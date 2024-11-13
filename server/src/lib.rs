@@ -8,23 +8,20 @@ use tungstenite::{
     Message,
 };
 
-fn main() {
+pub fn run() {
     let server = TcpListener::bind("127.0.0.1:3012").unwrap();
     let file = File::open("./file.txt").unwrap();
     let rope = Arc::new(Rope::from_reader(BufReader::new(file)).unwrap());
     for stream in server.incoming() {
         let rope = rope.clone();
         spawn(move || {
-            let callback = |req: &Request, mut response: Response| {
+            let callback = |req: &Request, response: Response| {
                 println!("Received a new ws handshake");
                 println!("The request's path is: {}", req.uri().path());
                 println!("The request's headers are:");
                 for (header, _value) in req.headers() {
                     println!("* {header}");
                 }
-
-                // Let's add an additional header to our response to the client.
-                let headers = response.headers_mut();
 
                 if req.headers().get("test").is_some_and(|x| x == "test") {
                     Ok(response)

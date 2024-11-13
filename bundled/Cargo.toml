@@ -1,0 +1,12 @@
+[package]
+name = "bundled"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+server = {path = "../server"}
+client = {path = "../client"}
+clap = { version = "4.5.20", features = ["derive"] }
+color-eyre = "0.6.3"
+tracing = "0.1.40"
+tracing-subscriber = "0.3.18"
