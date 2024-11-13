@@ -1,9 +1,8 @@
 use core::str;
-use std::{cmp, io::Cursor};
+use std::cmp;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ropey::Rope;
-use tungstenite::Message;
 
 #[derive(Clone, Debug)]
 pub struct State {
@@ -24,14 +23,9 @@ impl State {
         &self.cursorpos
     }
 
-    pub fn new(data: Message) -> Result<Self, CreateState> {
-        let Message::Binary(data) = data else {
-            return Err(CreateState::BadFormat);
-        };
+    pub fn new(data: &str) -> Result<Self, CreateState> {
         Ok(Self {
-            rope: Rope::from_str(
-                str::from_utf8(data.as_slice()).map_err(|_| CreateState::BadUtf8)?,
-            ),
+            rope: Rope::from_str(data),
             mode: Mode::Normal,
             cursorpos: CursorPos::default(),
         })

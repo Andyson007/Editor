@@ -3,7 +3,7 @@ use crossterm::{
     cursor,
     event::{read, EnableBracketedPaste, Event},
     execute,
-    style::Print,
+    style::{Colors, Print},
     terminal::{
         self, disable_raw_mode, enable_raw_mode, size, ClearType, EnterAlternateScreen,
         LeaveAlternateScreen,
@@ -11,16 +11,23 @@ use crossterm::{
     ExecutableCommand, QueueableCommand,
 };
 
-use std::io::{self, Write};
-use tungstenite::connect;
+use core::str;
+use std::{
+    io::{self, Write},
+};
+use tungstenite::{connect, Message};
 
-use client::editor::State;
+use client::{editor::State, errors};
 
-fn main() -> io::Result<()> {
+fn main() -> color_eyre::Result<()> {
     let mut out = io::stdout();
+    errors::install_hooks()?;
 
     let (mut socket, response) = connect("ws://localhost:3012").unwrap();
-    let mut app = State::new(socket.read().unwrap()).unwrap();
+    let Message::Binary(data) = socket.read()? else {
+        panic!();
+    };
+    let mut app = State::new(str::from_utf8(&data).unwrap()).unwrap();
     println!(
         "{}",
         app.rope
