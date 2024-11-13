@@ -21,6 +21,7 @@ pub struct State {
     cursorpos: CursorPos,
 }
 
+/// `CursorPos` is effectively an (x, y) tuple. 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct CursorPos {
     /// The row the cursor is on. This is effectively the line number
@@ -221,7 +222,8 @@ impl State {
         cmd == "q"
     }
 }
-
+/// Stores the current mode of the editor.
+/// These work in the same way as vims modes
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Mode {
     Normal,

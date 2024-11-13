@@ -3,7 +3,7 @@ use crossterm::{
     cursor,
     event::{read, EnableBracketedPaste, Event},
     execute,
-    style::{Colors, Print},
+    style::Print,
     terminal::{
         self, disable_raw_mode, enable_raw_mode, size, ClearType, EnterAlternateScreen,
         LeaveAlternateScreen,
@@ -21,7 +21,7 @@ fn main() -> color_eyre::Result<()> {
     let mut out = io::stdout();
     errors::install_hooks()?;
 
-    let (mut socket, response) = connect("ws://localhost:3012").unwrap();
+    let (mut socket, _response) = connect("ws://localhost:3012").unwrap();
     let Message::Binary(data) = socket.read()? else {
         panic!();
     };
