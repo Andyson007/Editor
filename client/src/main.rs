@@ -12,8 +12,18 @@ use crossterm::{
 };
 
 use core::str;
-use std::io::{self, Write};
-use tungstenite::{connect, Message};
+use std::{
+    io::{self, Write},
+    net::TcpStream,
+    str::FromStr,
+};
+use tungstenite::{
+    connect,
+    handshake::client::{generate_key, Request},
+    http::{self, Uri},
+    stream::MaybeTlsStream,
+    Message, WebSocket,
+};
 
 use client::{editor::State, errors};
 
@@ -25,7 +35,7 @@ async fn main() -> color_eyre::Result<()> {
     execute!(out, EnterAlternateScreen, EnableBracketedPaste)?;
     enable_raw_mode().unwrap();
 
-    let (mut socket, _response) = connect("ws://localhost:3012").unwrap();
+    let (mut socket, _response) = connect_with_auth("ws://localhost:3012");
     let Message::Binary(data) = socket.read()? else {
         panic!("Couldn't read binary stream from socket");
     };
@@ -78,4 +88,35 @@ where
     ))?;
     out.flush()?;
     Ok(())
+}
+
+fn connect_with_auth(
+    uri: &str,
+) -> (
+    WebSocket<MaybeTlsStream<TcpStream>>,
+    http::Response<Option<Vec<u8>>>,
+) {
+    let uri = Uri::from_str(uri).unwrap();
+    let authority = uri.authority().unwrap().as_str();
+    let host = authority
+        .find('@')
+        .map(|idx| authority.split_at(idx + 1).1)
+        .unwrap_or_else(|| authority);
+
+    if host.is_empty() {
+        panic!("No hostname")
+    }
+
+    let req = Request::builder()
+        .method("GET")
+        .header("Host", host)
+        .header("Connection", "Upgrade")
+        // .header("test", "test")
+        .header("Upgrade", "websocket")
+        .header("Sec-WebSocket-Version", "13")
+        .header("Sec-WebSocket-Key", generate_key())
+        .uri(uri)
+        .body(())
+        .unwrap();
+    connect(req).unwrap()
 }
