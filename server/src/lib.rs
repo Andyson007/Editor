@@ -1,6 +1,7 @@
 use std::{fs::File, io::BufReader, net::TcpListener, sync::Arc, thread::spawn};
 
 use ropey::Rope;
+use tracing::{error, info, trace, warn};
 use tungstenite::{
     accept_hdr,
     handshake::server::{Request, Response},

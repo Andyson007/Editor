@@ -1,5 +1,5 @@
 use clap::{Args, Parser, Subcommand, ValueEnum};
-use tracing::level_filters::LevelFilter;
+use tracing::{info, level_filters::LevelFilter};
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -36,9 +36,9 @@ fn main() -> color_eyre::Result<()> {
     tracing_subscriber::fmt()
         .pretty()
         .with_level(true)
-        .with_max_level(cli.verbosity.unwrap_or(LevelFilter::OFF))
-        .finish();
-    println!("{cli:?}");
+        .with_max_level(dbg!(cli.verbosity.unwrap_or(LevelFilter::OFF)))
+        .init();
+    info!("{cli:?}");
 
     // You can check for the existence of subcommands, and if found use their
     // matches just as you would the top level cmd
