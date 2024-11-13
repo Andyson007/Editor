@@ -12,9 +12,7 @@ use crossterm::{
 };
 
 use core::str;
-use std::{
-    io::{self, Write},
-};
+use std::io::{self, Write};
 use tungstenite::{connect, Message};
 
 use client::{editor::State, errors};
@@ -27,7 +25,7 @@ fn main() -> color_eyre::Result<()> {
     let Message::Binary(data) = socket.read()? else {
         panic!();
     };
-    let mut app = State::new(str::from_utf8(&data).unwrap()).unwrap();
+    let mut app = State::new(str::from_utf8(&data).unwrap());
     println!(
         "{}",
         app.rope

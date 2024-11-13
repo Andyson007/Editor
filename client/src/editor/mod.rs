@@ -1,3 +1,7 @@
+//! This is the main module for handling editor stuff.
+//! This includes handling keypressess and adding these
+//! to the queue for sending to the server, but *not*
+//! actually sending them
 use core::str;
 use std::cmp;
 
@@ -5,32 +9,45 @@ use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ropey::Rope;
 
 #[derive(Clone, Debug)]
+/// The main state for the entire editor. The entireity of the
+/// view presented to the user can be rebuild from this
 pub struct State {
+    /// The rope stores the entire file being edited.
     pub rope: Rope,
+    /// Stores the current editing mode. This is
+    /// effectively the same as Vims insert/Normal mode
     mode: Mode,
+    /// stores where the cursor is located
     cursorpos: CursorPos,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct CursorPos {
+    /// The row the cursor is on. This is effectively the line number
     pub row: usize,
+    /// What column the cursor is on. Distance from the start of the line
     pub col: usize,
 }
 
 impl State {
+    /// Creates a new appstate
+    #[must_use]
+    pub fn new(data: &str) -> Self {
+        Self {
+            rope: Rope::from_str(data),
+            mode: Mode::Normal,
+            cursorpos: CursorPos::default(),
+        }
+    }
+
+    /// Returns an immutable reference to the internal
+    /// cursors position
     #[must_use]
     pub const fn cursor(&self) -> &CursorPos {
         &self.cursorpos
     }
 
-    pub fn new(data: &str) -> Result<Self, CreateState> {
-        Ok(Self {
-            rope: Rope::from_str(data),
-            mode: Mode::Normal,
-            cursorpos: CursorPos::default(),
-        })
-    }
-
+    /// Handles a keyevent. This method handles every `mode`
     pub fn handle_keyevent(&mut self, input: &KeyEvent) -> bool {
         match self.mode {
             Mode::Normal => self.handle_normal_keyevent(input),
@@ -39,6 +56,7 @@ impl State {
         }
     }
 
+    /// handles a keypress as if were performed in `Insert` mode
     fn handle_insert_keyevent(&mut self, input: &KeyEvent) -> bool {
         if matches!(
             input,
@@ -145,6 +163,7 @@ impl State {
         false
     }
 
+    /// handles a keypress as if were performed in `Normal` mode
     fn handle_normal_keyevent(&mut self, input: &KeyEvent) -> bool {
         match input.code {
             KeyCode::Char('q') => return true,
@@ -201,12 +220,6 @@ impl State {
     fn execute_commad(&self, cmd: &str) -> bool {
         cmd == "q"
     }
-}
-
-#[derive(Clone, Debug, Copy, PartialEq, Eq)]
-pub enum CreateState {
-    BadFormat,
-    BadUtf8,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
