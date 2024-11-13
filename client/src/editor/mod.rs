@@ -1,5 +1,5 @@
 use core::str;
-use std::cmp;
+use std::{cmp, io::Cursor};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ropey::Rope;
@@ -19,7 +19,8 @@ pub struct CursorPos {
 }
 
 impl State {
-    pub fn cursor(&self) -> &CursorPos {
+    #[must_use]
+    pub const fn cursor(&self) -> &CursorPos {
         &self.cursorpos
     }
 
@@ -58,11 +59,25 @@ impl State {
         }
 
         match input.code {
-            KeyCode::Backspace => {
+            KeyCode::Backspace => 'backspace: {
                 let del_pos = self.rope.line_to_byte(self.cursorpos.row) + self.cursorpos.col;
+                if self.cursorpos == (CursorPos { row: 0, col: 0 }) {
+                    break 'backspace;
+                }
+                if self.cursorpos.col == 0 {
+                    self.cursorpos.row = self.cursorpos.row.saturating_sub(1);
+                    self.cursorpos.col = self
+                        .rope
+                        .lines_at(self.cursorpos.row)
+                        .next()
+                        .unwrap()
+                        .len_chars()
+                        - 1;
+                } else {
+                    self.cursorpos.col -= 1;
+                }
                 if del_pos != 0 {
                     self.rope.remove((del_pos - 1)..del_pos);
-                    self.cursorpos.col -= 1;
                 }
             }
             KeyCode::Left => self.cursorpos.col = self.cursorpos.col.saturating_sub(1),
