@@ -17,26 +17,20 @@ use tungstenite::{connect, Message};
 
 use client::{editor::State, errors};
 
-fn main() -> color_eyre::Result<()> {
+#[tokio::main]
+async fn main() -> color_eyre::Result<()> {
     let mut out = io::stdout();
     errors::install_hooks()?;
 
-    let (mut socket, _response) = connect("ws://localhost:3012").unwrap();
-    let Message::Binary(data) = socket.read()? else {
-        panic!();
-    };
-    let mut app = State::new(str::from_utf8(&data).unwrap());
-    println!(
-        "{}",
-        app.rope
-            .lines()
-            .nth(2)
-            .unwrap()
-            .slice(0..size()?.0 as usize)
-    );
-
     execute!(out, EnterAlternateScreen, EnableBracketedPaste)?;
     enable_raw_mode().unwrap();
+
+    let (mut socket, _response) = connect("ws://localhost:3012").unwrap();
+    let Message::Binary(data) = socket.read()? else {
+        panic!("Couldn't read binary stream from socket");
+    };
+    let mut app = State::new(str::from_utf8(&data).unwrap());
+
     redraw(&mut out, 0, &app)?;
 
     out.execute(cursor::MoveTo(0, 0)).unwrap();
