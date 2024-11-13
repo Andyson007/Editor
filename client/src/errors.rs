@@ -1,5 +1,5 @@
 //! Cleans up the terminal when the application panics
-use std::{io::{stdout, Write}, panic};
+use std::{io::stdout, panic};
 
 use color_eyre::{config::HookBuilder, eyre};
 use crossterm::{

@@ -1,11 +1,12 @@
 //! A client for my server side md editing thing
 use crossterm::{
     cursor,
-    event::{read, EnableBracketedPaste, Event, KeyCode},
+    event::{read, EnableBracketedPaste, Event},
     execute,
     style::Print,
     terminal::{
-        self, disable_raw_mode, enable_raw_mode, size, ClearType, EnterAlternateScreen, LeaveAlternateScreen
+        self, disable_raw_mode, enable_raw_mode, size, ClearType, EnterAlternateScreen,
+        LeaveAlternateScreen,
     },
     ExecutableCommand, QueueableCommand,
 };
