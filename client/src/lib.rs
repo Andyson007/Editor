@@ -2,7 +2,7 @@
 pub mod editor;
 pub mod errors;
 
-use btep::{Btep, FromMessage};
+use btep::Btep;
 use crossterm::{
     cursor,
     event::{read, EnableBracketedPaste, Event},
@@ -27,7 +27,7 @@ use tungstenite::{
     handshake::client::{generate_key, Request},
     http::{self, Uri},
     stream::MaybeTlsStream,
-    Message, WebSocket,
+    WebSocket,
 };
 
 pub fn run() -> color_eyre::Result<()> {
@@ -39,9 +39,13 @@ pub fn run() -> color_eyre::Result<()> {
 
     let (mut socket, _response) = connect_with_auth("ws://localhost:3012");
 
-    let initial_file = <Btep<Box<[u8]>> as FromMessage>::from_message(socket.read()?);
+    let Btep::Initial(initial_file) =
+        Btep::<Box<[u8]>>::from_message(socket.read()?)
+    else {
+        panic!("Initial message in wrong protocol")
+    };
 
-    let mut app = State::new(initial_file.as_utf8());
+    let mut app = State::new(str::from_utf8(&initial_file).unwrap());
 
     redraw(&mut out, 0, &app)?;
 

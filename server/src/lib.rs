@@ -1,13 +1,12 @@
 use std::{fs::File, io::BufReader, net::TcpListener, sync::Arc, thread::spawn};
 
-use btep::{Btep, IntoMessage};
+use btep::Btep;
 use ropey::Rope;
 use tracing::{debug, error, info, trace, warn};
 use tungstenite::{
     accept_hdr,
     handshake::server::{Request, Response},
     http::{self, StatusCode},
-    Message,
 };
 
 pub fn run() {
