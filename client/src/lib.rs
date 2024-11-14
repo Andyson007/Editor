@@ -2,6 +2,7 @@
 pub mod editor;
 pub mod errors;
 
+use btep::{Btep, FromMessage};
 use crossterm::{
     cursor,
     event::{read, EnableBracketedPaste, Event},
@@ -37,10 +38,10 @@ pub fn run() -> color_eyre::Result<()> {
     enable_raw_mode().unwrap();
 
     let (mut socket, _response) = connect_with_auth("ws://localhost:3012");
-    let Message::Binary(data) = socket.read()? else {
-        panic!("Couldn't read binary stream from socket");
-    };
-    let mut app = State::new(str::from_utf8(&data).unwrap());
+
+    let initial_file = <Btep<Box<[u8]>> as FromMessage>::from_message(socket.read()?);
+
+    let mut app = State::new(initial_file.as_utf8());
 
     redraw(&mut out, 0, &app)?;
 
@@ -112,7 +113,7 @@ fn connect_with_auth(
         .method("GET")
         .header("Host", host)
         .header("Connection", "Upgrade")
-        // .header("test", "test")
+        .header("test", "test")
         .header("Upgrade", "websocket")
         .header("Sec-WebSocket-Version", "13")
         .header("Sec-WebSocket-Key", generate_key())

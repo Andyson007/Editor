@@ -34,9 +34,8 @@ struct ClientArgs {
 fn main() -> color_eyre::Result<()> {
     let cli = Cli::parse();
     tracing_subscriber::fmt()
-        .pretty()
         .with_level(true)
-        .with_max_level(dbg!(cli.verbosity.unwrap_or(LevelFilter::OFF)))
+        .with_max_level(cli.verbosity.unwrap_or(LevelFilter::OFF))
         .init();
     info!("{cli:?}");
 

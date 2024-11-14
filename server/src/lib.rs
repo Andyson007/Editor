@@ -1,7 +1,8 @@
 use std::{fs::File, io::BufReader, net::TcpListener, sync::Arc, thread::spawn};
 
+use btep::{Btep, IntoMessage};
 use ropey::Rope;
-use tracing::{error, info, trace, warn};
+use tracing::{debug, error, info, trace, warn};
 use tungstenite::{
     accept_hdr,
     handshake::server::{Request, Response},
@@ -17,11 +18,12 @@ pub fn run() {
         let rope = rope.clone();
         spawn(move || {
             let callback = |req: &Request, response: Response| {
-                println!("Received a new ws handshake");
-                println!("The request's path is: {}", req.uri().path());
-                println!("The request's headers are:");
+                debug!("Received new ws handshake");
+                trace!("Received a new ws handshake");
+                trace!("The request's path is: {}", req.uri().path());
+                trace!("The request's headers are:");
                 for (header, _value) in req.headers() {
-                    println!("* {header}");
+                    trace!("* {header}");
                 }
 
                 if req.headers().get("test").is_some_and(|x| x == "test") {
@@ -35,7 +37,7 @@ pub fn run() {
             };
             let mut websocket = accept_hdr(stream.unwrap(), callback).unwrap();
             websocket
-                .send(Message::Binary(rope.bytes().collect()))
+                .send(Btep::Initial(rope.bytes()).into_message())
                 .unwrap();
             loop {
                 let msg = websocket.read().unwrap();
