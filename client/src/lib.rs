@@ -15,6 +15,7 @@ use crossterm::{
     ExecutableCommand, QueueableCommand,
 };
 use editor::State;
+use piece_table::Piece;
 
 use core::str;
 use std::{
@@ -39,13 +40,11 @@ pub fn run() -> color_eyre::Result<()> {
 
     let (mut socket, _response) = connect_with_auth("ws://localhost:3012");
 
-    let Btep::Full(initial_file) =
-        Btep::<Box<[u8]>>::from_message(socket.read()?)
-    else {
+    let Btep::Full(initial_file) = Btep::<Piece>::from_message(socket.read()?) else {
         panic!("Initial message in wrong protocol")
     };
 
-    let mut app = State::new(str::from_utf8(&initial_file).unwrap());
+    let mut app = State::new(initial_file);
 
     redraw(&mut out, 0, &app)?;
 

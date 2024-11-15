@@ -6,14 +6,14 @@ use core::str;
 use std::cmp;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
-use ropey::Rope;
+use piece_table::Piece;
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 /// The main state for the entire editor. The entireity of the
 /// view presented to the user can be rebuild from this
 pub struct State {
     /// The rope stores the entire file being edited.
-    pub rope: Rope,
+    pub text: Piece,
     /// Stores the current editing mode. This is
     /// effectively the same as Vims insert/Normal mode
     mode: Mode,
@@ -21,7 +21,7 @@ pub struct State {
     cursorpos: CursorPos,
 }
 
-/// `CursorPos` is effectively an (x, y) tuple. 
+/// `CursorPos` is effectively an (x, y) tuple.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct CursorPos {
     /// The row the cursor is on. This is effectively the line number
@@ -33,9 +33,9 @@ pub struct CursorPos {
 impl State {
     /// Creates a new appstate
     #[must_use]
-    pub fn new(data: &str) -> Self {
+    pub fn new(data: Piece) -> Self {
         Self {
-            rope: Rope::from_str(data),
+            text: data,
             mode: Mode::Normal,
             cursorpos: CursorPos::default(),
         }
@@ -73,14 +73,14 @@ impl State {
 
         match input.code {
             KeyCode::Backspace => 'backspace: {
-                let del_pos = self.rope.line_to_byte(self.cursorpos.row) + self.cursorpos.col;
+                let del_pos = self.text.line_to_byte(self.cursorpos.row) + self.cursorpos.col;
                 if self.cursorpos == (CursorPos { row: 0, col: 0 }) {
                     break 'backspace;
                 }
                 if self.cursorpos.col == 0 {
                     self.cursorpos.row = self.cursorpos.row.saturating_sub(1);
                     self.cursorpos.col = self
-                        .rope
+                        .text
                         .lines_at(self.cursorpos.row)
                         .next()
                         .unwrap()
@@ -90,14 +90,14 @@ impl State {
                     self.cursorpos.col -= 1;
                 }
                 if del_pos != 0 {
-                    self.rope.remove((del_pos - 1)..del_pos);
+                    self.text.remove((del_pos - 1)..del_pos);
                 }
             }
             KeyCode::Left => self.cursorpos.col = self.cursorpos.col.saturating_sub(1),
             KeyCode::Right => {
                 self.cursorpos.col = cmp::min(
                     self.cursorpos.col + 1,
-                    self.rope
+                    self.text
                         .lines_at(self.cursorpos.row)
                         .next()
                         .unwrap()
@@ -109,7 +109,7 @@ impl State {
                 self.cursorpos.row = self.cursorpos.row.saturating_sub(1);
                 self.cursorpos.col = cmp::min(
                     self.cursorpos.col,
-                    self.rope
+                    self.text
                         .lines_at(self.cursorpos.row)
                         .next()
                         .unwrap()
@@ -118,10 +118,10 @@ impl State {
                 );
             }
             KeyCode::Down => {
-                self.cursorpos.row = cmp::min(self.cursorpos.row + 1, self.rope.len_lines() - 1);
+                self.cursorpos.row = cmp::min(self.cursorpos.row + 1, self.text.len_lines() - 1);
                 self.cursorpos.col = cmp::min(
                     self.cursorpos.col,
-                    self.rope
+                    self.text
                         .lines_at(self.cursorpos.row)
                         .next()
                         .unwrap()
@@ -130,14 +130,14 @@ impl State {
                 );
             }
             KeyCode::Enter => {
-                let cursor_pos = self.rope.line_to_byte(self.cursorpos.row);
-                self.rope.insert_char(cursor_pos + self.cursorpos.col, '\n');
+                let cursor_pos = self.text.line_to_byte(self.cursorpos.row);
+                self.text.insert_char(cursor_pos + self.cursorpos.col, '\n');
                 self.cursorpos.row += 1;
                 self.cursorpos.col = 0;
             }
             KeyCode::Char(c) => {
-                let cursor_pos = self.rope.line_to_byte(self.cursorpos.row);
-                self.rope.insert_char(cursor_pos + self.cursorpos.col, c);
+                let cursor_pos = self.text.line_to_byte(self.cursorpos.row);
+                self.text.insert_char(cursor_pos + self.cursorpos.col, c);
                 self.cursorpos.col += 1;
             }
             KeyCode::Esc => self.mode = Mode::Normal,

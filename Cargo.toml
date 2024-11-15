@@ -5,4 +5,4 @@ members = [
   "server",
   "client",
   "btep"
-, "bundled", "piece-table"]
+, "bundled", "piece-table", "append_only_str"]

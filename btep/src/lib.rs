@@ -26,19 +26,22 @@ where
     }
 }
 
-impl Btep<Box<[u8]>> {
+impl<T> Btep<T> {
     /// Converts a message into a byte array
     ///
     /// # Panics
     /// This method panics when the message is empty,
     /// and when it has an invalid format identifier
     #[must_use]
-    pub fn from_message(msg: Message) -> Self {
+    pub fn from_message(msg: Message) -> Self
+    where
+        T: Deserialize,
+    {
         let Message::Binary(data) = msg else {
             panic!("wrong message type")
         };
         match data.first().unwrap() {
-            0 => Self::Full(data[1..].into()),
+            0 => Self::Full(Deserialize::deserialize(data.into_iter().skip(1))),
             _ => panic!("An invalid specifier was found"),
         }
     }
