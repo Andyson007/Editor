@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-ropey = "1.6.1"
 tracing = "0.1.40"
 tungstenite = "0.24.0"
 btep = { path = "../btep" }
+piece-table = { path = "../piece-table" }

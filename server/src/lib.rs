@@ -1,7 +1,13 @@
-use std::{fs::File, io::BufReader, net::TcpListener, sync::Arc, thread::spawn};
+use std::{
+    fs::File,
+    io::BufReader,
+    net::TcpListener,
+    sync::{Arc, Mutex, RwLock},
+    thread::spawn,
+};
 
 use btep::Btep;
-use ropey::Rope;
+use piece_table::Piece;
 use tracing::{debug, error, info, trace, warn};
 use tungstenite::{
     accept_hdr,
@@ -12,9 +18,11 @@ use tungstenite::{
 pub fn run() {
     let server = TcpListener::bind("127.0.0.1:3012").unwrap();
     let file = File::open("./file.txt").unwrap();
-    let rope = Arc::new(Rope::from_reader(BufReader::new(file)).unwrap());
+    let text = Arc::new(RwLock::new(
+            Piece::original_from_reader(BufReader::new(file)).unwrap(),
+    ));
     for stream in server.incoming() {
-        let rope = rope.clone();
+        let text = text.clone();
         spawn(move || {
             let callback = |req: &Request, response: Response| {
                 debug!("Received new ws handshake");
@@ -35,13 +43,15 @@ pub fn run() {
                 }
             };
             let mut websocket = accept_hdr(stream.unwrap(), callback).unwrap();
-            websocket
-                .send(Btep::Initial(rope.bytes()).into_message())
-                .unwrap();
+            {
+                let data = text.read().unwrap();
+                dbg!(&data);
+                websocket.send(Btep::Full(&*data).into_message()).unwrap();
+            }
             loop {
                 let msg = websocket.read().unwrap();
                 if msg.is_binary() || msg.is_text() {
-                    websocket.send(msg).unwrap();
+                    debug!("{msg:?}");
                 }
             }
         });

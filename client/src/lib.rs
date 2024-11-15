@@ -39,7 +39,7 @@ pub fn run() -> color_eyre::Result<()> {
 
     let (mut socket, _response) = connect_with_auth("ws://localhost:3012");
 
-    let Btep::Initial(initial_file) =
+    let Btep::Full(initial_file) =
         Btep::<Box<[u8]>>::from_message(socket.read()?)
     else {
         panic!("Initial message in wrong protocol")

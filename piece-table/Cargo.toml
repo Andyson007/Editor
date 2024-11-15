@@ -1,0 +1,8 @@
+[package]
+name = "piece-table"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+append-only-bytes = "0.1.12"
+btep = { version = "0.1.0", path = "../btep" }
