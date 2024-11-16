@@ -72,73 +72,59 @@ impl State {
         }
 
         match input.code {
-            KeyCode::Backspace => 'backspace: {
-                let del_pos = self.text.line_to_byte(self.cursorpos.row) + self.cursorpos.col;
-                if self.cursorpos == (CursorPos { row: 0, col: 0 }) {
-                    break 'backspace;
-                }
-                if self.cursorpos.col == 0 {
-                    self.cursorpos.row = self.cursorpos.row.saturating_sub(1);
-                    self.cursorpos.col = self
-                        .text
-                        .lines_at(self.cursorpos.row)
-                        .next()
-                        .unwrap()
-                        .len_chars()
-                        - 1;
-                } else {
-                    self.cursorpos.col -= 1;
-                }
-                if del_pos != 0 {
-                    self.text.remove((del_pos - 1)..del_pos);
-                }
+            KeyCode::Backspace => {
+                todo!()
             }
             KeyCode::Left => self.cursorpos.col = self.cursorpos.col.saturating_sub(1),
             KeyCode::Right => {
                 self.cursorpos.col = cmp::min(
                     self.cursorpos.col + 1,
-                    self.text
-                        .lines_at(self.cursorpos.row)
-                        .next()
-                        .unwrap()
-                        .len_chars()
-                        - 1,
+                    todo!("I need to get the length of this line"), // self.text
+                                                                    //     .lines_at(self.cursorpos.row)
+                                                                    //     .next()
+                                                                    //     .unwrap()
+                                                                    //     .len_chars()
+                                                                    //     - 1,
                 );
             }
             KeyCode::Up => {
-                self.cursorpos.row = self.cursorpos.row.saturating_sub(1);
-                self.cursorpos.col = cmp::min(
-                    self.cursorpos.col,
-                    self.text
-                        .lines_at(self.cursorpos.row)
-                        .next()
-                        .unwrap()
-                        .len_chars()
-                        .saturating_sub(1),
-                );
+                // self.cursorpos.row = self.cursorpos.row.saturating_sub(1);
+                // self.cursorpos.col = cmp::min(
+                //     self.cursorpos.col,
+                //     self.text
+                //         .lines_at(self.cursorpos.row)
+                //         .next()
+                //         .unwrap()
+                //         .len_chars()
+                //         .saturating_sub(1),
+                // );
+                todo!("I need to get the length of this line");
             }
             KeyCode::Down => {
-                self.cursorpos.row = cmp::min(self.cursorpos.row + 1, self.text.len_lines() - 1);
-                self.cursorpos.col = cmp::min(
-                    self.cursorpos.col,
-                    self.text
-                        .lines_at(self.cursorpos.row)
-                        .next()
-                        .unwrap()
-                        .len_chars()
-                        .saturating_sub(2),
-                );
+                todo!("get the amount of lines");
+                // self.cursorpos.row = cmp::min(self.cursorpos.row + 1, self.text.len_lines() - 1);
+                // self.cursorpos.col = cmp::min(
+                //     self.cursorpos.col,
+                //     self.text
+                //         .lines_at(self.cursorpos.row)
+                //         .next()
+                //         .unwrap()
+                //         .len_chars()
+                //         .saturating_sub(2),
+                // );
             }
             KeyCode::Enter => {
-                let cursor_pos = self.text.line_to_byte(self.cursorpos.row);
-                self.text.insert_char(cursor_pos + self.cursorpos.col, '\n');
-                self.cursorpos.row += 1;
-                self.cursorpos.col = 0;
+                todo!()
+                // let cursor_pos = self.text.line_to_byte(self.cursorpos.row);
+                // self.text.insert_char(cursor_pos + self.cursorpos.col, '\n');
+                // self.cursorpos.row += 1;
+                // self.cursorpos.col = 0;
             }
             KeyCode::Char(c) => {
-                let cursor_pos = self.text.line_to_byte(self.cursorpos.row);
-                self.text.insert_char(cursor_pos + self.cursorpos.col, c);
-                self.cursorpos.col += 1;
+                todo!()
+                // let cursor_pos = self.text.line_to_byte(self.cursorpos.row);
+                // self.text.insert_char(cursor_pos + self.cursorpos.col, c);
+                // self.cursorpos.col += 1;
             }
             KeyCode::Esc => self.mode = Mode::Normal,
             KeyCode::Home => todo!(),

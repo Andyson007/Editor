@@ -77,21 +77,22 @@ where
     E: QueueableCommand + io::Write,
 {
     out.queue(terminal::Clear(ClearType::All))?;
-    for (linenr, line) in state
-        .rope
-        .lines_at(startline)
-        .take(size()?.1.into())
-        .enumerate()
-    {
-        out.queue(cursor::MoveTo(0, linenr as u16))?.queue(Print(
-            line.chars().take(size()?.0.into()).collect::<String>(),
-        ))?;
-    }
-    out.queue(cursor::MoveTo(
-        state.cursor().col as u16,
-        state.cursor().row as u16,
-    ))?;
-    out.flush()?;
+    todo!("make iterator work");
+    // for (linenr, line) in state
+    //     .text
+    //     .lines_at(startline)
+    //     .take(size()?.1.into())
+    //     .enumerate()
+    // {
+    //     out.queue(cursor::MoveTo(0, linenr as u16))?.queue(Print(
+    //         line.chars().take(size()?.0.into()).collect::<String>(),
+    //     ))?;
+    // }
+    // out.queue(cursor::MoveTo(
+    //     state.cursor().col as u16,
+    //     state.cursor().row as u16,
+    // ))?;
+    // out.flush()?;
     Ok(())
 }
 
