@@ -1,3 +1,5 @@
+//! Implements iterator helper functions for `AppendOnlyStr`
+
 use crate::AppendOnlyStr;
 use std::str;
 

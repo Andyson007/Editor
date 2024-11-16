@@ -4,13 +4,13 @@ use std::{
     ptr::NonNull,
 };
 
-pub(crate) struct RawBuf {
+pub struct RawBuf {
     ptr: NonNull<u8>,
     capacity: usize,
 }
 
 impl RawBuf {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             ptr: NonNull::dangling(),
             capacity: 0,
@@ -27,9 +27,8 @@ impl RawBuf {
         //// Layout isn't zero-sized
         let unchecked_ptr = unsafe { alloc::alloc(layout) };
 
-        let ptr = match NonNull::new(unchecked_ptr) {
-            Some(p) => p,
-            None => alloc::handle_alloc_error(layout),
+        let Some(ptr) = NonNull::new(unchecked_ptr) else {
+            alloc::handle_alloc_error(layout)
         };
         Self {
             ptr,
@@ -37,13 +36,11 @@ impl RawBuf {
         }
     }
 
-    #[inline(always)]
-    pub fn capacity(&self) -> usize {
+    pub const fn capacity(&self) -> usize {
         self.capacity
     }
 
-    #[inline(always)]
-    pub fn ptr(&self) -> *mut u8 {
+    pub const fn ptr(&self) -> *mut u8 {
         self.ptr.as_ptr()
     }
 }
@@ -58,13 +55,13 @@ impl Drop for RawBuf {
                 alloc::dealloc(
                     self.ptr.as_ptr(),
                     Layout::array::<u8>(self.capacity).unwrap(),
-                )
+                );
             }
         }
     }
 }
 
-/// SAFETY: RawBuf does not allow for interior mutability
+/// SAFETY: `RawBuf` does not allow for interior mutability
 /// without exclusive access and is therefore `Sync` & `Send`
 unsafe impl Sync for RawBuf {}
 unsafe impl Send for RawBuf {}

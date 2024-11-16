@@ -47,11 +47,15 @@ impl<T> Btep<T> {
     }
 }
 
+/// A trait allow for serialization into the Btep™ format
 pub trait Serialize {
+    /// The method provide by `Serialize`.
     fn serialize(&self) -> impl IntoIterator<Item = u8>;
 }
 
+/// `Deserialize` allows for deserialization and is supposed to be the opposite of `Serialize`.
 pub trait Deserialize {
+    /// The method provided by `Deserialize`
     fn deserialize(data: impl IntoIterator<Item = u8>) -> Self;
 }
 

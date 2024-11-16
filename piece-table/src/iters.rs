@@ -27,13 +27,13 @@ where
                 self.main.chars().skip(*start).take(*len)
             } else {
                 self.clients[buf - 1].chars().skip(*start).take(*len)
-            })
+            });
         }
         if let Some(x) = self.current_iter.as_mut().unwrap().next() {
             return Some(x);
-        } else {
-            self.current_iter = None;
         }
+
+        self.current_iter = None;
         self.next()
     }
 }
@@ -68,6 +68,7 @@ where
 }
 
 impl Piece {
+    #[must_use]
     pub fn chars(&self) -> Chars<'_, std::collections::linked_list::Iter<'_, Range>> {
         Chars {
             ranges: self.piece_table.table.iter(),
@@ -77,6 +78,7 @@ impl Piece {
         }
     }
 
+    #[must_use]
     pub fn lines(&self) -> Lines<'_, std::collections::linked_list::Iter<'_, Range>> {
         Lines {
             chars: self.chars(),

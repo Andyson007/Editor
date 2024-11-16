@@ -33,10 +33,11 @@ pub struct AppendOnlyStr {
     len: usize,
 }
 
+#[allow(clippy::missing_fields_in_debug)]
 impl std::fmt::Debug for AppendOnlyStr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("AppendOnlyStr")
-            .field("data", &self.get_str())
+            .field("data", &&*self.slice(..))
             .field("len", &self.len)
             .finish()
     }
@@ -59,6 +60,8 @@ impl FromStr for AppendOnlyStr {
 }
 
 impl AppendOnlyStr {
+    #[must_use]
+    #[allow(missing_docs)]
     pub fn new() -> Self {
         Self {
             rawbuf: Arc::new(RawBuf::new()),
@@ -66,16 +69,16 @@ impl AppendOnlyStr {
         }
     }
 
+    #[must_use]
+    #[allow(missing_docs)]
     pub fn with_capacity(capacity: usize) -> Self {
-        match NonZeroUsize::new(capacity) {
-            Some(x) => Self {
-                rawbuf: Arc::new(RawBuf::with_capacity(x)),
-                len: 0,
-            },
-            None => Self::new(),
-        }
+        NonZeroUsize::new(capacity).map_or_else(Self::new, |nonzero_capacity| Self {
+            rawbuf: Arc::new(RawBuf::with_capacity(nonzero_capacity)),
+            len: 0,
+        })
     }
 
+    /// Appends a single character to the buffer
     pub fn push(c: char) {
         let mut buf = [0; 4];
         c.encode_utf8(&mut buf);
@@ -121,6 +124,7 @@ impl AppendOnlyStr {
         self.len += bytes.len();
     }
 
+    /// pushes a series of bytes onto the `AppendOnlyStr`. You are probably looking for `push_str`
     /// # Safety
     /// This assumes that the bytes are utf-8 compliant
     pub unsafe fn push_bytes(&mut self, bytes: &[u8]) {
@@ -128,6 +132,7 @@ impl AppendOnlyStr {
         self.write_unchecked(bytes);
     }
 
+    /// Pushes a string onto the `AppendOnlyStr`
     pub fn push_str(&mut self, str: &str) {
         unsafe { self.push_bytes(str.as_bytes()) }
     }
@@ -150,6 +155,8 @@ impl AppendOnlyStr {
         }
     }
 
+    /// Creates a slice referring to that place in memory. This slice is guaranteed to be valid
+    /// after the buffer has been reallocated!
     pub fn slice(&self, range: impl RangeBounds<usize>) -> ByteSlice {
         let (start, end) = get_range(range, self.len);
         ByteSlice {
@@ -158,9 +165,13 @@ impl AppendOnlyStr {
             end,
         }
     }
+
+    /// # Panics
+    /// This function panics during debug builds to check for valid utf-8 even though they should
+    /// always be valid
     pub fn str_slice(&self, range: impl RangeBounds<usize>) -> StrSlice {
         let byteslice = self.slice(range);
-        str::from_utf8(byteslice.deref()).unwrap();
+        debug_assert!(str::from_utf8(&byteslice).is_ok());
         StrSlice { byteslice }
     }
 }
@@ -177,11 +188,12 @@ where
     }
 }
 
-/// SAFETY: AppendOnlyStr does not allow for interior mutability
+/// SAFETY: `AppendOnlyStr` does not allow for interior mutability
 /// without exclusive access and is therefore `Sync` & `Send`
 unsafe impl Sync for AppendOnlyStr {}
 unsafe impl Send for AppendOnlyStr {}
 
+/// `ByteSlice` is a slice wrapper valid even through `AppendOnlyStr` reallocations
 pub struct ByteSlice {
     raw: Arc<RawBuf>,
     start: usize,
@@ -196,6 +208,7 @@ impl Deref for ByteSlice {
     }
 }
 
+/// `StrSlice` is a string slice wrapper valid even through `AppendOnlyStr` reallocations
 pub struct StrSlice {
     byteslice: ByteSlice,
 }
@@ -206,7 +219,7 @@ impl Deref for StrSlice {
     fn deref(&self) -> &Self::Target {
         // # Safety
         // This is safe because we checked for utf-8 compilance when creating the struct
-        unsafe { str::from_utf8_unchecked(self.byteslice.deref()) }
+        unsafe { str::from_utf8_unchecked(&self.byteslice) }
     }
 }
 
@@ -244,7 +257,9 @@ mod test {
     }
 
     #[test]
+    // The reason this could panic is that an empty string wouldn't need any length to be allocated
+    // and could therefore be allocated lazily with zero size. Zero-sized allocs panic
     fn zero_size_alloc() {
-        AppendOnlyStr::from_str("");
+        let _ = AppendOnlyStr::from_str("");
     }
 }

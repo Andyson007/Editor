@@ -106,12 +106,9 @@ fn connect_with_auth(
     let authority = uri.authority().unwrap().as_str();
     let host = authority
         .find('@')
-        .map(|idx| authority.split_at(idx + 1).1)
-        .unwrap_or_else(|| authority);
+        .map_or_else(|| authority, |idx| authority.split_at(idx + 1).1);
 
-    if host.is_empty() {
-        panic!("No hostname")
-    }
+    assert!(!host.is_empty());
 
     let req = Request::builder()
         .method("GET")

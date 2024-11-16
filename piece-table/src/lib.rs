@@ -35,6 +35,7 @@ pub struct Range {
 }
 
 impl Piece {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             buffers: Buffers {
@@ -52,6 +53,11 @@ impl Piece {
         }
     }
 
+    /// Creates a new Piece table from scratch with the initial value of the original buffer being
+    /// read from somewhere.
+    ///
+    /// # Errors
+    /// This function errors when the reader fails to read
     pub fn original_from_reader<T: Read>(mut read: T) -> io::Result<Self> {
         let mut string = String::new();
         read.read_to_string(&mut string)?;
@@ -109,11 +115,12 @@ impl Deserialize for Piece {
             .into_boxed_str();
         Self {
             piece_table: PieceTable {
-                table: LinkedList::from_iter(std::iter::once(Range {
+                table: std::iter::once(Range {
                     buf: 0,
                     start: 0,
                     len: original.len(),
-                })),
+                })
+                .collect::<LinkedList<_>>(),
                 // TODO: This should also be populated
                 cursors: vec![],
             },

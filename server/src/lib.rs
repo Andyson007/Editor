@@ -2,7 +2,7 @@ use std::{
     fs::File,
     io::BufReader,
     net::TcpListener,
-    sync::{Arc, Mutex, RwLock},
+    sync::{Arc, RwLock},
     thread::spawn,
 };
 
