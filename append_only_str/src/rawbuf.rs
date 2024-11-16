@@ -60,3 +60,8 @@ impl Drop for RawBuf {
         }
     }
 }
+
+/// SAFETY: RawBuf does not allow for interior mutability
+/// without exclusive access and is therefore `Sync` & `Send`
+unsafe impl Sync for RawBuf {}
+unsafe impl Send for RawBuf {}

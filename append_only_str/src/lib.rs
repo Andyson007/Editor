@@ -1,10 +1,17 @@
-use std::{
-    ptr, str,
-    sync::{Arc, RwLock},
-};
+//! This is a thread safe append only string. It allows for references to be kept even while the
+//! array has to reallocate
+//!
+//! # Credit
+//! A lot of this code looks like
+//! [append-only-bytes](https://docs.rs/append-only-bytes/latest/append_only_bytes/index.html),
+//! This is because  it didn't have all the methods that I felt it needed. I did rediscover why the
+//! architecture was the way it was, but credit where credits due
+use std::{str, sync::Arc};
 
 use rawbuf::RawBuf;
 mod rawbuf;
+
+pub mod iters;
 
 /// A thread safe append only string
 pub struct AppendOnlyStr {
@@ -16,7 +23,7 @@ pub struct AppendOnlyStr {
     // `len` doesn't need to be an RwLock because
     // the only time len is modified we have exclusive
     // access to it
-    len:usize,
+    len: usize,
 }
 
 impl std::fmt::Debug for AppendOnlyStr {
@@ -37,14 +44,14 @@ impl AppendOnlyStr {
     pub fn new() -> Self {
         Self {
             rawbuf: Arc::new(RawBuf::new()),
-            len: 0.into(),
+            len: 0,
         }
     }
 
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
             rawbuf: Arc::new(RawBuf::with_capacity(capacity)),
-            len: 0.into(),
+            len: 0,
         }
     }
 
@@ -59,7 +66,7 @@ impl AppendOnlyStr {
     /// # Panics
     /// The function panics if the new capacity overflows
     pub fn reserve(&mut self, amount: usize) {
-        let len = *self.len.read().unwrap();
+        let len = self.len;
         let target = len + amount;
         if target <= self.rawbuf.capacity() {
             // We have space for the reservation
@@ -91,7 +98,7 @@ impl AppendOnlyStr {
 
     unsafe fn write_unchecked(&mut self, bytes: &[u8]) {
         std::ptr::copy(bytes.as_ptr(), self.rawbuf.ptr(), bytes.len());
-        *self.len.write().unwrap() += bytes.len();
+        self.len += bytes.len();
     }
 
     /// # Safety
@@ -106,19 +113,21 @@ impl AppendOnlyStr {
     }
 
     pub fn get_str(&self) -> &str {
+        // : This shouldn't fail because utf-8
+        // compliance is always guaranteed
+        str::from_utf8(self.get_byte_slice()).unwrap()
+    }
+
+    fn get_byte_slice(&self) -> &[u8] {
         //// SAFETY: ---------------------------------------------
         //// We never make the capacity greater than the amount of
         //// space allocated. and therefore a slice won't read
         //// uninitialized memory
-        str::from_utf8(unsafe {
-            std::ptr::slice_from_raw_parts(
-                self.rawbuf.ptr().cast_const(),
-                self.len,
-            )
-            .as_ref()
-            .unwrap()
-        })
-        .unwrap()
+        unsafe {
+            std::ptr::slice_from_raw_parts(self.rawbuf.ptr().cast_const(), self.len)
+                .as_ref()
+                .unwrap()
+        }
     }
 }
 

@@ -1,8 +1,7 @@
+use std::ops::{Range, RangeBounds, RangeInclusive};
 use std::{
-    cell::Cell,
     collections::LinkedList,
     io::{self, Read},
-    ops::{Range, RangeBounds, RangeInclusive},
     sync::RwLock,
 };
 
