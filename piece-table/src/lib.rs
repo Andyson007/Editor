@@ -1,4 +1,4 @@
-use std::ops::{Range, RangeBounds, RangeInclusive};
+use std::ops::RangeInclusive;
 use std::{
     collections::LinkedList,
     io::{self, Read},
@@ -24,8 +24,15 @@ pub struct Piece {
 
 #[derive(Debug)]
 struct PieceTable {
-    table: LinkedList<(usize, RangeInclusive<usize>)>,
+    table: LinkedList<Range>,
     cursors: Vec<RwLock<Box<str>>>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct Range {
+    buf: usize,
+    start: usize,
+    len: usize,
 }
 
 impl Piece {
@@ -34,7 +41,11 @@ impl Piece {
         read.read_to_string(&mut string)?;
         let original = string.into_boxed_str();
         let mut list = LinkedList::new();
-        list.push_back((0, 0..=original.len()));
+        list.push_back(Range {
+            buf: 0,
+            start: 0,
+            len: original.len(),
+        });
         Ok(Self {
             buffers: Buffers {
                 original,
@@ -64,7 +75,7 @@ impl Deserialize for Piece {
 mod test {
     use std::io::BufReader;
 
-    use crate::Piece;
+    use crate::{Piece, Range};
 
     #[test]
     fn from_reader() {
@@ -74,7 +85,14 @@ mod test {
         assert!(piece.buffers.original == "test".to_string().into_boxed_str());
         assert_eq!(piece.buffers.clients.len(), 0);
         let mut iter = piece.piece_table.table.into_iter();
-        assert_eq!(iter.next(), Some((0, 0..=4)));
+        assert_eq!(
+            iter.next(),
+            Some(Range {
+                buf: 0,
+                start: 0,
+                len: 4,
+            })
+        );
         assert_eq!(iter.next(), None);
         assert_eq!(piece.piece_table.cursors.len(), 0);
     }
