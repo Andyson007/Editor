@@ -8,6 +8,7 @@
 //! architecture was the way it was, but credit where credits due
 use std::{
     convert::Infallible,
+    num::NonZeroUsize,
     ops::{Deref, Index, RangeBounds},
     slice::SliceIndex,
     str::{self, FromStr},
@@ -66,9 +67,12 @@ impl AppendOnlyStr {
     }
 
     pub fn with_capacity(capacity: usize) -> Self {
-        Self {
-            rawbuf: Arc::new(RawBuf::with_capacity(capacity)),
-            len: 0,
+        match NonZeroUsize::new(capacity) {
+            Some(x) => Self {
+                rawbuf: Arc::new(RawBuf::with_capacity(x)),
+                len: 0,
+            },
+            None => Self::new(),
         }
     }
 
@@ -105,11 +109,7 @@ impl AppendOnlyStr {
         //// The two buffers are non-overlapping, and are both at least
         //// the length of the original buffer
         unsafe {
-            std::ptr::copy_nonoverlapping(
-                original.rawbuf.ptr(),
-                self.rawbuf.ptr(),
-                original.len,
-            );
+            std::ptr::copy_nonoverlapping(original.rawbuf.ptr(), self.rawbuf.ptr(), original.len);
         }
         self.len = original.len;
     }
@@ -132,7 +132,7 @@ impl AppendOnlyStr {
         unsafe { self.push_bytes(str.as_bytes()) }
     }
 
-    pub fn get_str(&self) -> &str {
+    fn get_str(&self) -> &str {
         // : This shouldn't fail because utf-8
         // compliance is always guaranteed
         str::from_utf8(self.get_byte_slice()).unwrap()
@@ -153,23 +153,28 @@ impl AppendOnlyStr {
     pub fn slice(&self, range: impl RangeBounds<usize>) -> ByteSlice {
         let (start, end) = get_range(range, self.len);
         ByteSlice {
-        raw: self.rawbuf.clone(),
-        start,
-        end,
+            raw: self.rawbuf.clone(),
+            start,
+            end,
+        }
     }
-}
+    pub fn str_slice(&self, range: impl RangeBounds<usize>) -> StrSlice {
+        let byteslice = self.slice(range);
+        str::from_utf8(byteslice.deref()).unwrap();
+        StrSlice { byteslice }
+    }
 }
 
 impl<Idx> Index<Idx> for AppendOnlyStr
 where
-Idx: SliceIndex<[u8], Output = [u8]>,
+    Idx: SliceIndex<[u8], Output = [u8]>,
 {
-type Output = str;
+    type Output = str;
 
-fn index(&self, index: Idx) -> &Self::Output {
-    let tmp = &self.get_byte_slice()[index];
-    str::from_utf8(tmp).unwrap()
-}
+    fn index(&self, index: Idx) -> &Self::Output {
+        let tmp = &self.get_byte_slice()[index];
+        str::from_utf8(tmp).unwrap()
+    }
 }
 
 /// SAFETY: AppendOnlyStr does not allow for interior mutability
@@ -178,34 +183,46 @@ unsafe impl Sync for AppendOnlyStr {}
 unsafe impl Send for AppendOnlyStr {}
 
 pub struct ByteSlice {
-raw: Arc<RawBuf>,
-start: usize,
-end: usize,
+    raw: Arc<RawBuf>,
+    start: usize,
+    end: usize,
 }
 
 impl Deref for ByteSlice {
-type Target = [u8];
+    type Target = [u8];
 
-fn deref(&self) -> &Self::Target {
-    unsafe {
-        std::slice::from_raw_parts(self.raw.ptr().add(self.start), self.end-self.start)
+    fn deref(&self) -> &Self::Target {
+        unsafe { std::slice::from_raw_parts(self.raw.ptr().add(self.start), self.end - self.start) }
     }
 }
+
+pub struct StrSlice {
+    byteslice: ByteSlice,
+}
+
+impl Deref for StrSlice {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        // # Safety
+        // This is safe because we checked for utf-8 compilance when creating the struct
+        unsafe { str::from_utf8_unchecked(self.byteslice.deref()) }
+    }
 }
 
 fn get_range(range: impl RangeBounds<usize>, max_len: usize) -> (usize, usize) {
-let start = match range.start_bound() {
-    std::ops::Bound::Included(&v) => v,
-    std::ops::Bound::Excluded(&v) => v + 1,
-    std::ops::Bound::Unbounded => 0,
-};
-let end = match range.end_bound() {
-    std::ops::Bound::Included(&v) => v + 1,
-    std::ops::Bound::Excluded(&v) => v,
-    std::ops::Bound::Unbounded => max_len,
-};
-assert!(start <= end);
-assert!(end <= max_len);
+    let start = match range.start_bound() {
+        std::ops::Bound::Included(&v) => v,
+        std::ops::Bound::Excluded(&v) => v + 1,
+        std::ops::Bound::Unbounded => 0,
+    };
+    let end = match range.end_bound() {
+        std::ops::Bound::Included(&v) => v + 1,
+        std::ops::Bound::Excluded(&v) => v,
+        std::ops::Bound::Unbounded => max_len,
+    };
+    assert!(start <= end);
+    assert!(end <= max_len);
     (start, end)
 }
 
@@ -224,5 +241,10 @@ mod test {
         let new_ref = val.slice(..6);
         assert_eq!(&*new_ref, &b"testin"[..6]);
         assert_eq!(&*reference, b"te");
+    }
+
+    #[test]
+    fn zero_size_alloc() {
+        AppendOnlyStr::from_str("");
     }
 }

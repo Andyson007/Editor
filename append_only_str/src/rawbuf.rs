@@ -1,10 +1,8 @@
 use std::{
     alloc::{self, Layout},
-    ops::RangeBounds,
+    num::NonZeroUsize,
     ptr::NonNull,
 };
-
-use crate::get_range;
 
 pub(crate) struct RawBuf {
     ptr: NonNull<u8>,
@@ -19,22 +17,24 @@ impl RawBuf {
         }
     }
 
-    pub fn with_capacity(capacity: usize) -> Self {
-        assert!(capacity < isize::MAX as usize);
-        let layout = Layout::array::<u8>(capacity).unwrap();
+    pub fn with_capacity(capacity: NonZeroUsize) -> Self {
+        assert!(capacity < NonZeroUsize::new(isize::MAX as usize).unwrap());
+        let layout = Layout::array::<u8>(capacity.get()).unwrap();
         // This is unchecked because alloc returns a nullptr
         // when failing to alloc
 
-        //// SAFETY: -----------------------------------------
-        //// alloc is an effectively safe function to call
-        //// -------------------------------------------------
+        //// # SAFETY:
+        //// Layout isn't zero-sized
         let unchecked_ptr = unsafe { alloc::alloc(layout) };
 
         let ptr = match NonNull::new(unchecked_ptr) {
             Some(p) => p,
             None => alloc::handle_alloc_error(layout),
         };
-        Self { ptr, capacity }
+        Self {
+            ptr,
+            capacity: capacity.get(),
+        }
     }
 
     #[inline(always)]
