@@ -1,7 +1,6 @@
-use core::str;
 use std::{
     alloc::{self, Layout},
-    ptr::{self, NonNull},
+    ptr::NonNull,
 };
 
 pub(crate) struct RawBuf {
@@ -33,10 +32,6 @@ impl RawBuf {
             None => alloc::handle_alloc_error(layout),
         };
         Self { ptr, capacity }
-    }
-
-    pub unsafe fn write_unchecked(&mut self, bytes: &[u8]) {
-        ptr::copy(bytes.as_ptr(), self.ptr.as_ptr(), bytes.len());
     }
 
     #[inline(always)]

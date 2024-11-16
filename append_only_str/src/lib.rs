@@ -6,7 +6,13 @@
 //! [append-only-bytes](https://docs.rs/append-only-bytes/latest/append_only_bytes/index.html),
 //! This is because  it didn't have all the methods that I felt it needed. I did rediscover why the
 //! architecture was the way it was, but credit where credits due
-use std::{str, sync::Arc};
+use std::{
+    convert::Infallible,
+    ops::Index,
+    slice::SliceIndex,
+    str::{self, FromStr},
+    sync::Arc,
+};
 
 use rawbuf::RawBuf;
 mod rawbuf;
@@ -37,6 +43,16 @@ impl std::fmt::Debug for AppendOnlyStr {
 impl Default for AppendOnlyStr {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl FromStr for AppendOnlyStr {
+    type Err = Infallible;
+
+    fn from_str(data: &str) -> Result<Self, Self::Err> {
+        let mut ret = Self::with_capacity(data.len());
+        ret.push_str(data);
+        Ok(ret)
     }
 }
 
@@ -131,7 +147,33 @@ impl AppendOnlyStr {
     }
 }
 
+impl<Idx> Index<Idx> for AppendOnlyStr
+where
+    Idx: SliceIndex<[u8], Output = [u8]>,
+{
+    type Output = str;
+
+    fn index(&self, index: Idx) -> &Self::Output {
+        let tmp = &self.get_byte_slice()[index];
+        str::from_utf8(tmp).unwrap()
+    }
+}
+
 /// SAFETY: AppendOnlyStr does not allow for interior mutability
 /// without exclusive access and is therefore `Sync` & `Send`
 unsafe impl Sync for AppendOnlyStr {}
 unsafe impl Send for AppendOnlyStr {}
+
+#[cfg(test)]
+mod test {
+    use std::str::FromStr;
+
+    use crate::AppendOnlyStr;
+
+    #[test]
+    fn index() {
+        let val = AppendOnlyStr::from_str("testing").unwrap();
+        let reference = &val[0..=1];
+        assert_eq!(reference, "te")
+    }
+}
