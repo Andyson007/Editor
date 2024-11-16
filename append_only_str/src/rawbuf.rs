@@ -50,11 +50,16 @@ impl RawBuf {
 
 impl Drop for RawBuf {
     fn drop(&mut self) {
-        unsafe {
-            alloc::dealloc(
-                self.ptr.as_ptr(),
-                Layout::array::<u8>(self.capacity).unwrap(),
-            )
+        if self.capacity != 0 {
+            //// # Safety
+            //// Dealloc is safe beacuse ptr isn't a nullptr, and we aren't deallocing a zero-sized
+            //// struct because we know that we are storing u8s
+            unsafe {
+                alloc::dealloc(
+                    self.ptr.as_ptr(),
+                    Layout::array::<u8>(self.capacity).unwrap(),
+                )
+            }
         }
     }
 }
