@@ -1,4 +1,4 @@
-use std::{iter, str};
+use std::{iter, str, sync::Arc};
 
 use append_only_str::AppendOnlyStr;
 
@@ -10,7 +10,7 @@ where
 {
     ranges: T,
     main: &'a str,
-    clients: &'a Vec<AppendOnlyStr>,
+    clients: &'a Vec<Arc<AppendOnlyStr>>,
     current_iter: Option<iter::Take<iter::Skip<str::Chars<'a>>>>,
 }
 
@@ -86,7 +86,7 @@ impl Piece {
 
 #[cfg(test)]
 mod test {
-    use std::{collections::LinkedList, str::FromStr};
+    use std::{collections::LinkedList, str::FromStr, sync::Arc};
 
     use append_only_str::AppendOnlyStr;
 
@@ -170,7 +170,7 @@ mod test {
         let piece = Piece {
             buffers: Buffers {
                 original: original.to_string().into_boxed_str(),
-                clients: vec![AppendOnlyStr::from_str(client1).unwrap()],
+                clients: vec![Arc::new(AppendOnlyStr::from_str(client1).unwrap())],
             },
             piece_table: PieceTable {
                 table: LinkedList::from_iter([
@@ -206,7 +206,7 @@ mod test {
         let piece = Piece {
             buffers: Buffers {
                 original: original.to_string().into_boxed_str(),
-                clients: vec![AppendOnlyStr::from_str(client1).unwrap()],
+                clients: vec![Arc::new(AppendOnlyStr::from_str(client1).unwrap())],
             },
             piece_table: PieceTable {
                 table: LinkedList::from_iter([

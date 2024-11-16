@@ -1,8 +1,7 @@
 use std::{
     collections::LinkedList,
     io::{self, Read},
-    iter,
-    sync::RwLock,
+    sync::Arc,
 };
 
 pub mod iters;
@@ -13,7 +12,7 @@ use btep::{Deserialize, Serialize};
 #[derive(Debug)]
 struct Buffers {
     original: Box<str>,
-    clients: Vec<AppendOnlyStr>,
+    clients: Vec<Arc<AppendOnlyStr>>,
 }
 
 #[derive(Debug)]
@@ -25,7 +24,7 @@ pub struct Piece {
 #[derive(Debug)]
 struct PieceTable {
     table: LinkedList<Range>,
-    cursors: Vec<RwLock<Box<str>>>,
+    cursors: Vec<Arc<AppendOnlyStr>>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -36,6 +35,23 @@ pub struct Range {
 }
 
 impl Piece {
+    pub fn new() -> Self {
+        Self {
+            buffers: Buffers {
+                original: "".into(),
+                clients: vec![],
+            },
+            piece_table: PieceTable {
+                table: LinkedList::from_iter([Range {
+                    buf: 0,
+                    start: 0,
+                    len: 0,
+                }]),
+                cursors: vec![],
+            },
+        }
+    }
+
     pub fn original_from_reader<T: Read>(mut read: T) -> io::Result<Self> {
         let mut string = String::new();
         read.read_to_string(&mut string)?;
@@ -57,22 +73,32 @@ impl Piece {
             },
         })
     }
+
+    pub fn add_client(&mut self) -> Arc<AppendOnlyStr> {
+        let append_only = AppendOnlyStr::new();
+        let arc = Arc::new(append_only);
+        self.piece_table.cursors.push(Arc::clone(&arc));
+        self.buffers.clients.push(Arc::clone(&arc));
+        arc
+    }
+}
+
+impl Default for Piece {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Serialize for &Piece {
+    // TODO: This doesn't send the piece table yet
     fn serialize(&self) -> impl IntoIterator<Item = u8> {
-        iter::once(self.buffers.original.as_ref().as_bytes())
-            .chain(
-                self.buffers
-                    .clients
-                    .iter()
-                    .map(|x| x.get_str().as_bytes()),
-            )
-            .map(|x| {
-                x.into_iter()
-                    .flat_map(|x| [b'\\', *x].into_iter().skip(if *x == b']' { 0 } else { 1 }))
-            })
-            .flatten()
+        todo!();
+        let mut ret = std::iter::empty();
+        // .map(|x| {
+        //     x.into_iter()
+        //         .flat_map(|x| [b'\\', *x].into_iter().skip(if *x == b']' { 0 } else { 1 }))
+        // })
+        ret
     }
 }
 
@@ -131,5 +157,11 @@ mod test {
         let mut bytes = &b"test"[..];
         let piece =
             Piece::original_from_reader(BufReader::with_capacity(bytes.len(), &mut bytes)).unwrap();
+    }
+
+    #[test]
+    fn insert() {
+        let mut piece = Piece::new();
+        piece.add_client();
     }
 }
