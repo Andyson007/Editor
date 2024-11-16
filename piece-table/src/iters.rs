@@ -5,23 +5,26 @@ use append_only_str::AppendOnlyStr;
 
 use crate::Piece;
 
-pub struct Chars<'a, T> {
+pub struct Chars<'a, T>
+where
+    T: Iterator<Item = &'a (usize, RangeInclusive<usize>)>,
+{
     ranges: T,
     main: &'a str,
     clients: &'a Vec<AppendOnlyStr>,
     current_iter: Option<iter::Take<iter::Skip<str::Chars<'a>>>>,
 }
 
-impl<T> Iterator for Chars<'_, T>
+impl<'a, T> Iterator for Chars<'a, T>
 where
-    T: Iterator<Item = (usize, RangeInclusive<usize>)>,
+    T: Iterator<Item = &'a (usize, RangeInclusive<usize>)>,
 {
     type Item = char;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.current_iter.is_none() {
             let (buf, current_range) = self.ranges.next()?;
-            self.current_iter = Some(if buf == 0 {
+            self.current_iter = Some(if *buf == 0 {
                 self.main
                     .chars()
                     .skip(*current_range.start())
@@ -42,13 +45,16 @@ where
     }
 }
 
-pub struct Lines<'a, T> {
+pub struct Lines<'a, T>
+where
+    T: Iterator<Item = &'a (usize, RangeInclusive<usize>)>,
+{
     chars: Chars<'a, T>,
 }
 
-impl<T> Iterator for Lines<'_, T>
+impl<'a, T> Iterator for Lines<'a, T>
 where
-    T: Iterator<Item = (usize, RangeInclusive<usize>)>,
+    T: Iterator<Item = &'a (usize, RangeInclusive<usize>)>,
 {
     type Item = String;
 
@@ -84,12 +90,52 @@ impl Piece {
         &self,
     ) -> Lines<'_, std::collections::linked_list::Iter<'_, (usize, RangeInclusive<usize>)>> {
         Lines {
-            chars: Chars {
-                ranges: self.piece_table.table.iter(),
-                main: &self.buffers.original,
-                current_iter: None,
-                clients: &self.buffers.clients,
-            },
+            chars: self.chars(),
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::collections::LinkedList;
+
+    use crate::{Buffers, Piece, PieceTable};
+
+    #[test]
+    fn test_lines_no_clients() {
+        let text = "test\nmore tests\n";
+        let piece = Piece {
+            buffers: Buffers {
+                original: text.to_string().into_boxed_str(),
+                clients: vec![],
+            },
+            piece_table: PieceTable {
+                table: LinkedList::from_iter(std::iter::once((0, 0..=text.len() - 1))),
+                cursors: vec![],
+            },
+        };
+
+        let mut lines = piece.lines();
+        assert_eq!(lines.next(), Some("test".to_string()));
+    }
+
+    #[test]
+    fn test_chars_no_clients() {
+        let text = "test\nmore tests\n";
+        let piece = Piece {
+            buffers: Buffers {
+                original: text.to_string().into_boxed_str(),
+                clients: vec![],
+            },
+            piece_table: PieceTable {
+                table: LinkedList::from_iter(std::iter::once((0, 0..=text.len() - 1))),
+                cursors: vec![],
+            },
+        };
+        let test = piece.piece_table.table.iter();
+        let test = piece.piece_table.table.iter();
+        let mut chars = piece.chars();
+        assert_eq!(chars.next(), Some('t'));
+        assert_eq!(chars.next(), Some('e'));
     }
 }
