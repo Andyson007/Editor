@@ -1,7 +1,10 @@
 use std::{
     alloc::{self, Layout},
+    ops::RangeBounds,
     ptr::NonNull,
 };
+
+use crate::get_range;
 
 pub(crate) struct RawBuf {
     ptr: NonNull<u8>,

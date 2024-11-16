@@ -8,7 +8,7 @@
 //! architecture was the way it was, but credit where credits due
 use std::{
     convert::Infallible,
-    ops::Index,
+    ops::{Deref, Index, RangeBounds},
     slice::SliceIndex,
     str::{self, FromStr},
     sync::Arc,
@@ -145,24 +145,65 @@ impl AppendOnlyStr {
                 .unwrap()
         }
     }
+
+    pub fn slice(&self, range: impl RangeBounds<usize>) -> ByteSlice {
+        let (start, end) = get_range(range, self.len);
+        ByteSlice {
+        raw: self.rawbuf.clone(),
+        start,
+        end,
+    }
+}
 }
 
 impl<Idx> Index<Idx> for AppendOnlyStr
 where
-    Idx: SliceIndex<[u8], Output = [u8]>,
+Idx: SliceIndex<[u8], Output = [u8]>,
 {
-    type Output = str;
+type Output = str;
 
-    fn index(&self, index: Idx) -> &Self::Output {
-        let tmp = &self.get_byte_slice()[index];
-        str::from_utf8(tmp).unwrap()
-    }
+fn index(&self, index: Idx) -> &Self::Output {
+    let tmp = &self.get_byte_slice()[index];
+    str::from_utf8(tmp).unwrap()
+}
 }
 
 /// SAFETY: AppendOnlyStr does not allow for interior mutability
 /// without exclusive access and is therefore `Sync` & `Send`
 unsafe impl Sync for AppendOnlyStr {}
 unsafe impl Send for AppendOnlyStr {}
+
+pub struct ByteSlice {
+raw: Arc<RawBuf>,
+start: usize,
+end: usize,
+}
+
+impl Deref for ByteSlice {
+type Target = [u8];
+
+fn deref(&self) -> &Self::Target {
+    unsafe {
+        std::slice::from_raw_parts(self.raw.ptr().add(self.start), self.end-self.start)
+    }
+}
+}
+
+fn get_range(range: impl RangeBounds<usize>, max_len: usize) -> (usize, usize) {
+let start = match range.start_bound() {
+    std::ops::Bound::Included(&v) => v,
+    std::ops::Bound::Excluded(&v) => v + 1,
+    std::ops::Bound::Unbounded => 0,
+};
+let end = match range.end_bound() {
+    std::ops::Bound::Included(&v) => v + 1,
+    std::ops::Bound::Excluded(&v) => v,
+    std::ops::Bound::Unbounded => max_len,
+};
+assert!(start <= end);
+assert!(end <= max_len);
+    (start, end)
+}
 
 #[cfg(test)]
 mod test {
@@ -171,9 +212,11 @@ mod test {
     use crate::AppendOnlyStr;
 
     #[test]
-    fn index() {
-        let val = AppendOnlyStr::from_str("testing").unwrap();
-        let reference = &val[0..=1];
-        assert_eq!(reference, "te")
+    fn slice_through_realloc() {
+        let mut val = AppendOnlyStr::from_str("test").unwrap();
+        let reference = val.slice(0..=1);
+        assert_eq!(&*reference, b"te");
+        val.push_str("snoatehusnaotheusnatoheusantheooa");
+        assert_eq!(&*reference, b"te");
     }
 }
