@@ -36,7 +36,8 @@ impl std::fmt::Debug for AppendOnlyStr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("AppendOnlyStr")
             .field("data", &self.get_str())
-            .finish_non_exhaustive()
+            .field("len", &self.len)
+            .finish()
     }
 }
 
@@ -102,18 +103,21 @@ impl AppendOnlyStr {
         let original = std::mem::replace(self, Self::with_capacity(new_capacity));
         //// SAFETY: -----------------------------
         //// The two buffers are non-overlapping, and are both at least
-        //// `original.rawbuf.capacity()` long
+        //// the length of the original buffer
         unsafe {
             std::ptr::copy_nonoverlapping(
                 original.rawbuf.ptr(),
                 self.rawbuf.ptr(),
-                original.rawbuf.capacity(),
+                original.len,
             );
         }
+        self.len = original.len;
     }
 
+    /// # Safety
+    /// This function assumes that there is already enough space allocated to fit the new bytes
     unsafe fn write_unchecked(&mut self, bytes: &[u8]) {
-        std::ptr::copy(bytes.as_ptr(), self.rawbuf.ptr(), bytes.len());
+        std::ptr::copy(bytes.as_ptr(), self.rawbuf.ptr().add(self.len), bytes.len());
         self.len += bytes.len();
     }
 
@@ -216,7 +220,9 @@ mod test {
         let mut val = AppendOnlyStr::from_str("test").unwrap();
         let reference = val.slice(0..=1);
         assert_eq!(&*reference, b"te");
-        val.push_str("snoatehusnaotheusnatoheusantheooa");
+        val.push_str("ing stuff");
+        let new_ref = val.slice(..6);
+        assert_eq!(&*new_ref, &b"testin"[..6]);
         assert_eq!(&*reference, b"te");
     }
 }
