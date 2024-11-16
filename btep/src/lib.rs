@@ -1,7 +1,7 @@
 //! This crate implements a custom binary
 //! text transfer protocol.
 
-use std::{iter, ops::Deref};
+use std::iter;
 
 use tungstenite::Message;
 /// Btep or the Binary Text Editor Protocol

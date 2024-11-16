@@ -1,4 +1,4 @@
-use std::{iter, ops::RangeInclusive, str};
+use std::{iter, str};
 
 use append_only_str::AppendOnlyStr;
 
@@ -90,7 +90,7 @@ mod test {
 
     use append_only_str::AppendOnlyStr;
 
-    use crate::{iters::test, Buffers, Piece, PieceTable, Range};
+    use crate::{Buffers, Piece, PieceTable, Range};
 
     #[test]
     fn test_chars_no_clients() {

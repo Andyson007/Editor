@@ -1,7 +1,7 @@
-use std::ops::RangeInclusive;
 use std::{
     collections::LinkedList,
     io::{self, Read},
+    iter,
     sync::RwLock,
 };
 
@@ -61,13 +61,42 @@ impl Piece {
 
 impl Serialize for &Piece {
     fn serialize(&self) -> impl IntoIterator<Item = u8> {
-        std::iter::empty()
+        iter::once(self.buffers.original.as_ref().as_bytes())
+            .chain(
+                self.buffers
+                    .clients
+                    .iter()
+                    .map(|x| x.get_str().as_bytes()),
+            )
+            .map(|x| {
+                x.into_iter()
+                    .flat_map(|x| [b'\\', *x].into_iter().skip(if *x == b']' { 0 } else { 1 }))
+            })
+            .flatten()
     }
 }
 
 impl Deserialize for Piece {
     fn deserialize(data: impl IntoIterator<Item = u8>) -> Self {
-        todo!()
+        let original = String::from_utf8(data.into_iter().collect())
+            .unwrap()
+            .into_boxed_str();
+        Self {
+            piece_table: PieceTable {
+                table: LinkedList::from_iter(std::iter::once(Range {
+                    buf: 0,
+                    start: 0,
+                    len: original.len(),
+                })),
+                // TODO: This should also be populated
+                cursors: vec![],
+            },
+            buffers: Buffers {
+                original,
+                // TODO: This should be populated
+                clients: vec![],
+            },
+        }
     }
 }
 
