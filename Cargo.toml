@@ -1,4 +1,4 @@
 [workspace]
 resolver = "2"
 
-members = ["server","client", "btep", "bundled", "piece-table", "append_only_str"]
+members = ["server","client", "btep", "bundled", "piece-table", "append_only_str", "utils"]
