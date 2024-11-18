@@ -100,6 +100,10 @@ mod test {
 
     use crate::{Buffers, Piece, PieceTable, Range};
 
+    fn with_len(buf: usize, start: usize, len: usize) -> Arc<Range> {
+        Arc::new(Range { buf, start, len })
+    }
+
     #[test]
     fn test_chars_no_clients() {
         let text = "test\nmore tests\n";
@@ -109,11 +113,7 @@ mod test {
                 clients: vec![],
             },
             piece_table: PieceTable {
-                table: LinkedList::from_iter(std::iter::once(Range {
-                    buf: 0,
-                    start: 0,
-                    len: text.len(),
-                })),
+                table: LinkedList::from_iter(std::iter::once(with_len(0, 0, text.len()))),
                 cursors: vec![],
             },
         };
@@ -131,11 +131,7 @@ mod test {
                 clients: vec![],
             },
             piece_table: PieceTable {
-                table: LinkedList::from_iter(std::iter::once(Range {
-                    buf: 0,
-                    start: 0,
-                    len: text.len(),
-                })),
+                table: LinkedList::from_iter(std::iter::once(with_len(0, 0, text.len()))),
                 cursors: vec![],
             },
         };
@@ -155,11 +151,7 @@ mod test {
                 clients: vec![],
             },
             piece_table: PieceTable {
-                table: LinkedList::from_iter(std::iter::once(Range {
-                    buf: 0,
-                    start: 0,
-                    len: text.len(),
-                })),
+                table: LinkedList::from_iter(std::iter::once(with_len(0, 0, text.len()))),
                 cursors: vec![],
             },
         };
@@ -181,18 +173,22 @@ mod test {
                 clients: vec![Arc::new(AppendOnlyStr::from_str(client1).unwrap())],
             },
             piece_table: PieceTable {
-                table: LinkedList::from_iter([
-                    Range {
-                        buf: 0,
-                        start: 0,
-                        len: original.len(),
-                    },
-                    Range {
-                        buf: 1,
-                        start: 0,
-                        len: client1.len(),
-                    },
-                ]),
+                table: LinkedList::from_iter(
+                    [
+                        Range {
+                            buf: 0,
+                            start: 0,
+                            len: original.len(),
+                        },
+                        Range {
+                            buf: 1,
+                            start: 0,
+                            len: client1.len(),
+                        },
+                    ]
+                    .into_iter()
+                    .map(Arc::new),
+                ),
                 cursors: vec![],
             },
         };
@@ -217,28 +213,32 @@ mod test {
                 clients: vec![Arc::new(AppendOnlyStr::from_str(client1).unwrap())],
             },
             piece_table: PieceTable {
-                table: LinkedList::from_iter([
-                    Range {
-                        buf: 0,
-                        start: 0,
-                        len: 1,
-                    },
-                    Range {
-                        buf: 1,
-                        start: 0,
-                        len: 1,
-                    },
-                    Range {
-                        buf: 0,
-                        start: 1,
-                        len: 2,
-                    },
-                    Range {
-                        buf: 1,
-                        start: 1,
-                        len: 2,
-                    },
-                ]),
+                table: LinkedList::from_iter(
+                    [
+                        Range {
+                            buf: 0,
+                            start: 0,
+                            len: 1,
+                        },
+                        Range {
+                            buf: 1,
+                            start: 0,
+                            len: 1,
+                        },
+                        Range {
+                            buf: 0,
+                            start: 1,
+                            len: 2,
+                        },
+                        Range {
+                            buf: 1,
+                            start: 1,
+                            len: 2,
+                        },
+                    ]
+                    .into_iter()
+                    .map(Arc::new),
+                ),
                 cursors: vec![],
             },
         };

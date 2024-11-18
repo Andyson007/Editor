@@ -1,6 +1,10 @@
 #![feature(linked_list_cursors)]
 use std::{
-    collections::{linked_list::Cursor as LinkedCursor, LinkedList, VecDeque},
+    borrow::BorrowMut,
+    collections::{
+        linked_list::{self, Cursor as LinkedCursor},
+        LinkedList, VecDeque,
+    },
     io::{self, Read},
     mem, str,
     sync::Arc,
@@ -33,16 +37,16 @@ struct PieceTable {
 #[derive(Debug)]
 struct Cursor {
     buffer: Arc<AppendOnlyStr>,
-    // NOTE: This 'static might, be wrong, but iirc 'static actually means that it lives as long as
+    // NOTE: This 'static might be wrong, but iirc 'static actually means that it lives as long as
     // it has to, which should be sufficient for this
-    location: Option<LinkedCursor<'static, Arc<Range>>>,
+    location: Option<Arc<Range>>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Range {
-    buf: usize,
-    start: usize,
-    len: usize,
+    pub buf: usize,
+    pub start: usize,
+    pub len: usize,
 }
 
 impl Piece {
@@ -123,15 +127,24 @@ impl Serialize for &Piece {
         // Might be useless, but it's a single byte
         ret.push_back(0xff);
 
-        let cursors = &self.piece_table.cursors;
-
         ret.extend((self.piece_table.table.len() as u64).to_be_bytes());
+
         for piece in &self.piece_table.table {
             ret.extend((piece.buf as u64).to_be_bytes());
             ret.extend((piece.start as u64).to_be_bytes());
             ret.extend((piece.len as u64).to_be_bytes());
         }
-        todo!("The cursors aren't sent yet");
+
+        for cursor in &self.piece_table.cursors {
+            let Some(ref current) = cursor.location else {
+                ret.push_back(0);
+                continue;
+            };
+            ret.push_back(1);
+            ret.extend((current.buf as u64).to_be_bytes());
+            ret.extend((current.start as u64).to_be_bytes());
+            ret.extend((current.len as u64).to_be_bytes());
+        }
         ret
     }
 }
@@ -164,15 +177,16 @@ impl Deserialize for Piece {
             .collect::<Vec<_>>()
             .try_into()
             .unwrap();
+
         let piece_count = u64::from_be_bytes(pieces) as usize;
 
-        let table = iter
+        let table: LinkedList<Arc<Range>> = iter
             .by_ref()
-            .take(piece_count)
             // This should be take while in order to actually consume the next value. This is
             // expected because it allows  for disambiguation between a value and and a control
             // value
             .chunks::<{ 3 * mem::size_of::<u64>() }>()
+            .take(piece_count)
             .map(|x| {
                 let slices = x
                     .into_iter()
@@ -186,22 +200,46 @@ impl Deserialize for Piece {
             })
             .collect();
 
+        let mut cursors = Vec::with_capacity(client_buffers.len());
+        while let Some(cursor) = iter.next() {
+            if cursor == 0 {
+                cursors.push(Cursor {
+                    buffer: Arc::clone(&client_buffers[cursors.len()]),
+                    location: None,
+                });
+                continue;
+            }
+            debug_assert_eq!(cursor, 1);
+            let chunks = iter
+                .by_ref()
+                .chunks::<{ 3 * mem::size_of::<u64>() }>()
+                .take(3)
+                .flat_map(|x| x.into_iter().chunks::<{ mem::size_of::<u64>() }>())
+                .collect::<Vec<_>>();
+
+            cursors.push(Cursor {
+                buffer: Arc::clone(&client_buffers[cursors.len()]),
+                location: Some(Arc::new(Range {
+                    buf: u64::from_be_bytes(chunks[0]) as usize,
+                    start: u64::from_be_bytes(chunks[1]) as usize,
+                    len: u64::from_be_bytes(chunks[2]) as usize,
+                })),
+            });
+        }
+
         Self {
             buffers: Buffers {
                 original: original_buffer,
                 clients: client_buffers,
             },
-            piece_table: PieceTable {
-                table,
-                cursors: todo!(),
-            },
+            piece_table: PieceTable { table, cursors },
         }
     }
 }
 
 #[cfg(test)]
 mod test {
-    use std::io::BufReader;
+    use std::{io::BufReader, sync::Arc};
 
     use crate::{Piece, Range};
 
@@ -215,11 +253,11 @@ mod test {
         let mut iter = piece.piece_table.table.into_iter();
         assert_eq!(
             iter.next(),
-            Some(Range {
+            Some(Arc::new(Range {
                 buf: 0,
                 start: 0,
                 len: 4,
-            })
+            }))
         );
         assert_eq!(iter.next(), None);
         assert_eq!(piece.piece_table.cursors.len(), 0);
