@@ -1,4 +1,4 @@
-use std::{iter, str, sync::Arc};
+use std::{borrow::Borrow, iter, str, sync::Arc};
 
 use append_only_str::AppendOnlyStr;
 
@@ -6,7 +6,7 @@ use crate::{Piece, Range};
 
 pub struct Chars<'a, T>
 where
-    T: Iterator<Item = &'a Range>,
+    T: Iterator<Item = Range>,
 {
     ranges: T,
     main: &'a str,
@@ -16,17 +16,17 @@ where
 
 impl<'a, T> Iterator for Chars<'a, T>
 where
-    T: Iterator<Item = &'a Range>,
+    T: Iterator<Item = Range>,
 {
     type Item = char;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.current_iter.is_none() {
             let Range { buf, start, len } = self.ranges.next()?;
-            self.current_iter = Some(if *buf == 0 {
-                self.main.chars().skip(*start).take(*len)
+            self.current_iter = Some(if buf == 0 {
+                self.main.chars().skip(start).take(len)
             } else {
-                self.clients[buf - 1].chars().skip(*start).take(*len)
+                self.clients[buf - 1].chars().skip(start).take(len)
             });
         }
         if let Some(x) = self.current_iter.as_mut().unwrap().next() {
@@ -40,14 +40,14 @@ where
 
 pub struct Lines<'a, T>
 where
-    T: Iterator<Item = &'a Range>,
+    T: Iterator<Item = Range>,
 {
     chars: Chars<'a, T>,
 }
 
 impl<'a, T> Iterator for Lines<'a, T>
 where
-    T: Iterator<Item = &'a Range>,
+    T: Iterator<Item = Range>,
 {
     type Item = String;
 
@@ -69,9 +69,15 @@ where
 
 impl Piece {
     #[must_use]
-    pub fn chars(&self) -> Chars<'_, std::collections::linked_list::Iter<'_, Range>> {
+    pub fn chars(&self) -> Chars<'_, std::vec::IntoIter<Range>> {
         Chars {
-            ranges: self.piece_table.table.iter(),
+            ranges: self
+                .piece_table
+                .table
+                .iter()
+                .map(|x| Range::clone(x))
+                .collect::<Vec<_>>()
+                .into_iter(),
             main: &self.buffers.original,
             current_iter: None,
             clients: &self.buffers.clients,
@@ -79,7 +85,7 @@ impl Piece {
     }
 
     #[must_use]
-    pub fn lines(&self) -> Lines<'_, std::collections::linked_list::Iter<'_, Range>> {
+    pub fn lines(&self) -> Lines<'_, std::vec::IntoIter<Range>> {
         Lines {
             chars: self.chars(),
         }

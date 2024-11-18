@@ -1,5 +1,6 @@
+#![feature(linked_list_cursors)]
 use std::{
-    collections::{LinkedList, VecDeque},
+    collections::{linked_list::Cursor as LinkedCursor, LinkedList, VecDeque},
     io::{self, Read},
     mem, str,
     sync::Arc,
@@ -25,11 +26,19 @@ pub struct Piece {
 
 #[derive(Debug)]
 struct PieceTable {
-    table: LinkedList<Range>,
-    cursors: Vec<Arc<AppendOnlyStr>>,
+    table: LinkedList<Arc<Range>>,
+    cursors: Vec<Cursor>,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
+struct Cursor {
+    buffer: Arc<AppendOnlyStr>,
+    // NOTE: This 'static might, be wrong, but iirc 'static actually means that it lives as long as
+    // it has to, which should be sufficient for this
+    location: Option<LinkedCursor<'static, Arc<Range>>>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Range {
     buf: usize,
     start: usize,
@@ -45,11 +54,11 @@ impl Piece {
                 clients: vec![],
             },
             piece_table: PieceTable {
-                table: LinkedList::from_iter([Range {
+                table: LinkedList::from_iter([Arc::new(Range {
                     buf: 0,
                     start: 0,
                     len: 0,
-                }]),
+                })]),
                 cursors: vec![],
             },
         }
@@ -65,11 +74,11 @@ impl Piece {
         read.read_to_string(&mut string)?;
         let original = string.into_boxed_str();
         let mut list = LinkedList::new();
-        list.push_back(Range {
+        list.push_back(Arc::new(Range {
             buf: 0,
             start: 0,
             len: original.len(),
-        });
+        }));
         Ok(Self {
             buffers: Buffers {
                 original,
@@ -85,7 +94,10 @@ impl Piece {
     pub fn add_client(&mut self) -> Arc<AppendOnlyStr> {
         let append_only = AppendOnlyStr::new();
         let arc = Arc::new(append_only);
-        self.piece_table.cursors.push(Arc::clone(&arc));
+        self.piece_table.cursors.push(Cursor {
+            buffer: Arc::clone(&arc),
+            location: None,
+        });
         self.buffers.clients.push(Arc::clone(&arc));
         arc
     }
@@ -111,7 +123,7 @@ impl Serialize for &Piece {
         // Might be useless, but it's a single byte
         ret.push_back(0xff);
 
-        let cursors = self.piece_table.cursors;
+        let cursors = &self.piece_table.cursors;
 
         ret.extend((self.piece_table.table.len() as u64).to_be_bytes());
         for piece in &self.piece_table.table {
@@ -166,11 +178,11 @@ impl Deserialize for Piece {
                     .into_iter()
                     .chunks::<{ mem::size_of::<u64>() }>()
                     .collect::<Vec<_>>();
-                Range {
+                Arc::new(Range {
                     buf: u64::from_be_bytes(slices[0]) as usize,
                     start: u64::from_be_bytes(slices[1]) as usize,
                     len: u64::from_be_bytes(slices[2]) as usize,
-                }
+                })
             })
             .collect();
 
