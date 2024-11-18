@@ -1,7 +1,7 @@
 //! This crate implements a custom binary
 //! text transfer protocol.
 
-use std::iter;
+use std::{collections::VecDeque, iter};
 
 use tungstenite::Message;
 /// Btep or the Binary Text Editor Protocol
@@ -18,9 +18,11 @@ where
     /// Converts a bytestream into a message
     #[must_use]
     pub fn into_message(self) -> Message {
+        let mut serialized = self.serialize();
         match self {
-            Self::Full(x) => {
-                Message::Binary(iter::once(0).chain(x.serialize()).collect::<Vec<_>>())
+            Self::Full(_) => {
+                serialized.push_front(0);
+                Message::Binary(serialized.into())
             }
         }
     }
@@ -41,8 +43,19 @@ impl<T> Btep<T> {
             panic!("wrong message type")
         };
         match data.first().unwrap() {
-            0 => Self::Full(Deserialize::deserialize(data.into_iter().skip(1))),
+            0 => Self::Full(Deserialize::deserialize(&data[1..])),
             _ => panic!("An invalid specifier was found"),
+        }
+    }
+}
+
+impl<T> Serialize for Btep<T>
+where
+    T: Serialize,
+{
+    fn serialize(&self) -> VecDeque<u8> {
+        match self {
+            Btep::Full(x) => x.serialize(),
         }
     }
 }
@@ -50,13 +63,13 @@ impl<T> Btep<T> {
 /// A trait allow for serialization into the Btep™ format
 pub trait Serialize {
     /// The method provide by `Serialize`.
-    fn serialize(&self) -> impl IntoIterator<Item = u8>;
+    fn serialize(&self) -> VecDeque<u8>;
 }
 
 /// `Deserialize` allows for deserialization and is supposed to be the opposite of `Serialize`.
 pub trait Deserialize {
     /// The method provided by `Deserialize`
-    fn deserialize(data: impl IntoIterator<Item = u8>) -> Self;
+    fn deserialize(data: &[u8]) -> Self;
 }
 
 // impl<'a, T: Serialize + 'a, U: Deref<Target = T>> Serialize for U {
