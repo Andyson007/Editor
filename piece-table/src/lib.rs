@@ -1,6 +1,7 @@
 use std::{
-    collections::LinkedList,
+    collections::{LinkedList, VecDeque},
     io::{self, Read},
+    mem, str,
     sync::Arc,
 };
 
@@ -8,6 +9,7 @@ pub mod iters;
 
 use append_only_str::AppendOnlyStr;
 use btep::{Deserialize, Serialize};
+use utils::iters::{InnerIteratorExt, IteratorExt};
 
 #[derive(Debug)]
 struct Buffers {
@@ -96,38 +98,90 @@ impl Default for Piece {
 }
 
 impl Serialize for &Piece {
-    // TODO: This doesn't send the piece table yet
-    fn serialize(&self) -> impl IntoIterator<Item = u8> {
-        todo!();
-        let mut ret = std::iter::empty();
-        // .map(|x| {
-        //     x.into_iter()
-        //         .flat_map(|x| [b'\\', *x].into_iter().skip(if *x == b']' { 0 } else { 1 }))
-        // })
+    fn serialize(&self) -> std::collections::VecDeque<u8> {
+        let mut ret = VecDeque::new();
+        ret.extend(self.buffers.original.bytes());
+        for client in &self.buffers.clients {
+            // 0xfe is used here because its not representable by utf8, and makes stuff easier to
+            // parse. This is useful because the alternative is the specify the strings length,
+            // which would take up at least as many bytes
+            ret.push_back(0xfe);
+            ret.extend(client.slice(..).iter());
+        }
+        // Might be useless, but it's a single byte
+        ret.push_back(0xff);
+
+        let cursors = self.piece_table.cursors;
+
+        ret.extend((self.piece_table.table.len() as u64).to_be_bytes());
+        for piece in &self.piece_table.table {
+            ret.extend((piece.buf as u64).to_be_bytes());
+            ret.extend((piece.start as u64).to_be_bytes());
+            ret.extend((piece.len as u64).to_be_bytes());
+        }
+        todo!("The cursors aren't sent yet");
         ret
     }
 }
 
 impl Deserialize for Piece {
-    fn deserialize(data: impl IntoIterator<Item = u8>) -> Self {
-        let original = String::from_utf8(data.into_iter().collect())
-            .unwrap()
-            .into_boxed_str();
+    fn deserialize(data: &[u8]) -> Self {
+        let mut iter = data.iter().cloned().peekable();
+
+        let original_buffer = String::from_utf8(
+            iter.take_while_ref(|x| !(*x == 254 || *x == 255))
+                .collect::<Vec<_>>(),
+        )
+        .unwrap()
+        .into_boxed_str();
+
+        let mut client_buffers = Vec::new();
+        loop {
+            if iter.next() == Some(255) {
+                break;
+            }
+            client_buffers.push(Arc::new(
+                iter.by_ref()
+                    .take_while(|x| !(*x == 254 || *x == 255))
+                    .collect::<AppendOnlyStr>(),
+            ))
+        }
+        let pieces: [u8; 8] = iter
+            .by_ref()
+            .take(mem::size_of::<u64>())
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap();
+        let piece_count = u64::from_be_bytes(pieces) as usize;
+
+        let table = iter
+            .by_ref()
+            .take(piece_count)
+            // This should be take while in order to actually consume the next value. This is
+            // expected because it allows  for disambiguation between a value and and a control
+            // value
+            .chunks::<{ 3 * mem::size_of::<u64>() }>()
+            .map(|x| {
+                let slices = x
+                    .into_iter()
+                    .chunks::<{ mem::size_of::<u64>() }>()
+                    .collect::<Vec<_>>();
+                Range {
+                    buf: u64::from_be_bytes(slices[0]) as usize,
+                    start: u64::from_be_bytes(slices[1]) as usize,
+                    len: u64::from_be_bytes(slices[2]) as usize,
+                }
+            })
+            .collect();
+
         Self {
-            piece_table: PieceTable {
-                table: std::iter::once(Range {
-                    buf: 0,
-                    start: 0,
-                    len: original.len(),
-                })
-                .collect::<LinkedList<_>>(),
-                // TODO: This should also be populated
-                cursors: vec![],
-            },
             buffers: Buffers {
-                original,
-                // TODO: This should be populated
-                clients: vec![],
+                original: original_buffer,
+                clients: client_buffers,
+            },
+            piece_table: PieceTable {
+                table,
+                cursors: todo!(),
             },
         }
     }
