@@ -179,7 +179,6 @@ impl Deserialize for Piece {
             .unwrap();
 
         let piece_count = u64::from_be_bytes(pieces) as usize;
-
         let table: LinkedList<Arc<Range>> = iter
             .by_ref()
             // This should be take while in order to actually consume the next value. This is

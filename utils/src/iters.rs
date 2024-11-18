@@ -1,4 +1,5 @@
 use std::{
+    fmt::Debug,
     iter::{self, Peekable},
     mem::MaybeUninit,
 };
@@ -53,8 +54,13 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         let mut ret = [MaybeUninit::<T::Item>::uninit(); N];
         let mut ret_iter = ret.iter_mut();
-        while let (Some(ret), val) = (ret_iter.next(), self.iter.next()?) {
-            ret.write(val);
+        for i in 0..N {
+            let (Some(ret), val) = (ret_iter.next(), self.iter.next()?) else {
+                unreachable!()
+            };
+            {
+                ret.write(val);
+            }
         }
         //// # Safety
         //// We have iterated over the entirity of ret meaning that every item has been written to.
@@ -104,6 +110,8 @@ where
 
 #[cfg(test)]
 mod test {
+    use crate::iters::IteratorExt;
+
     use super::InnerIteratorExt;
 
     #[test]
@@ -114,5 +122,10 @@ mod test {
         let sum_b = iter.sum::<u8>();
         assert_eq!(sum_a, 1 + 2);
         assert_eq!(sum_b, 3 + 4 + 5);
+    }
+
+    #[test]
+    fn exact_size_chunk() {
+        assert_ne!((0..24).chunks::<24>().next(), None);
     }
 }
