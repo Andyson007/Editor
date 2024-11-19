@@ -1,15 +1,39 @@
 //! Implements iterator helper functions for `AppendOnlyStr`
 
-use crate::AppendOnlyStr;
+use crate::{AppendOnlyStr, StrSlice};
 use std::str::{self, FromStr};
 
+pub struct Chars {
+    string: StrSlice,
+}
+
+impl Iterator for Chars {
+    type Item = char;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let ret = self.string.chars().next()?;
+        self.string.byteslice.start += ret.len_utf8();
+        Some(ret)
+    }
+}
+
 impl AppendOnlyStr {
-    /// Returns an iterator over all chars
-    /// in the `AppendOnlyStr`. This method
-    /// gain new elements when push is called
-    /// on the original `AppendOnlyStr`
+    pub fn owned_chars(&self) -> Chars {
+        Chars {
+            string: self.str_slice(..),
+        }
+    }
+
     pub fn chars(&self) -> str::Chars {
         self.get_str().chars()
+    }
+}
+
+impl StrSlice {
+    pub fn owned_chars(&self) -> Chars {
+        Chars {
+            string: self.clone(),
+        }
     }
 }
 

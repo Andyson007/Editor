@@ -2,20 +2,22 @@
 use std::{
     collections::{LinkedList, VecDeque},
     io::{self, Read},
-    mem, str,
-    sync::Arc,
+    iter, mem, str,
+    sync::{Arc, RwLock},
 };
 
 pub mod iters;
+mod table;
 
-use append_only_str::AppendOnlyStr;
+use append_only_str::{AppendOnlyStr, StrSlice};
 use btep::{Deserialize, Serialize};
+use table::{InnerTable, Table};
 use utils::iters::{InnerIteratorExt, IteratorExt};
 
 #[derive(Debug)]
 struct Buffers {
     /// The original file content
-    original: Box<str>,
+    original: AppendOnlyStr,
     /// The appendbuffers for each of the clients
     clients: Vec<Arc<AppendOnlyStr>>,
 }
@@ -32,16 +34,16 @@ pub struct Piece {
 #[derive(Debug)]
 struct PieceTable {
     #[allow(clippy::linkedlist)]
-    table: LinkedList<Arc<Range>>,
+    table: Table<StrSlice>,
     cursors: Vec<Cursor>,
 }
 
 #[derive(Debug)]
 struct Cursor {
+    /// The buffer that this client owns. It's an Arc because it refers to one of Buffers' clients'
+    /// element
     buffer: Arc<AppendOnlyStr>,
-    // NOTE: This 'static might be wrong, but iirc 'static actually means that it lives as long as
-    // it has to, which should be sufficient for this
-    location: Option<Arc<Range>>,
+    location: Option<InnerTable<StrSlice>>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -54,18 +56,15 @@ pub struct Range {
 impl Piece {
     #[must_use]
     pub fn new() -> Self {
+        let original: AppendOnlyStr = "".into();
         Self {
-            buffers: Buffers {
-                original: "".into(),
-                clients: vec![],
-            },
             piece_table: PieceTable {
-                table: LinkedList::from_iter([Arc::new(Range {
-                    buf: 0,
-                    start: 0,
-                    len: 0,
-                })]),
+                table: Table::from_iter(std::iter::once(original.str_slice(..))),
                 cursors: vec![],
+            },
+            buffers: Buffers {
+                original,
+                clients: vec![],
             },
         }
     }
@@ -78,21 +77,16 @@ impl Piece {
     pub fn original_from_reader<T: Read>(mut read: T) -> io::Result<Self> {
         let mut string = String::new();
         read.read_to_string(&mut string)?;
-        let original = string.into_boxed_str();
-        let mut list = LinkedList::new();
-        list.push_back(Arc::new(Range {
-            buf: 0,
-            start: 0,
-            len: original.len(),
-        }));
+        let original: AppendOnlyStr = string.into();
+
         Ok(Self {
+            piece_table: PieceTable {
+                table: Table::from_iter(iter::once(original.str_slice(..))),
+                cursors: vec![],
+            },
             buffers: Buffers {
                 original,
                 clients: vec![],
-            },
-            piece_table: PieceTable {
-                table: list,
-                cursors: vec![],
             },
         })
     }
@@ -118,7 +112,7 @@ impl Default for Piece {
 impl Serialize for &Piece {
     fn serialize(&self) -> std::collections::VecDeque<u8> {
         let mut ret = VecDeque::new();
-        ret.extend(self.buffers.original.bytes());
+        ret.extend(self.buffers.original.slice(..).into_iter());
         for client in &self.buffers.clients {
             // 0xfe is used here because its not representable by utf8, and makes stuff easier to
             // parse. This is useful because the alternative is the specify the strings length,
@@ -129,9 +123,9 @@ impl Serialize for &Piece {
         // Might be useless, but it's a single byte
         ret.push_back(0xff);
 
-        ret.extend((self.piece_table.table.len() as u64).to_be_bytes());
+        ret.extend((self.piece_table.table.read_full().unwrap().len() as u64).to_be_bytes());
 
-        for piece in &self.piece_table.table {
+        for piece in self.piece_table.table.read_full().unwrap().into_iter() {
             ret.extend((piece.buf as u64).to_be_bytes());
             ret.extend((piece.start as u64).to_be_bytes());
             ret.extend((piece.len as u64).to_be_bytes());
@@ -264,13 +258,6 @@ mod test {
         );
         assert_eq!(iter.next(), None);
         assert_eq!(piece.piece_table.cursors.len(), 0);
-    }
-
-    #[test]
-    fn serialize_original() {
-        let mut bytes = &b"test"[..];
-        let piece =
-            Piece::original_from_reader(BufReader::with_capacity(bytes.len(), &mut bytes)).unwrap();
     }
 
     #[test]

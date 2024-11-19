@@ -150,7 +150,7 @@ impl AppendOnlyStr {
     }
 
     fn get_str(&self) -> &str {
-        // : This shouldn't fail because utf-8
+        // This shouldn't fail because utf-8
         // compliance is always guaranteed
         str::from_utf8(self.get_byte_slice()).unwrap()
     }
@@ -253,7 +253,18 @@ impl Deref for ByteSlice {
     }
 }
 
+impl Clone for ByteSlice {
+    fn clone(&self) -> Self {
+        Self {
+            raw: self.raw.clone(),
+            start: self.start,
+            end: self.end,
+        }
+    }
+}
+
 /// `StrSlice` is a string slice wrapper valid even through `AppendOnlyStr` reallocations
+#[derive(Clone)]
 pub struct StrSlice {
     byteslice: ByteSlice,
 }

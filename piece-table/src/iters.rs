@@ -1,54 +1,45 @@
 //! Implements iterator types for Pieces
-use std::{iter, str, sync::Arc};
+use append_only_str::{iters::Chars as AppendChars, StrSlice};
 
-use append_only_str::AppendOnlyStr;
+use crate::Piece;
 
-use crate::{Piece, Range};
-
-pub struct Chars<'a, T>
+pub struct Chars<T>
 where
-    T: Iterator<Item = Range>,
+    T: Iterator<Item = StrSlice>,
 {
     ranges: T,
-    main: &'a str,
-    clients: &'a Vec<Arc<AppendOnlyStr>>,
-    current_iter: Option<iter::Take<iter::Skip<str::Chars<'a>>>>,
+    current_iter: Option<AppendChars>,
 }
 
-impl<T> Iterator for Chars<'_, T>
+impl<T> Iterator for Chars<T>
 where
-    T: Iterator<Item = Range>,
+    T: Iterator<Item = StrSlice>,
 {
     type Item = char;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.current_iter.is_none() {
-            let Range { buf, start, len } = self.ranges.next()?;
-            self.current_iter = Some(if buf == 0 {
-                self.main.chars().skip(start).take(len)
-            } else {
-                self.clients[buf - 1].chars().skip(start).take(len)
-            });
+        let Some(ref mut current_iter) = self.current_iter else {
+            self.current_iter = Some(self.ranges.next()?.owned_chars());
+            return self.next();
+        };
+        if let Some(next) = current_iter.next() {
+            return Some(next);
         }
-        if let Some(x) = self.current_iter.as_mut().unwrap().next() {
-            return Some(x);
-        }
-
-        self.current_iter = None;
+        *current_iter = self.ranges.next().unwrap().owned_chars();
         self.next()
     }
 }
 
-pub struct Lines<'a, T>
+pub struct Lines<T>
 where
-    T: Iterator<Item = Range>,
+    T: Iterator<Item = StrSlice>,
 {
-    chars: Chars<'a, T>,
+    chars: Chars<T>,
 }
 
-impl<T> Iterator for Lines<'_, T>
+impl<T> Iterator for Lines<T>
 where
-    T: Iterator<Item = Range>,
+    T: Iterator<Item = StrSlice>,
 {
     type Item = String;
 
@@ -70,27 +61,33 @@ where
 
 impl Piece {
     #[must_use]
-    pub fn chars(&self) -> Chars<'_, std::vec::IntoIter<Range>> {
+    pub fn chars(
+        &self,
+    ) -> Chars<
+        std::iter::Map<
+            std::collections::linked_list::IntoIter<crate::table::InnerTable<StrSlice>>,
+            impl FnMut(crate::table::InnerTable<StrSlice>) -> StrSlice,
+        >,
+    > {
         Chars {
             ranges: self
                 .piece_table
                 .table
-                .iter()
-                .map(|x| Range::clone(x))
-                .collect::<Vec<_>>()
-                .into_iter(),
-            main: &self.buffers.original,
+                .read_full()
+                .unwrap()
+                .clone()
+                .into_iter()
+                .map(|x| x.read().unwrap().clone()),
             current_iter: None,
-            clients: &self.buffers.clients,
         }
     }
 
-    #[must_use]
-    pub fn lines(&self) -> Lines<'_, std::vec::IntoIter<Range>> {
-        Lines {
-            chars: self.chars(),
-        }
-    }
+    // #[must_use]
+    // pub fn lines(&self) -> Lines<'_, std::vec::IntoIter<Range>> {
+    //     Lines {
+    //         chars: self.chars(),
+    //     }
+    // }
 }
 
 #[cfg(test)]

@@ -40,11 +40,11 @@ pub fn run() -> color_eyre::Result<()> {
 
     let (mut socket, _response) = connect_with_auth("ws://localhost:3012");
 
-    let Btep::Full(initial_file) = Btep::<Piece>::from_message(socket.read()?) else {
+    let Btep::Full(initial_piece) = Btep::<Piece>::from_message(socket.read()?) else {
         panic!("Initial message in wrong protocol")
     };
 
-    let mut app = State::new(initial_file);
+    let mut app = State::new(initial_piece);
 
     redraw(&mut out, 0, &app)?;
 
