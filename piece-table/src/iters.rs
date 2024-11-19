@@ -1,4 +1,4 @@
-use std::{borrow::Borrow, iter, str, sync::Arc};
+use std::{iter, str, sync::Arc};
 
 use append_only_str::AppendOnlyStr;
 
@@ -14,7 +14,7 @@ where
     current_iter: Option<iter::Take<iter::Skip<str::Chars<'a>>>>,
 }
 
-impl<'a, T> Iterator for Chars<'a, T>
+impl<T> Iterator for Chars<'_, T>
 where
     T: Iterator<Item = Range>,
 {
@@ -45,7 +45,7 @@ where
     chars: Chars<'a, T>,
 }
 
-impl<'a, T> Iterator for Lines<'a, T>
+impl<T> Iterator for Lines<'_, T>
 where
     T: Iterator<Item = Range>,
 {

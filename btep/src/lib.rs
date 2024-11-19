@@ -1,7 +1,7 @@
 //! This crate implements a custom binary
 //! text transfer protocol.
 
-use std::{collections::VecDeque, iter};
+use std::collections::VecDeque;
 
 use tungstenite::Message;
 /// Btep or the Binary Text Editor Protocol
@@ -55,7 +55,7 @@ where
 {
     fn serialize(&self) -> VecDeque<u8> {
         match self {
-            Btep::Full(x) => x.serialize(),
+            Self::Full(x) => x.serialize(),
         }
     }
 }

@@ -1,10 +1,5 @@
-#![feature(linked_list_cursors)]
 use std::{
-    borrow::BorrowMut,
-    collections::{
-        linked_list::{self, Cursor as LinkedCursor},
-        LinkedList, VecDeque,
-    },
+    collections::{LinkedList, VecDeque},
     io::{self, Read},
     mem, str,
     sync::Arc,
@@ -30,6 +25,7 @@ pub struct Piece {
 
 #[derive(Debug)]
 struct PieceTable {
+    #[allow(clippy::linkedlist)]
     table: LinkedList<Arc<Range>>,
     cursors: Vec<Cursor>,
 }
@@ -151,7 +147,7 @@ impl Serialize for &Piece {
 
 impl Deserialize for Piece {
     fn deserialize(data: &[u8]) -> Self {
-        let mut iter = data.iter().cloned().peekable();
+        let mut iter = data.iter().copied().peekable();
 
         let original_buffer = String::from_utf8(
             iter.take_while_ref(|x| !(*x == 254 || *x == 255))
@@ -169,7 +165,7 @@ impl Deserialize for Piece {
                 iter.by_ref()
                     .take_while(|x| !(*x == 254 || *x == 255))
                     .collect::<AppendOnlyStr>(),
-            ))
+            ));
         }
         let pieces: [u8; 8] = iter
             .by_ref()
