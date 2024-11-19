@@ -1,9 +1,26 @@
-use std::{
-    fmt::Debug,
-    iter::{self, Peekable},
-    mem::MaybeUninit,
-};
+//! This module is responsible for making extensions to iterators that don't exists in the standard
+//! library.
+//!
+//! I know I could've used a crate like itertools, but I'm inexperienced with iterators so
+//! I though I might aswell learn something
+use std::{iter::Peekable, mem::MaybeUninit};
 
+/// `TakeWhileRef` allows for a predicate specifying whether to take the next element without
+/// consuming the element
+///
+/// # Example
+/// ```
+/// # use std::iter::Peekable;
+/// # use utils::iters::InnerIteratorExt;
+/// # fn main() {
+/// let mut iter = (1..5).peekable();
+///
+/// let sum_a = iter.take_while_ref(|x: &u8| *x < 3).sum::<u8>();
+/// let sum_b = iter.sum::<u8>();
+/// assert_eq!(sum_a, 1 + 2);
+/// assert_eq!(sum_b, 3 + 4);
+/// # }
+/// ```
 pub struct TakeWhileRef<'a, I, P>
 where
     I: Iterator,
@@ -36,6 +53,19 @@ where
     TakeWhileRef { iter, predicate }
 }
 
+/// An iterator type granting fixed sized slices.
+///
+/// # Example
+/// ```
+/// # use utils::iters::IteratorExt;
+/// # fn chunks() {
+/// let mut iter = (0..6).chunks::<2>();
+/// assert_eq!(iter.next(), Some([0, 1]));
+/// assert_eq!(iter.next(), Some([2, 3]));
+/// assert_eq!(iter.next(), Some([4, 5]));
+/// assert_eq!(iter.next(), None);
+/// # }
+/// ```
 pub struct Chunks<I, const N: usize>
 where
     I: Iterator,
@@ -54,13 +84,8 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         let mut ret = [MaybeUninit::<T::Item>::uninit(); N];
         let mut ret_iter = ret.iter_mut();
-        for i in 0..N {
-            let (Some(ret), val) = (ret_iter.next(), self.iter.next()?) else {
-                unreachable!()
-            };
-            {
-                ret.write(val);
-            }
+        for _ in 0..N {
+            ret_iter.next().unwrap().write(self.iter.next()?);
         }
         //// # Safety
         //// We have iterated over the entirity of ret meaning that every item has been written to.
@@ -122,6 +147,15 @@ mod test {
         let sum_b = iter.sum::<u8>();
         assert_eq!(sum_a, 1 + 2);
         assert_eq!(sum_b, 3 + 4 + 5);
+    }
+
+    #[test]
+    fn chunks() {
+        let mut iter = (0..6).chunks::<2>();
+        assert_eq!(iter.next(), Some([0, 1]));
+        assert_eq!(iter.next(), Some([2, 3]));
+        assert_eq!(iter.next(), Some([4, 5]));
+        assert_eq!(iter.next(), None);
     }
 
     #[test]
