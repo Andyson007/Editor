@@ -94,10 +94,14 @@ where
     }
 }
 
+/// `InnerIteratorExt` is a trait which exposes trait bounds on the inner iterator. This is used
+/// for methods that require a wrapping iterator
 pub trait InnerIteratorExt<T>: Iterator + Sized
 where
     T: Iterator<Item = Self::Item>,
 {
+    /// Uses a peekable iterator in order to be able to peek the next element without consuming the
+    /// iterator. See `TakeWhileRef` for more
     fn take_while_ref<P>(&mut self, predicate: P) -> TakeWhileRef<T, P>
     where
         P: FnMut(&Self::Item) -> bool;
@@ -115,7 +119,9 @@ where
     }
 }
 
+/// Iterator extensions
 pub trait IteratorExt: Iterator + Sized {
+    /// Splits the iterator up into chunks which are a known size at compile-time. 
     fn chunks<const N: usize>(self) -> Chunks<Self, N>
     where
         Self::Item: Copy;

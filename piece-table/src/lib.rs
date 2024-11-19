@@ -1,3 +1,4 @@
+//! A Piece table implementation with multiple clients
 use std::{
     collections::{LinkedList, VecDeque},
     io::{self, Read},
@@ -13,13 +14,18 @@ use utils::iters::{InnerIteratorExt, IteratorExt};
 
 #[derive(Debug)]
 struct Buffers {
+    /// The original file content
     original: Box<str>,
+    /// The appendbuffers for each of the clients
     clients: Vec<Arc<AppendOnlyStr>>,
 }
 
+/// A complete Piece table. It has support for handling multiple clients at the same time
 #[derive(Debug)]
 pub struct Piece {
+    /// Holds the buffers that get modified when anyone inserts
     buffers: Buffers,
+    /// stores the pieces to reconstruct the whole file
     piece_table: PieceTable,
 }
 

@@ -1,3 +1,4 @@
+//! Implements iterator types for Pieces
 use std::{iter, str, sync::Arc};
 
 use append_only_str::AppendOnlyStr;
