@@ -79,39 +79,41 @@ impl State {
             KeyCode::Right => {
                 self.cursorpos.col = cmp::min(
                     self.cursorpos.col + 1,
-                    todo!("I need to get the length of this line"), // self.text
-                                                                    //     .lines_at(self.cursorpos.row)
-                                                                    //     .next()
-                                                                    //     .unwrap()
-                                                                    //     .len_chars()
-                                                                    //     - 1,
+                    self.text
+                        .lines()
+                        .nth(self.cursorpos.row)
+                        .unwrap()
+                        .chars()
+                        .count()
+                        - 1,
                 );
             }
             KeyCode::Up => {
-                // self.cursorpos.row = self.cursorpos.row.saturating_sub(1);
-                // self.cursorpos.col = cmp::min(
-                //     self.cursorpos.col,
-                //     self.text
-                //         .lines_at(self.cursorpos.row)
-                //         .next()
-                //         .unwrap()
-                //         .len_chars()
-                //         .saturating_sub(1),
-                // );
-                todo!("I need to get the length of this line");
+                self.cursorpos.row = self.cursorpos.row.saturating_sub(1);
+                self.cursorpos.col = cmp::min(
+                    self.cursorpos.col,
+                    self.text
+                        .lines()
+                        .nth(self.cursorpos.row)
+                        .unwrap()
+                        .chars()
+                        .count()
+                        .saturating_sub(1),
+                );
             }
             KeyCode::Down => {
-                todo!("get the amount of lines");
-                // self.cursorpos.row = cmp::min(self.cursorpos.row + 1, self.text.len_lines() - 1);
-                // self.cursorpos.col = cmp::min(
-                //     self.cursorpos.col,
-                //     self.text
-                //         .lines_at(self.cursorpos.row)
-                //         .next()
-                //         .unwrap()
-                //         .len_chars()
-                //         .saturating_sub(2),
-                // );
+                self.cursorpos.row =
+                    cmp::min(self.cursorpos.row + 1, self.text.lines().count() - 1);
+                self.cursorpos.col = cmp::min(
+                    self.cursorpos.col,
+                    self.text
+                        .lines()
+                        .nth(self.cursorpos.row)
+                        .unwrap()
+                        .chars()
+                        .count()
+                        .saturating_sub(2),
+                );
             }
             KeyCode::Enter => {
                 todo!()
