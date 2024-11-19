@@ -84,13 +84,14 @@ where
         .take(size()?.1.into())
         .enumerate()
     {
-        out.queue(cursor::MoveTo(0, linenr as u16))?.queue(Print(
-            line.chars().take(size()?.0.into()).collect::<String>(),
-        ))?;
+        out.queue(cursor::MoveTo(0, u16::try_from(linenr).unwrap()))?
+            .queue(Print(
+                line.chars().take(size()?.0.into()).collect::<String>(),
+            ))?;
     }
     out.queue(cursor::MoveTo(
-        state.cursor().col as u16,
-        state.cursor().row as u16,
+        u16::try_from(state.cursor().col).unwrap(),
+        u16::try_from(state.cursor().row).unwrap(),
     ))?;
     out.flush()?;
     Ok(())

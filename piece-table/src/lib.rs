@@ -147,6 +147,8 @@ impl Serialize for &Piece {
 
 impl Deserialize for Piece {
     fn deserialize(data: &[u8]) -> Self {
+        // `take_while_ref` requires a peekable wrapper
+        #[allow(clippy::unused_peekable)]
         let mut iter = data.iter().copied().peekable();
 
         let original_buffer = String::from_utf8(
@@ -174,7 +176,7 @@ impl Deserialize for Piece {
             .try_into()
             .unwrap();
 
-        let piece_count = u64::from_be_bytes(pieces) as usize;
+        let piece_count = usize::try_from(u64::from_be_bytes(pieces)).unwrap();
         let table: LinkedList<Arc<Range>> = iter
             .by_ref()
             // This should be take while in order to actually consume the next value. This is
@@ -188,9 +190,9 @@ impl Deserialize for Piece {
                     .chunks::<{ mem::size_of::<u64>() }>()
                     .collect::<Vec<_>>();
                 Arc::new(Range {
-                    buf: u64::from_be_bytes(slices[0]) as usize,
-                    start: u64::from_be_bytes(slices[1]) as usize,
-                    len: u64::from_be_bytes(slices[2]) as usize,
+                    buf: usize::try_from(u64::from_be_bytes(slices[0])).unwrap(),
+                    start: usize::try_from(u64::from_be_bytes(slices[1])).unwrap(),
+                    len: usize::try_from(u64::from_be_bytes(slices[2])).unwrap(),
                 })
             })
             .collect();
@@ -215,9 +217,9 @@ impl Deserialize for Piece {
             cursors.push(Cursor {
                 buffer: Arc::clone(&client_buffers[cursors.len()]),
                 location: Some(Arc::new(Range {
-                    buf: u64::from_be_bytes(chunks[0]) as usize,
-                    start: u64::from_be_bytes(chunks[1]) as usize,
-                    len: u64::from_be_bytes(chunks[2]) as usize,
+                    buf: usize::try_from(u64::from_be_bytes(chunks[0])).unwrap(),
+                    start: usize::try_from(u64::from_be_bytes(chunks[1])).unwrap(),
+                    len: usize::try_from(u64::from_be_bytes(chunks[2])).unwrap(),
                 })),
             });
         }
