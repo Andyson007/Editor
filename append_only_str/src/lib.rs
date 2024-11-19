@@ -59,6 +59,18 @@ impl FromStr for AppendOnlyStr {
     }
 }
 
+impl From<&str> for AppendOnlyStr {
+    fn from(value: &str) -> Self {
+        Self::from_str(value).unwrap()
+    }
+}
+
+impl From<String> for AppendOnlyStr {
+    fn from(value: String) -> Self {
+        value.as_str().into()
+    }
+}
+
 impl AppendOnlyStr {
     #[must_use]
     #[allow(missing_docs)]
@@ -200,6 +212,39 @@ pub struct ByteSlice {
     end: usize,
 }
 
+impl ByteSlice {
+    pub const fn start(&self) -> usize {
+        self.start
+    }
+
+    pub const fn end(&self) -> usize {
+        self.end
+    }
+
+    pub fn as_bytes(&self) -> &[u8] {
+        //// SAFETY: ---------------------------------------------
+        //// We never make the capacity greater than the amount of
+        //// space allocated. and therefore a slice won't read
+        //// uninitialized memory
+        unsafe {
+            std::ptr::slice_from_raw_parts(
+                self.raw.ptr().cast_const().add(self.start),
+                self.end - self.start,
+            )
+            .as_ref()
+            .unwrap()
+        }
+    }
+}
+
+impl PartialEq for ByteSlice {
+    fn eq(&self, other: &Self) -> bool {
+        self.as_bytes() == other.as_bytes() && self.start == other.start && self.end == other.end
+    }
+}
+
+impl Eq for ByteSlice {}
+
 impl Deref for ByteSlice {
     type Target = [u8];
 
@@ -211,6 +256,34 @@ impl Deref for ByteSlice {
 /// `StrSlice` is a string slice wrapper valid even through `AppendOnlyStr` reallocations
 pub struct StrSlice {
     byteslice: ByteSlice,
+}
+
+impl std::fmt::Debug for StrSlice {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_list()
+            .entries(str::from_utf8(&self.byteslice))
+            .finish()
+    }
+}
+
+impl PartialEq for StrSlice {
+    fn eq(&self, other: &Self) -> bool {
+        self.byteslice == other.byteslice
+    }
+}
+
+impl StrSlice {
+    pub const fn as_bytes(&self) -> &ByteSlice {
+        &self.byteslice
+    }
+
+    pub const fn len(&self) -> usize {
+        self.byteslice.end - self.byteslice.start
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }
 
 impl Deref for StrSlice {

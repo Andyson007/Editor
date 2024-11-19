@@ -121,7 +121,7 @@ where
 
 /// Iterator extensions
 pub trait IteratorExt: Iterator + Sized {
-    /// Splits the iterator up into chunks which are a known size at compile-time. 
+    /// Splits the iterator up into chunks which are a known size at compile-time.
     fn chunks<const N: usize>(self) -> Chunks<Self, N>
     where
         Self::Item: Copy;
