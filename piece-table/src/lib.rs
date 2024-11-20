@@ -239,9 +239,6 @@ impl Deserialize for Piece {
     }
 }
 
-unsafe impl Sync for Piece {}
-unsafe impl Send for Piece {}
-
 #[cfg(test)]
 mod test {
     use crate::Piece;
