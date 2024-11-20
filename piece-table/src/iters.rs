@@ -82,12 +82,11 @@ impl Piece {
         }
     }
 
-    // #[must_use]
-    // pub fn lines(&self) -> Lines<'_, std::vec::IntoIter<Range>> {
-    //     Lines {
-    //         chars: self.chars(),
-    //     }
-    // }
+    pub fn lines(&self) -> impl Iterator<Item = String> {
+        Lines {
+            chars: self.chars(),
+        }
+    }
 }
 
 #[cfg(test)]

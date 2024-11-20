@@ -288,6 +288,15 @@ impl StrSlice {
         &self.byteslice
     }
 
+    pub const fn start(&self) -> usize {
+        self.byteslice.start
+    }
+
+    pub const fn end(&self) -> usize {
+        self.byteslice.end
+    }
+
+
     pub const fn len(&self) -> usize {
         self.byteslice.end - self.byteslice.start
     }

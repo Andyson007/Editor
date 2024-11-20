@@ -24,21 +24,6 @@ where
     }
 }
 
-impl<T> Table<T> {
-    pub fn from_iter<I>(iter: I) -> Self
-    where
-        I: Iterator<Item = T>,
-    {
-        let state = Arc::new(RwLock::new(TableState::Unshared));
-        Self {
-            inner: Arc::new(LinkedList::from_iter(
-                iter.map(|x| InnerTable::new(x, Arc::clone(&state))),
-            )),
-            state,
-        }
-    }
-}
-
 #[derive(Debug)]
 enum TableState {
     Unshared,
@@ -57,6 +42,19 @@ impl<T> Table<T> {
             val: Arc::clone(&self.inner),
             state: self.state.clone(),
         })
+    }
+
+    pub fn from_iter<I>(iter: I) -> Self
+    where
+        I: Iterator<Item = T>,
+    {
+        let state = Arc::new(RwLock::new(TableState::Unshared));
+        Self {
+            inner: Arc::new(LinkedList::from_iter(
+                iter.map(|x| InnerTable::new(x, Arc::clone(&state))),
+            )),
+            state,
+        }
     }
 }
 

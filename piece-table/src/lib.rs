@@ -19,7 +19,7 @@ struct Buffers {
     /// The original file content
     original: AppendOnlyStr,
     /// The appendbuffers for each of the clients
-    clients: Vec<Arc<AppendOnlyStr>>,
+    clients: Vec<Arc<RwLock<AppendOnlyStr>>>,
 }
 
 /// A complete Piece table. It has support for handling multiple clients at the same time
@@ -42,7 +42,7 @@ struct PieceTable {
 struct Cursor {
     /// The buffer that this client owns. It's an Arc because it refers to one of Buffers' clients'
     /// element
-    buffer: Arc<AppendOnlyStr>,
+    buffer: Arc<RwLock<AppendOnlyStr>>,
     location: Option<InnerTable<StrSlice>>,
 }
 
@@ -91,15 +91,15 @@ impl Piece {
         })
     }
 
-    pub fn add_client(&mut self) -> Arc<AppendOnlyStr> {
+    pub fn add_client(&mut self) -> Arc<RwLock<AppendOnlyStr>> {
         let append_only = AppendOnlyStr::new();
-        let arc = Arc::new(append_only);
+        let buf = Arc::new(RwLock::new(append_only));
         self.piece_table.cursors.push(Cursor {
-            buffer: Arc::clone(&arc),
+            buffer: Arc::clone(&buf),
             location: None,
         });
-        self.buffers.clients.push(Arc::clone(&arc));
-        arc
+        self.buffers.clients.push(Arc::clone(&buf));
+        buf
     }
 }
 
@@ -118,17 +118,19 @@ impl Serialize for &Piece {
             // parse. This is useful because the alternative is the specify the strings length,
             // which would take up at least as many bytes
             ret.push_back(0xfe);
-            ret.extend(client.slice(..).iter());
+            ret.extend(client.read().unwrap().slice(..).iter());
         }
         // Might be useless, but it's a single byte
         ret.push_back(0xff);
 
         ret.extend((self.piece_table.table.read_full().unwrap().len() as u64).to_be_bytes());
 
-        for piece in self.piece_table.table.read_full().unwrap().into_iter() {
-            ret.extend((piece.buf as u64).to_be_bytes());
-            ret.extend((piece.start as u64).to_be_bytes());
-            ret.extend((piece.len as u64).to_be_bytes());
+        for piece in self.piece_table.table.read_full().unwrap().iter() {
+            let piece = piece.read().unwrap();
+            todo!("find the current buffer");
+            ret.extend((5u64).to_be_bytes());
+            ret.extend((piece.start() as u64).to_be_bytes());
+            ret.extend((piece.len() as u64).to_be_bytes());
         }
 
         for cursor in &self.piece_table.cursors {
@@ -137,9 +139,9 @@ impl Serialize for &Piece {
                 continue;
             };
             ret.push_back(1);
-            ret.extend((current.buf as u64).to_be_bytes());
-            ret.extend((current.start as u64).to_be_bytes());
-            ret.extend((current.len as u64).to_be_bytes());
+            // ret.extend((current.buf as u64).to_be_bytes());
+            // ret.extend((current.start as u64).to_be_bytes());
+            // ret.extend((current.len as u64).to_be_bytes());
         }
         ret
     }
@@ -151,23 +153,23 @@ impl Deserialize for Piece {
         #[allow(clippy::unused_peekable)]
         let mut iter = data.iter().copied().peekable();
 
-        let original_buffer = String::from_utf8(
+        let original_buffer: AppendOnlyStr = String::from_utf8(
             iter.take_while_ref(|x| !(*x == 254 || *x == 255))
                 .collect::<Vec<_>>(),
         )
         .unwrap()
-        .into_boxed_str();
+        .into();
 
         let mut client_buffers = Vec::new();
         loop {
             if iter.next() == Some(255) {
                 break;
             }
-            client_buffers.push(Arc::new(
+            client_buffers.push(Arc::new(RwLock::new(
                 iter.by_ref()
                     .take_while(|x| !(*x == 254 || *x == 255))
                     .collect::<AppendOnlyStr>(),
-            ));
+            )));
         }
         let pieces: [u8; 8] = iter
             .by_ref()
@@ -216,11 +218,11 @@ impl Deserialize for Piece {
 
             cursors.push(Cursor {
                 buffer: Arc::clone(&client_buffers[cursors.len()]),
-                location: Some(Arc::new(Range {
-                    buf: usize::try_from(u64::from_be_bytes(chunks[0])).unwrap(),
-                    start: usize::try_from(u64::from_be_bytes(chunks[1])).unwrap(),
-                    len: usize::try_from(u64::from_be_bytes(chunks[2])).unwrap(),
-                })),
+                location: Some(todo!()), // location: Some(Arc::new(Range {
+                                         //     buf: usize::try_from(u64::from_be_bytes(chunks[0])).unwrap(),
+                                         //     start: usize::try_from(u64::from_be_bytes(chunks[1])).unwrap(),
+                                         //     len: usize::try_from(u64::from_be_bytes(chunks[2])).unwrap(),
+                                         // })),
             });
         }
 
@@ -229,34 +231,33 @@ impl Deserialize for Piece {
                 original: original_buffer,
                 clients: client_buffers,
             },
-            piece_table: PieceTable { table, cursors },
+            piece_table: PieceTable {
+                table: todo!(),
+                cursors,
+            },
         }
     }
 }
 
+unsafe impl Sync for Piece {}
+unsafe impl Send for Piece {}
+
 #[cfg(test)]
 mod test {
-    use std::{io::BufReader, sync::Arc};
-
-    use crate::{Piece, Range};
+    use crate::Piece;
+    use std::io::BufReader;
 
     #[test]
     fn from_reader() {
         let mut bytes = &b"test"[..];
         let piece =
             Piece::original_from_reader(BufReader::with_capacity(bytes.len(), &mut bytes)).unwrap();
-        assert!(piece.buffers.original == "test".to_string().into_boxed_str());
+        assert!(&*piece.buffers.original.str_slice(..) == "test");
         assert_eq!(piece.buffers.clients.len(), 0);
-        let mut iter = piece.piece_table.table.into_iter();
-        assert_eq!(
-            iter.next(),
-            Some(Arc::new(Range {
-                buf: 0,
-                start: 0,
-                len: 4,
-            }))
-        );
-        assert_eq!(iter.next(), None);
+        let binding = piece.piece_table.table.read_full().unwrap();
+        let mut iter = binding.iter();
+        assert_eq!(&**iter.next().unwrap().read().unwrap(), "test");
+        assert!(iter.next().is_none());
         assert_eq!(piece.piece_table.cursors.len(), 0);
     }
 

@@ -158,7 +158,7 @@ impl State {
             KeyCode::Char('q') => return true,
             KeyCode::Char('i') => {
                 self.mode = Mode::Insert;
-            },
+            }
             KeyCode::Char(':') => self.mode = Mode::Command(String::new()),
             _ => (),
         };
