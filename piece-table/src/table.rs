@@ -2,7 +2,7 @@ use std::{
     collections::LinkedList,
     fmt::Debug,
     ops::{Deref, DerefMut},
-    sync::{Arc, RwLock},
+    sync::{Arc, RwLock, RwLockReadGuard},
 };
 
 pub struct Table<T> {
@@ -34,7 +34,7 @@ impl<T> Table<T> {
     pub fn read_full(&self) -> Result<TableReader<T>, ()> {
         match *self.state.write().unwrap() {
             TableState::Exclusive => return Err(()),
-            TableState::Unshared => *self.state.write().unwrap() = TableState::Shared(1),
+            ref mut x @ TableState::Unshared => *x = TableState::Shared(1),
             TableState::Shared(ref mut amount) => *amount += 1,
         };
         Ok(TableReader {
@@ -94,8 +94,26 @@ impl<T> TableLocker<T> {
     }
 }
 
+impl<T> TableLocker<T> {
+    pub fn read(&self) -> Result<TableLockReader<T>, ()> {
+        match *self.state.write().unwrap() {
+            ref mut state @ TableState::Unshared => *state = TableState::Shared(1),
+            ref mut state @ TableState::Shared(val) => *state = TableState::Shared(val + 1),
+            TableState::Exclusive => return Err(()),
+        };
+        Ok(TableLockReader {
+            value: self.value.read().unwrap(),
+            state: Arc::clone(&self.state),
+        })
+    }
+
+    pub fn write(&self) -> Result<TableLockWriter<T>, ()> {
+        todo!()
+    }
+}
+
 pub struct TableLockReader<'a, T> {
-    value: Arc<&'a T>,
+    value: RwLockReadGuard<'a, T>,
     state: Arc<RwLock<TableState>>,
 }
 
@@ -122,21 +140,11 @@ pub struct TableLockWriter<'a, T> {
     state: Arc<RwLock<TableState>>,
 }
 
-impl<T> TableLocker<T> {
-    pub fn read(&self) -> Result<TableLockReader<T>, ()> {
-        todo!()
-    }
-
-    pub fn write(&self) -> Result<TableLockWriter<T>, ()> {
-        todo!()
-    }
-}
-
 impl<T> Deref for TableLockWriter<'_, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        &self.value
+        self.value
     }
 }
 
@@ -178,7 +186,7 @@ impl<T> InnerTable<T> {
     pub fn read(&self) -> Result<TableLockReader<T>, ()> {
         match *self.state.write().unwrap() {
             TableState::Exclusive => return Err(()),
-            TableState::Unshared => *self.state.write().unwrap() = TableState::Shared(1),
+            ref mut state @ TableState::Unshared => *state = TableState::Shared(1),
             TableState::Shared(ref mut amount) => *amount += 1,
         };
         self.inner.read()

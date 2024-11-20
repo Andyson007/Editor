@@ -19,7 +19,8 @@ where
 
     fn next(&mut self) -> Option<Self::Item> {
         let Some(ref mut current_iter) = self.current_iter else {
-            self.current_iter = Some(self.ranges.next()?.owned_chars());
+            let a = self.ranges.next()?;
+            self.current_iter = Some(a.owned_chars());
             return self.next();
         };
         if let Some(next) = current_iter.next() {
@@ -32,14 +33,14 @@ where
 
 pub struct Lines<T>
 where
-    T: Iterator<Item = StrSlice>,
+    T: Iterator<Item = char>,
 {
-    chars: Chars<T>,
+    chars: T,
 }
 
 impl<T> Iterator for Lines<T>
 where
-    T: Iterator<Item = StrSlice>,
+    T: Iterator<Item = char>,
 {
     type Item = String;
 
@@ -60,15 +61,7 @@ where
 }
 
 impl Piece {
-    #[must_use]
-    pub fn chars(
-        &self,
-    ) -> Chars<
-        std::iter::Map<
-            std::collections::linked_list::IntoIter<crate::table::InnerTable<StrSlice>>,
-            impl FnMut(crate::table::InnerTable<StrSlice>) -> StrSlice,
-        >,
-    > {
+    pub fn chars(&self) -> impl Iterator<Item = char> {
         Chars {
             ranges: self
                 .piece_table
@@ -77,6 +70,7 @@ impl Piece {
                 .unwrap()
                 .clone()
                 .into_iter()
+                // .inspect(|x| println!("{x:?}"))
                 .map(|x| x.read().unwrap().clone()),
             current_iter: None,
         }
@@ -92,9 +86,7 @@ impl Piece {
 #[cfg(test)]
 mod test {
     use std::{
-        collections::LinkedList,
         iter,
-        str::FromStr,
         sync::{Arc, RwLock},
     };
 
