@@ -1,5 +1,4 @@
 use std::{
-    cell::Cell,
     collections::LinkedList,
     fmt::Debug,
     ops::{Deref, DerefMut},
@@ -25,7 +24,7 @@ where
 }
 
 #[derive(Debug)]
-enum TableState {
+pub(crate) enum TableState {
     Unshared,
     Shared(usize),
     Exclusive,
@@ -82,14 +81,14 @@ impl<T> Drop for TableReader<T> {
 }
 
 pub struct TableLocker<T> {
-    lock: Arc<Cell<T>>,
+    value: Arc<RwLock<T>>,
     state: Arc<RwLock<TableState>>,
 }
 
 impl<T> TableLocker<T> {
     pub fn new(value: T, state: Arc<RwLock<TableState>>) -> Self {
         Self {
-            lock: Arc::new(Cell::new(value)),
+            value: Arc::new(RwLock::new(value)),
             state,
         }
     }
