@@ -19,14 +19,13 @@ where
 
     fn next(&mut self) -> Option<Self::Item> {
         let Some(ref mut current_iter) = self.current_iter else {
-            let a = self.ranges.next()?;
-            self.current_iter = Some(a.owned_chars());
+            self.current_iter = Some(self.ranges.next()?.owned_chars());
             return self.next();
         };
         if let Some(next) = current_iter.next() {
             return Some(next);
         }
-        *current_iter = self.ranges.next().unwrap().owned_chars();
+        *current_iter = self.ranges.next()?.owned_chars();
         self.next()
     }
 }
@@ -70,7 +69,7 @@ impl Piece {
                 .unwrap()
                 .clone()
                 .into_iter()
-                // .inspect(|x| println!("{x:?}"))
+                .inspect(|x| println!("{x:?}"))
                 .map(|x| x.read().unwrap().clone()),
             current_iter: None,
         }
