@@ -110,7 +110,12 @@ impl AppendOnlyStr {
             return;
         }
         let mut new_capacity = self.rawbuf.capacity();
-        while target > new_capacity {
+
+        if new_capacity == 0 {
+            new_capacity = 1;
+        }
+
+        while new_capacity < target {
             match new_capacity.checked_mul(2) {
                 Some(x) => new_capacity = x,
                 // This ensures that the new buffer is at least as large as

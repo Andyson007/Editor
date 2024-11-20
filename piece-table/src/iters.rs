@@ -69,7 +69,6 @@ impl Piece {
                 .unwrap()
                 .clone()
                 .into_iter()
-                .inspect(|x| println!("{x:?}"))
                 .map(|x| x.read().unwrap().clone()),
             current_iter: None,
         }

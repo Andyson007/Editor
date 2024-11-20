@@ -24,7 +24,7 @@ where
 }
 
 #[derive(Debug)]
-pub(crate) enum TableState {
+enum TableState {
     Unshared,
     Shared(usize),
     Exclusive,

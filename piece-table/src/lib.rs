@@ -2,7 +2,7 @@
 use std::{
     collections::{LinkedList, VecDeque},
     io::{self, Read},
-    iter, mem, str,
+    iter, mem,
     sync::{Arc, RwLock},
 };
 
@@ -261,6 +261,13 @@ mod test {
     #[test]
     fn insert() {
         let mut piece = Piece::new();
-        piece.add_client();
+        let client = piece.add_client();
+        {
+            let mut a = client.write().unwrap();
+            a.push_str("andy");
+        }
+        let mut iter = piece.lines();
+        assert_eq!(iter.next(), Some("andy".into()));
+        assert_eq!(iter.next(), None);
     }
 }
