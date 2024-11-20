@@ -164,10 +164,23 @@ impl<T> Drop for TableLockWriter<'_, T> {
     }
 }
 
-#[derive(Clone)]
 pub struct InnerTable<T> {
     inner: Arc<TableLocker<T>>,
     state: Arc<RwLock<TableState>>,
+}
+
+impl<T> Clone for InnerTable<T> {
+    fn clone(&self) -> Self {
+        match *self.state.write().unwrap() {
+            TableState::Exclusive => panic!(),
+            ref mut state @ TableState::Unshared => *state = TableState::Shared(1),
+            TableState::Shared(ref mut amount) => *amount += 1,
+        };
+        Self {
+            inner: self.inner.clone(),
+            state: Arc::clone(&self.state),
+        }
+    }
 }
 
 impl<T> Debug for InnerTable<T>
