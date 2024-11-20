@@ -59,6 +59,7 @@ impl FromStr for AppendOnlyStr {
     }
 }
 
+#[allow(clippy::fallible_impl_from)]
 impl From<&str> for AppendOnlyStr {
     fn from(value: &str) -> Self {
         Self::from_str(value).unwrap()
@@ -213,26 +214,36 @@ pub struct ByteSlice {
 }
 
 impl ByteSlice {
+    /// returns the starting position of the slice
+    #[must_use]
     pub const fn start(&self) -> usize {
         self.start
     }
 
+    /// returns the ending position of the slice
+    #[must_use]
     pub const fn end(&self) -> usize {
         self.end
     }
 
+    /// Returns the slice as an actual slice
+    #[must_use]
     pub fn as_bytes(&self) -> &[u8] {
-        //// SAFETY: ---------------------------------------------
+        if self.raw.ptr().is_null() {
+            return &[];
+        }
+        //// # SAFETY
         //// We never make the capacity greater than the amount of
         //// space allocated. and therefore a slice won't read
-        //// uninitialized memory
+        //// uninitialized memory.
+        //// We also know that self.raw isn't a nullptr
         unsafe {
             std::ptr::slice_from_raw_parts(
                 self.raw.ptr().cast_const().add(self.start),
                 self.end - self.start,
             )
             .as_ref()
-            .unwrap()
+            .unwrap_unchecked()
         }
     }
 }
@@ -284,24 +295,45 @@ impl PartialEq for StrSlice {
 }
 
 impl StrSlice {
+    /// Returns the underlying byte representation of the string
+    #[must_use]
     pub const fn as_bytes(&self) -> &ByteSlice {
         &self.byteslice
     }
 
+    /// Returns the starting position in the buffer of this string slice.
+    #[must_use]
     pub const fn start(&self) -> usize {
         self.byteslice.start
     }
 
+    /// Returns the end position in the buffer of this string slice.
+    /// # Note
+    /// This counts the amount of bytes
+    #[must_use]
     pub const fn end(&self) -> usize {
         self.byteslice.end
     }
 
-
+    /// Returns the length of the str as if were utf-8 encoded
+    /// You might want to count the iterators length
+    /// ```
+    /// # use append_only_str::AppendOnlyStr;
+    /// # use std::str::FromStr;
+    /// # fn main() {
+    ///      let mut append_str = AppendOnlyStr::from_str("test").unwrap();
+    ///      let slice = append_str.str_slice(..);
+    ///      assert_eq!(slice.chars().count(), 4);
+    /// # }
+    /// ```
+    #[must_use]
     pub const fn len(&self) -> usize {
         self.byteslice.end - self.byteslice.start
     }
 
-    pub fn is_empty(&self) -> bool {
+    /// Checks if the slice contains anything whatsoever
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
         self.len() == 0
     }
 }

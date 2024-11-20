@@ -3,6 +3,7 @@
 use crate::{AppendOnlyStr, StrSlice};
 use std::str::{self, FromStr};
 
+/// An iterator over the chars inside of the string slices while owning the memory.
 pub struct Chars {
     string: StrSlice,
 }
@@ -18,18 +19,23 @@ impl Iterator for Chars {
 }
 
 impl AppendOnlyStr {
+    /// Creates an iterator over the chars in this `StrSlice`. This allows for the iterator to
+    /// outlive this `StrSlice`
+    #[must_use]
     pub fn owned_chars(&self) -> Chars {
-        Chars {
-            string: self.str_slice(..),
-        }
+        self.str_slice(..).owned_chars()
     }
 
+    /// Iterates over the chars using the build in Chars iterator from the standard library
     pub fn chars(&self) -> str::Chars {
         self.get_str().chars()
     }
 }
 
 impl StrSlice {
+    /// Creates an iterator over the chars in this `StrSlice`. This allows for the iterator to
+    /// outlive this `StrSlice`
+    #[must_use]
     pub fn owned_chars(&self) -> Chars {
         Chars {
             string: self.clone(),
