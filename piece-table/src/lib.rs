@@ -1,4 +1,5 @@
 //! A Piece table implementation with multiple clients
+#![feature(linked_list_cursors)]
 use std::{
     collections::{LinkedList, VecDeque},
     io::{self, Read},
@@ -10,7 +11,7 @@ pub mod client;
 pub mod iters;
 mod table;
 
-use append_only_str::{AppendOnlyStr, StrSlice};
+use append_only_str::{slices::StrSlice, AppendOnlyStr};
 use btep::{Deserialize, Serialize};
 use client::Client;
 use table::{InnerTable, Table};
@@ -105,17 +106,34 @@ impl Piece {
     }
 
     pub fn insert_at(&mut self, buf: usize, pos: usize) -> InnerTable<StrSlice> {
-        let mut to_split = self.piece_table.table.write_full().unwrap();
-        let mut curr_pos = 0;
-        let mut iter = to_split.iter();
+        let curr_pos = {
+            let binding = self.piece_table.table.write_full().unwrap();
+            let mut to_split = binding.write();
+            let mut cursor = to_split.cursor_front_mut();
+            let mut curr_pos = 0;
 
-        let elem = iter.next();
-        loop {
-            if curr_pos >= pos {
-                break;
+            loop {
+                if curr_pos >= pos {
+                    break;
+                }
+                curr_pos += cursor.current().unwrap().read().unwrap().len();
+                cursor.move_next();
             }
-            curr_pos += elem.unwrap().read().unwrap().len();
-        }
+
+            let offset = curr_pos - pos;
+            cursor.insert_before(InnerTable::new(
+                StrSlice::empty(),
+                self.piece_table.table.state(),
+            ));
+            curr_pos
+        };
+        // let binding = self.piece_table.table.read_full().unwrap();
+        // let read = binding.read();
+        // let mut cursor = read.cursor_front();
+        // for i in 0..=curr_pos {
+        //     cursor.move_next();
+        // }
+        // cursor.current().unwrap().write().unwrap();
         todo!();
     }
 }
@@ -140,9 +158,9 @@ impl Serialize for &Piece {
         // Might be useless, but it's a single byte
         ret.push_back(0xff);
 
-        ret.extend((self.piece_table.table.read_full().unwrap().len() as u64).to_be_bytes());
+        ret.extend((self.piece_table.table.read_full().unwrap().read().len() as u64).to_be_bytes());
 
-        for piece in self.piece_table.table.read_full().unwrap().iter() {
+        for piece in self.piece_table.table.read_full().unwrap().read().iter() {
             let piece = piece.read().unwrap();
             todo!("find the current buffer");
             ret.extend((5u64).to_be_bytes());
@@ -269,6 +287,7 @@ mod test {
         assert!(&*piece.buffers.original.str_slice(..) == "test");
         assert_eq!(piece.buffers.clients.len(), 0);
         let binding = piece.piece_table.table.read_full().unwrap();
+        let binding = binding.read();
         let mut iter = binding.iter();
         assert_eq!(&**iter.next().unwrap().read().unwrap(), "test");
         assert!(iter.next().is_none());

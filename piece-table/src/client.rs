@@ -1,6 +1,6 @@
 use std::sync::{Arc, RwLock};
 
-use append_only_str::{AppendOnlyStr, StrSlice};
+use append_only_str::{slices::StrSlice, AppendOnlyStr};
 
 use crate::table::InnerTable;
 

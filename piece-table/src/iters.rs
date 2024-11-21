@@ -1,5 +1,5 @@
 //! Implements iterator types for Pieces
-use append_only_str::{iters::Chars as AppendChars, StrSlice};
+use append_only_str::{iters::Chars as AppendChars, slices::StrSlice};
 
 use crate::Piece;
 
@@ -67,6 +67,7 @@ impl Piece {
                 .table
                 .read_full()
                 .unwrap()
+                .read()
                 .clone()
                 .into_iter()
                 .map(|x| x.read().unwrap().clone()),
