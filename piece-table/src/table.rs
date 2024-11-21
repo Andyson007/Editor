@@ -1,7 +1,7 @@
 use std::{
     collections::LinkedList,
     fmt::Debug,
-    ops::{Deref, DerefMut},
+    ops::{Deref, DerefMut, Index},
     sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard},
 };
 
@@ -88,6 +88,16 @@ impl<T> Table<T> {
     pub fn state(&self) -> Arc<RwLock<TableState>> {
         Arc::clone(&self.state)
     }
+
+    pub fn get(&self, index: usize) -> InnerTable<T> {
+        self.inner
+            .read()
+            .unwrap()
+            .iter()
+            .nth(index)
+            .cloned()
+            .unwrap()
+    }
 }
 
 pub struct TableWriter<T> {
@@ -168,7 +178,18 @@ impl<T> TableLocker<T> {
     }
 
     pub fn write(&self) -> Result<TableLockWriter<T>, ()> {
-        todo!()
+        match *self.state.write().unwrap() {
+            ref mut state @ TableState::Unshared => *state = TableState::SharedMuts((0, 1)),
+            ref mut state @ TableState::Shared((0, refs)) => {
+                *state = TableState::SharedMuts((refs, 1))
+            }
+            TableState::SharedMuts((ref mut refs, _)) => *refs += 1,
+            TableState::Shared((1.., _)) | TableState::Exclusive => return Err(()),
+        };
+        Ok(TableLockWriter {
+            value: self.value.write().unwrap(),
+            state: Arc::clone(&self.state),
+        })
     }
 }
 
@@ -197,7 +218,7 @@ impl<T> Drop for TableLockReader<'_, T> {
 }
 
 pub struct TableLockWriter<'a, T> {
-    value: &'a mut T,
+    value: RwLockWriteGuard<'a, T>,
     state: Arc<RwLock<TableState>>,
 }
 
@@ -205,13 +226,13 @@ impl<T> Deref for TableLockWriter<'_, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        self.value
+        &self.value
     }
 }
 
 impl<T> DerefMut for TableLockWriter<'_, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        self.value
+        &mut self.value
     }
 }
 

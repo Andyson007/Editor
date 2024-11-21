@@ -106,35 +106,32 @@ impl Piece {
     }
 
     pub fn insert_at(&mut self, buf: usize, pos: usize) -> InnerTable<StrSlice> {
-        let curr_pos = {
+        let (curr_pos, nodenr) = {
             let binding = self.piece_table.table.write_full().unwrap();
             let mut to_split = binding.write();
             let mut cursor = to_split.cursor_front_mut();
             let mut curr_pos = 0;
-
+            let mut nodenr = 0;
             loop {
                 if curr_pos >= pos {
                     break;
                 }
                 curr_pos += cursor.current().unwrap().read().unwrap().len();
                 cursor.move_next();
+                nodenr += 1;
             }
 
-            let offset = curr_pos - pos;
             cursor.insert_before(InnerTable::new(
                 StrSlice::empty(),
                 self.piece_table.table.state(),
             ));
-            curr_pos
+            (curr_pos, nodenr)
         };
-        // let binding = self.piece_table.table.read_full().unwrap();
-        // let read = binding.read();
-        // let mut cursor = read.cursor_front();
-        // for i in 0..=curr_pos {
-        //     cursor.move_next();
-        // }
-        // cursor.current().unwrap().write().unwrap();
-        todo!();
+        let offset = curr_pos - pos;
+        let binding = &self.piece_table.table.get(nodenr + 1);
+        let mut x = binding.write().unwrap();
+        *x = x.subslice(offset..);
+        self.piece_table.table.get(nodenr)
     }
 }
 
@@ -301,7 +298,6 @@ mod test {
 
         client.enter_insert(piece.insert_at(0, 0));
         client.push_str("andy");
-
         let mut iter = piece.lines();
         assert_eq!(iter.next(), Some("andy".into()));
         assert_eq!(iter.next(), None);
