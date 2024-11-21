@@ -6,11 +6,13 @@ use std::{
     sync::{Arc, RwLock},
 };
 
+pub mod client;
 pub mod iters;
 mod table;
 
 use append_only_str::{AppendOnlyStr, StrSlice};
 use btep::{Deserialize, Serialize};
+use client::Client;
 use table::{InnerTable, Table};
 use utils::iters::{InnerIteratorExt, IteratorExt};
 
@@ -91,7 +93,7 @@ impl Piece {
         })
     }
 
-    pub fn add_client(&mut self) -> Arc<RwLock<AppendOnlyStr>> {
+    pub fn add_client(&mut self) -> Client {
         let append_only = AppendOnlyStr::new();
         let buf = Arc::new(RwLock::new(append_only));
         self.piece_table.cursors.push(Cursor {
@@ -99,7 +101,22 @@ impl Piece {
             location: None,
         });
         self.buffers.clients.push(Arc::clone(&buf));
-        buf
+        Client::new(buf)
+    }
+
+    pub fn insert_at(&mut self, buf: usize, pos: usize) -> InnerTable<StrSlice> {
+        let mut to_split = self.piece_table.table.write_full().unwrap();
+        let mut curr_pos = 0;
+        let mut iter = to_split.iter();
+
+        let elem = iter.next();
+        loop {
+            if curr_pos >= pos {
+                break;
+            }
+            curr_pos += elem.unwrap().read().unwrap().len();
+        }
+        todo!();
     }
 }
 
@@ -112,7 +129,7 @@ impl Default for Piece {
 impl Serialize for &Piece {
     fn serialize(&self) -> std::collections::VecDeque<u8> {
         let mut ret = VecDeque::new();
-        ret.extend(self.buffers.original.slice(..).into_iter());
+        ret.extend(self.buffers.original.slice(..).iter());
         for client in &self.buffers.clients {
             // 0xfe is used here because its not representable by utf8, and makes stuff easier to
             // parse. This is useful because the alternative is the specify the strings length,
@@ -261,11 +278,11 @@ mod test {
     #[test]
     fn insert() {
         let mut piece = Piece::new();
-        let client = piece.add_client();
-        {
-            let mut a = client.write().unwrap();
-            a.push_str("andy");
-        }
+        let mut client = piece.add_client();
+
+        client.enter_insert(piece.insert_at(0, 0));
+        client.push_str("andy");
+
         let mut iter = piece.lines();
         assert_eq!(iter.next(), Some("andy".into()));
         assert_eq!(iter.next(), None);

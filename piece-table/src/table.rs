@@ -43,6 +43,18 @@ impl<T> Table<T> {
         })
     }
 
+    pub fn write_full(&self) -> Result<TableWriter<T>, ()> {
+        match *self.state.write().unwrap() {
+            TableState::Exclusive => return Err(()),
+            ref mut x @ TableState::Unshared => *x = TableState::Exclusive,
+            TableState::Shared(_) => return Err(()),
+        };
+        Ok(TableWriter {
+            val: Arc::clone(&self.inner),
+            state: self.state.clone(),
+        })
+    }
+
     pub fn from_iter<I>(iter: I) -> Self
     where
         I: Iterator<Item = T>,
@@ -54,6 +66,34 @@ impl<T> Table<T> {
             )),
             state,
         }
+    }
+}
+
+pub struct TableWriter<T> {
+    val: Arc<LinkedList<InnerTable<T>>>,
+    state: Arc<RwLock<TableState>>,
+}
+
+impl<T> Deref for TableWriter<T> {
+    type Target = LinkedList<InnerTable<T>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.val
+    }
+}
+
+impl<T> DerefMut for TableWriter<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        Arc::get_mut(&mut self.val).unwrap()
+    }
+}
+
+impl<T> Drop for TableWriter<T> {
+    fn drop(&mut self) {
+        match *self.state.write().unwrap() {
+            ref mut state @ TableState::Exclusive => *state = TableState::Unshared,
+            TableState::Shared(_) | TableState::Unshared => unreachable!(),
+        };
     }
 }
 
@@ -86,7 +126,7 @@ pub struct TableLocker<T> {
 }
 
 impl<T> TableLocker<T> {
-    pub fn new(value: T, state: Arc<RwLock<TableState>>) -> Self {
+    fn new(value: T, state: Arc<RwLock<TableState>>) -> Self {
         Self {
             value: Arc::new(RwLock::new(value)),
             state,
@@ -150,7 +190,7 @@ impl<T> Deref for TableLockWriter<'_, T> {
 
 impl<T> DerefMut for TableLockWriter<'_, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.value
+        self.value
     }
 }
 

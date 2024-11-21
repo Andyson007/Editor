@@ -219,6 +219,14 @@ pub struct ByteSlice {
 }
 
 impl ByteSlice {
+    pub fn empty() -> Self{
+        Self {
+            raw: Arc::new(RawBuf::new()),
+            start: 0,
+            end: 0,
+        }
+    }
+
     /// returns the starting position of the slice
     #[must_use]
     pub const fn start(&self) -> usize {
@@ -300,6 +308,11 @@ impl PartialEq for StrSlice {
 }
 
 impl StrSlice {
+    pub fn empty() -> Self {
+        Self {
+            byteslice: ByteSlice::empty()
+        }
+    }
     /// Returns the underlying byte representation of the string
     #[must_use]
     pub const fn as_bytes(&self) -> &ByteSlice {
