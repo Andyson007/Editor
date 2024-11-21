@@ -298,6 +298,7 @@ mod test {
 
         client.enter_insert(piece.insert_at(0, 0));
         client.push_str("andy");
+
         let mut iter = piece.lines();
         assert_eq!(iter.next(), Some("andy".into()));
         assert_eq!(iter.next(), None);

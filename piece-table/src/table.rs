@@ -51,6 +51,7 @@ impl<T> Table<T> {
         match *self.state.write().unwrap() {
             ref mut x @ TableState::Unshared => *x = TableState::Shared((1, 0)),
             TableState::Shared((ref mut amount, _)) => *amount += 1,
+            ref mut state @ TableState::SharedMuts((amount, 0)) => *state = TableState::Shared((1, amount)),
             TableState::Exclusive | TableState::SharedMuts(_) => return Err(()),
         };
         Ok(TableReader {
