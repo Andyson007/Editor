@@ -1,7 +1,7 @@
 use std::{
     collections::LinkedList,
     fmt::Debug,
-    ops::{Deref, DerefMut, Index},
+    ops::{Deref, DerefMut},
     sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard},
 };
 
@@ -115,10 +115,6 @@ pub struct TableWriter<T> {
 }
 
 impl<T> TableWriter<T> {
-    pub fn read(&self) -> RwLockReadGuard<'_, LinkedList<InnerTable<T>>> {
-        self.val.read().unwrap()
-    }
-
     pub fn write(&self) -> RwLockWriteGuard<'_, LinkedList<InnerTable<T>>> {
         self.val.write().unwrap()
     }
