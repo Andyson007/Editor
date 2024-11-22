@@ -45,7 +45,7 @@ pub fn run() {
             let mut websocket = accept_hdr(stream.unwrap(), callback).unwrap();
             {
                 let data = text.read().unwrap();
-                dbg!(&data);
+                // dbg!(&data);
                 websocket.send(Btep::Full(&*data).into_message()).unwrap();
             }
             loop {

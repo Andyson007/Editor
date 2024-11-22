@@ -184,7 +184,7 @@ impl<T> TableLocker<T> {
             ref mut state @ TableState::Shared((0, refs)) => {
                 *state = TableState::SharedMuts((refs, 1))
             }
-            TableState::SharedMuts((ref mut refs, _)) => *refs += 1,
+            TableState::SharedMuts((_, ref mut refs)) => *refs += 1,
             TableState::Shared((1.., _)) | TableState::Exclusive => return Err(()),
         };
         Ok(TableLockWriter {
@@ -256,12 +256,6 @@ pub struct InnerTable<T> {
 
 impl<T> Clone for InnerTable<T> {
     fn clone(&self) -> Self {
-        match *self.state.write().unwrap() {
-            ref mut state @ TableState::Unshared => *state = TableState::Shared((0, 1)),
-            TableState::Shared((_, ref mut amount)) => *amount += 1,
-            TableState::SharedMuts((ref mut amount, _)) => *amount += 1,
-            TableState::Exclusive => unreachable!(),
-        };
         Self {
             inner: self.inner.clone(),
             state: Arc::clone(&self.state),
@@ -283,24 +277,10 @@ where
 
 impl<T> InnerTable<T> {
     pub fn read(&self) -> Result<TableLockReader<T>, ()> {
-        match *self.state.write().unwrap() {
-            TableState::Exclusive => return Err(()),
-            ref mut state @ TableState::Unshared => *state = TableState::Shared((0, 1)),
-            TableState::SharedMuts((ref mut amount, _)) => *amount += 1,
-            TableState::Shared((_, ref mut amount)) => *amount += 1,
-        };
         self.inner.read()
     }
 
     pub fn write(&self) -> Result<TableLockWriter<'_, T>, ()> {
-        match *dbg!(self.state.write().unwrap()) {
-            TableState::Unshared => *self.state.write().unwrap() = TableState::SharedMuts((0, 1)),
-            ref mut state @ TableState::Shared((0, amount)) => {
-                *state = TableState::SharedMuts((amount, 1))
-            }
-            TableState::SharedMuts((_, ref mut amount)) => *amount += 1,
-            TableState::Exclusive | TableState::Shared((1.., _)) => return Err(()),
-        };
         self.inner.write()
     }
 

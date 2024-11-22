@@ -105,9 +105,11 @@ impl Piece {
         Client::new(buf)
     }
 
-    pub fn insert_at(&mut self, buf: usize, pos: usize) -> InnerTable<StrSlice> {
+    pub fn insert_at(&mut self, pos: usize) -> InnerTable<StrSlice> {
         let (curr_pos, nodenr) = {
+println!("[{}:{}]: {:?}", file!(), line!(), self.piece_table.table.state.read());
             let binding = self.piece_table.table.write_full().unwrap();
+println!("[{}:{}]: {:?}", file!(), line!(), self.piece_table.table.state.read());
             let mut to_split = binding.write();
             let mut cursor = to_split.cursor_front_mut();
             let mut curr_pos = 0;
@@ -296,8 +298,25 @@ mod test {
         let mut piece = Piece::new();
         let mut client = piece.add_client();
 
-        client.enter_insert(piece.insert_at(0, 0));
+        client.enter_insert(piece.insert_at(0));
         client.push_str("andy");
+
+        let mut iter = piece.lines();
+        assert_eq!(iter.next(), Some("andy".into()));
+        assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn multiple_clients() {
+        let mut piece = Piece::new();
+        let mut client = piece.add_client();
+        let mut client2 = piece.add_client();
+        let inner_table = piece.insert_at(0);
+
+        client.enter_insert(inner_table);
+        client.push_str("andy");
+        client2.enter_insert(piece.insert_at(2));
+        client2.push_str("andy");
 
         let mut iter = piece.lines();
         assert_eq!(iter.next(), Some("andy".into()));
