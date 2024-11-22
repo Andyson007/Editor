@@ -5,7 +5,7 @@ use std::{
     convert::Infallible,
     fmt::Display,
     ops::{Bound, Deref, RangeBounds},
-    str::{self, FromStr},
+    str::{self, FromStr, Utf8Error},
     sync::Arc,
 };
 
@@ -19,7 +19,7 @@ pub struct ByteSlice {
 }
 
 impl ByteSlice {
-    /// Creates a byteslice with no data. 
+    /// Creates a byteslice with no data.
     ///
     /// Notably this doesn't actually point to anything
     #[must_use]
@@ -181,16 +181,21 @@ impl StrSlice {
         unsafe { str::from_utf8_unchecked(self.byteslice.as_bytes()) }
     }
 
-    #[must_use]
-    pub fn subslice(&self, range: impl RangeBounds<usize>) -> Self {
+    pub fn subslice(&self, range: impl RangeBounds<usize>) -> Option<Self> {
         let (relative_start, relative_end) = get_range(range, 0, self.len());
-        Self {
+        if self
+            .as_str()
+            .is_char_boundary(self.start() + relative_start)
+        {
+            return None;
+        }
+        Some(Self {
             byteslice: ByteSlice {
                 raw: Arc::clone(&self.byteslice.raw),
                 start: self.start() + relative_start,
                 end: self.start() + relative_end,
             },
-        }
+        })
     }
 }
 
