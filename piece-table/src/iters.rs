@@ -64,7 +64,6 @@ impl Piece {
         Chars {
             ranges: self
                 .piece_table
-                .table
                 .read_full()
                 .unwrap()
                 .read()

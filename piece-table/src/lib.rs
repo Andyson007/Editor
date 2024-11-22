@@ -1,7 +1,7 @@
 //! A Piece table implementation with multiple clients
 #![feature(linked_list_cursors)]
 use std::{
-    collections::{LinkedList, VecDeque},
+    collections::VecDeque,
     io::{self, Read},
     iter, mem,
     sync::{Arc, RwLock},
@@ -31,22 +31,8 @@ pub struct Piece {
     /// Holds the buffers that get modified when anyone inserts
     buffers: Buffers,
     /// stores the pieces to reconstruct the whole file
-    piece_table: PieceTable,
-}
-
-#[derive(Debug)]
-struct PieceTable {
     #[allow(clippy::linkedlist)]
-    table: Table<StrSlice>,
-    cursors: Vec<Cursor>,
-}
-
-#[derive(Debug)]
-struct Cursor {
-    /// The buffer that this client owns. It's an Arc because it refers to one of Buffers' clients'
-    /// element
-    buffer: Arc<RwLock<AppendOnlyStr>>,
-    location: Option<InnerTable<StrSlice>>,
+    piece_table: Table<StrSlice>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -61,10 +47,7 @@ impl Piece {
     pub fn new() -> Self {
         let original: AppendOnlyStr = "".into();
         Self {
-            piece_table: PieceTable {
-                table: Table::from_iter(std::iter::once(original.str_slice(..))),
-                cursors: vec![],
-            },
+            piece_table: Table::from_iter(std::iter::once(original.str_slice(..))),
             buffers: Buffers {
                 original,
                 clients: vec![],
@@ -83,10 +66,7 @@ impl Piece {
         let original: AppendOnlyStr = string.into();
 
         Ok(Self {
-            piece_table: PieceTable {
-                table: Table::from_iter(iter::once(original.str_slice(..))),
-                cursors: vec![],
-            },
+            piece_table: Table::from_iter(iter::once(original.str_slice(..))),
             buffers: Buffers {
                 original,
                 clients: vec![],
@@ -96,16 +76,12 @@ impl Piece {
 
     pub fn add_client(&mut self) -> Client {
         let buf = Arc::new(RwLock::new(AppendOnlyStr::new()));
-        self.piece_table.cursors.push(Cursor {
-            buffer: Arc::clone(&buf),
-            location: None,
-        });
         self.buffers.clients.push(Arc::clone(&buf));
         Client::new(buf)
     }
 
     pub fn insert_at(&mut self, pos: usize) -> Option<InnerTable<StrSlice>> {
-        let binding = self.piece_table.table.write_full().unwrap();
+        let binding = self.piece_table.write_full().unwrap();
         let mut to_split = binding.write();
         let mut cursor = to_split.cursor_front_mut();
         let mut curr_pos = cursor.current().unwrap().read().unwrap().len();
@@ -123,10 +99,7 @@ impl Piece {
 
         if is_end {
             cursor.move_prev();
-            cursor.insert_after(InnerTable::new(
-                StrSlice::empty(),
-                self.piece_table.table.state(),
-            ));
+            cursor.insert_after(InnerTable::new(StrSlice::empty(), self.piece_table.state()));
             Some(cursor.current().unwrap().clone())
         } else {
             let current = cursor.current().unwrap().read().unwrap().clone();
@@ -135,12 +108,12 @@ impl Piece {
             if offset != 0 {
                 cursor.insert_before(InnerTable::new(
                     current.subslice(..offset)?,
-                    self.piece_table.table.state(),
+                    self.piece_table.state(),
                 ));
             }
             cursor.insert_after(InnerTable::new(
                 current.subslice(offset..)?,
-                self.piece_table.table.state(),
+                self.piece_table.state(),
             ));
             *cursor.current().unwrap().write().unwrap() = StrSlice::empty();
             Some(cursor.current().unwrap().clone())
@@ -168,26 +141,15 @@ impl Serialize for &Piece {
         // Might be useless, but it's a single byte
         ret.push_back(0xff);
 
-        ret.extend((self.piece_table.table.read_full().unwrap().read().len() as u64).to_be_bytes());
+        ret.extend((self.piece_table.read_full().unwrap().read().len() as u64).to_be_bytes());
 
-        for piece in self.piece_table.table.read_full().unwrap().read().iter() {
+        for piece in self.piece_table.read_full().unwrap().read().iter() {
             let piece = piece.read().unwrap();
-            todo!("find the current buffer");
-            ret.extend((5u64).to_be_bytes());
             ret.extend((piece.start() as u64).to_be_bytes());
+            ret.extend((piece.end()).to_be_bytes());
             ret.extend((piece.len() as u64).to_be_bytes());
         }
 
-        for cursor in &self.piece_table.cursors {
-            let Some(ref current) = cursor.location else {
-                ret.push_back(0);
-                continue;
-            };
-            ret.push_back(1);
-            // ret.extend((current.buf as u64).to_be_bytes());
-            // ret.extend((current.start as u64).to_be_bytes());
-            // ret.extend((current.len as u64).to_be_bytes());
-        }
         ret
     }
 }
@@ -224,7 +186,7 @@ impl Deserialize for Piece {
             .unwrap();
 
         let piece_count = usize::try_from(u64::from_be_bytes(pieces)).unwrap();
-        let table: LinkedList<Arc<Range>> = iter
+        let table = iter
             .by_ref()
             // This should be take while in order to actually consume the next value. This is
             // expected because it allows  for disambiguation between a value and and a control
@@ -232,54 +194,26 @@ impl Deserialize for Piece {
             .chunks::<{ 3 * mem::size_of::<u64>() }>()
             .take(piece_count)
             .map(|x| {
-                let slices = x
+                let _slices = x
                     .into_iter()
                     .chunks::<{ mem::size_of::<u64>() }>()
                     .collect::<Vec<_>>();
-                Arc::new(Range {
-                    buf: usize::try_from(u64::from_be_bytes(slices[0])).unwrap(),
-                    start: usize::try_from(u64::from_be_bytes(slices[1])).unwrap(),
-                    len: usize::try_from(u64::from_be_bytes(slices[2])).unwrap(),
-                })
+                // Arc::new(Range {
+                //     buf: usize::try_from(u64::from_be_bytes(slices[0])).unwrap(),
+                //     start: usize::try_from(u64::from_be_bytes(slices[1])).unwrap(),
+                //     len: usize::try_from(u64::from_be_bytes(slices[2])).unwrap(),
+                // })
+                // StrSlice::empty()
+                todo!()
             })
             .collect();
-
-        let mut cursors = Vec::with_capacity(client_buffers.len());
-        while let Some(cursor) = iter.next() {
-            if cursor == 0 {
-                cursors.push(Cursor {
-                    buffer: Arc::clone(&client_buffers[cursors.len()]),
-                    location: None,
-                });
-                continue;
-            }
-            debug_assert_eq!(cursor, 1);
-            let chunks = iter
-                .by_ref()
-                .chunks::<{ 3 * mem::size_of::<u64>() }>()
-                .take(3)
-                .flat_map(|x| x.into_iter().chunks::<{ mem::size_of::<u64>() }>())
-                .collect::<Vec<_>>();
-
-            cursors.push(Cursor {
-                buffer: Arc::clone(&client_buffers[cursors.len()]),
-                location: Some(todo!()), // location: Some(Arc::new(Range {
-                                         //     buf: usize::try_from(u64::from_be_bytes(chunks[0])).unwrap(),
-                                         //     start: usize::try_from(u64::from_be_bytes(chunks[1])).unwrap(),
-                                         //     len: usize::try_from(u64::from_be_bytes(chunks[2])).unwrap(),
-                                         // })),
-            });
-        }
 
         Self {
             buffers: Buffers {
                 original: original_buffer,
                 clients: client_buffers,
             },
-            piece_table: PieceTable {
-                table: todo!(),
-                cursors,
-            },
+            piece_table: table,
         }
     }
 }

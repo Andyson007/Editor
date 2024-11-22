@@ -34,18 +34,6 @@ where
     }
 }
 
-#[derive(Debug)]
-pub(crate) enum TableState {
-    /// There are no referenses to the list
-    Unshared,
-    /// The entire list only has immutable borrows. (full list borrows, single item immutable borrows)
-    Shared((usize, usize)),
-    /// The entire list isn't borrowed. (single item immutable bororws, single item mutable borrows)
-    SharedMuts((usize, usize)),
-    /// The entire list is mutably borrowed (immutable element borrows, mutable element borrows)
-    Exclusive((usize, usize)),
-}
-
 impl<T> Table<T> {
     pub fn read_full(&self) -> Result<TableReader<T>, ()> {
         match *self.state.write().unwrap() {
@@ -102,6 +90,24 @@ impl<T> Table<T> {
             .cloned()
             .unwrap()
     }
+}
+
+impl<T> FromIterator<T> for Table<T> {
+    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
+        Self::from_iter(iter.into_iter())
+    }
+}
+
+#[derive(Debug)]
+pub(crate) enum TableState {
+    /// There are no referenses to the list
+    Unshared,
+    /// The entire list only has immutable borrows. (full list borrows, single item immutable borrows)
+    Shared((usize, usize)),
+    /// The entire list isn't borrowed. (single item immutable bororws, single item mutable borrows)
+    SharedMuts((usize, usize)),
+    /// The entire list is mutably borrowed (immutable element borrows, mutable element borrows)
+    Exclusive((usize, usize)),
 }
 
 /// Represents a mutable lock on order of the full list
