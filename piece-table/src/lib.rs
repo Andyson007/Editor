@@ -80,6 +80,10 @@ impl Piece {
         Client::new(buf)
     }
 
+    /// Creates an `InnerTable` within the piece table.
+    /// This allows the list to be mutated at that point.
+    /// # Panics
+    /// Shouldn't panic
     pub fn insert_at(&mut self, pos: usize) -> Option<InnerTable<StrSlice>> {
         let binding = self.piece_table.write_full().unwrap();
         let mut to_split = binding.write();
@@ -100,7 +104,6 @@ impl Piece {
         if is_end {
             cursor.move_prev();
             cursor.insert_after(InnerTable::new(StrSlice::empty(), self.piece_table.state()));
-            Some(cursor.current().unwrap().clone())
         } else {
             let current = cursor.current().unwrap().read().clone();
             let offset = curr_pos - pos;
@@ -116,8 +119,8 @@ impl Piece {
                 self.piece_table.state(),
             ));
             *cursor.current().unwrap().write().unwrap() = StrSlice::empty();
-            Some(cursor.current().unwrap().clone())
         }
+        Some(cursor.current().unwrap().clone())
     }
 }
 
