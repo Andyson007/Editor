@@ -84,14 +84,14 @@ impl Piece {
         let binding = self.piece_table.write_full().unwrap();
         let mut to_split = binding.write();
         let mut cursor = to_split.cursor_front_mut();
-        let mut curr_pos = cursor.current().unwrap().read().unwrap().len();
+        let mut curr_pos = cursor.current().unwrap().read().len();
         let is_end = loop {
             if curr_pos > pos {
                 break false;
             }
             cursor.move_next();
             if let Some(x) = cursor.current() {
-                curr_pos += x.read().unwrap().len();
+                curr_pos += x.read().len();
             } else {
                 break true;
             }
@@ -102,7 +102,7 @@ impl Piece {
             cursor.insert_after(InnerTable::new(StrSlice::empty(), self.piece_table.state()));
             Some(cursor.current().unwrap().clone())
         } else {
-            let current = cursor.current().unwrap().read().unwrap().clone();
+            let current = cursor.current().unwrap().read().clone();
             let offset = curr_pos - pos;
 
             if offset != 0 {
@@ -144,7 +144,7 @@ impl Serialize for &Piece {
         ret.extend((self.piece_table.read_full().unwrap().read().len() as u64).to_be_bytes());
 
         for piece in self.piece_table.read_full().unwrap().read().iter() {
-            let piece = piece.read().unwrap();
+            let piece = piece.read();
             ret.extend((piece.start() as u64).to_be_bytes());
             ret.extend((piece.end()).to_be_bytes());
             ret.extend((piece.len() as u64).to_be_bytes());
@@ -230,12 +230,11 @@ mod test {
             Piece::original_from_reader(BufReader::with_capacity(bytes.len(), &mut bytes)).unwrap();
         assert!(&*piece.buffers.original.str_slice(..) == "test");
         assert_eq!(piece.buffers.clients.len(), 0);
-        let binding = piece.piece_table.table.read_full().unwrap();
+        let binding = piece.piece_table.read_full().unwrap();
         let binding = binding.read();
         let mut iter = binding.iter();
-        assert_eq!(&**iter.next().unwrap().read().unwrap(), "test");
+        assert_eq!(&**iter.next().unwrap().read(), "test");
         assert!(iter.next().is_none());
-        assert_eq!(piece.piece_table.cursors.len(), 0);
     }
 
     #[test]
@@ -243,7 +242,7 @@ mod test {
         let mut piece = Piece::new();
         let mut client = piece.add_client();
 
-        client.enter_insert(piece.insert_at(0));
+        client.enter_insert(piece.insert_at(0).unwrap());
         client.push_str("andy");
 
         let mut iter = piece.lines();
@@ -298,12 +297,11 @@ mod test {
             "{:?}",
             piece
                 .piece_table
-                .table
                 .read_full()
                 .unwrap()
                 .read()
                 .iter()
-                .map(|x| x.read().unwrap().as_str().to_string())
+                .map(|x| x.read().as_str().to_string())
                 .collect::<Vec<_>>()
         );
     }

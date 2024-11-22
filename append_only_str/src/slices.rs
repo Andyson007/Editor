@@ -5,7 +5,7 @@ use std::{
     convert::Infallible,
     fmt::Display,
     ops::{Bound, Deref, RangeBounds},
-    str::{self, FromStr, Utf8Error},
+    str::{self, FromStr},
     sync::Arc,
 };
 
@@ -181,9 +181,12 @@ impl StrSlice {
         unsafe { str::from_utf8_unchecked(self.byteslice.as_bytes()) }
     }
 
+    /// creates a subslice of self at a char index. 
+    /// # Errors
+    /// returns None if the index is at a char boundary
     pub fn subslice(&self, range: impl RangeBounds<usize>) -> Option<Self> {
         let (relative_start, relative_end) = get_range(range, 0, self.len());
-        if self
+        if !self
             .as_str()
             .is_char_boundary(self.start() + relative_start)
         {

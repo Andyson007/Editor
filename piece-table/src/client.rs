@@ -10,13 +10,17 @@ pub struct Client {
 }
 
 impl Client {
-    pub fn new(buffer: Arc<RwLock<AppendOnlyStr>>) -> Self {
+    pub const fn new(buffer: Arc<RwLock<AppendOnlyStr>>) -> Self {
         Self {
             buffer,
             slice: None,
         }
     }
 
+    /// appends a string at the current location
+    /// # Panics
+    /// - Insert mode isn't entered
+    /// - We can't read our own buffer. This is most likely this crates fault
     pub fn push_str(&mut self, to_push: &str) {
         self.buffer.write().unwrap().push_str(to_push);
         let slice = self

@@ -19,15 +19,7 @@ where
         f.debug_struct("Table")
             .field(
                 "inner",
-                &self
-                    .inner
-                    .read()
-                    .unwrap()
-                    .front()
-                    .unwrap()
-                    .read()
-                    .unwrap()
-                    .value,
+                &self.inner.read().unwrap().front().unwrap().read().value,
             )
             .field("state", &self.state)
             .finish()
@@ -40,7 +32,7 @@ impl<T> Table<T> {
             ref mut x @ TableState::Unshared => *x = TableState::Shared((1, 0)),
             TableState::Shared((ref mut amount, _)) => *amount += 1,
             ref mut state @ TableState::SharedMuts((amount, 0)) => {
-                *state = TableState::Shared((1, amount))
+                *state = TableState::Shared((1, amount));
             }
             TableState::Exclusive(_) | TableState::SharedMuts(_) => return Err(()),
         };
@@ -54,7 +46,7 @@ impl<T> Table<T> {
         match *self.state.write().unwrap() {
             ref mut state @ TableState::Unshared => *state = TableState::Exclusive((0, 0)),
             ref mut state @ TableState::SharedMuts((immuts, muts)) => {
-                *state = TableState::Exclusive((immuts, muts))
+                *state = TableState::Exclusive((immuts, muts));
             }
             TableState::Exclusive(_) | TableState::Shared(_) => return Err(()),
         };
@@ -70,25 +62,16 @@ impl<T> Table<T> {
     {
         let state = Arc::new(RwLock::new(TableState::Unshared));
         Self {
-            inner: Arc::new(RwLock::new(LinkedList::from_iter(
-                iter.map(|x| InnerTable::new(x, Arc::clone(&state))),
-            ))),
+            inner: Arc::new(RwLock::new(
+                iter.map(|x| InnerTable::new(x, Arc::clone(&state)))
+                    .collect(),
+            )),
             state,
         }
     }
 
     pub fn state(&self) -> Arc<RwLock<TableState>> {
         Arc::clone(&self.state)
-    }
-
-    pub fn get(&self, index: usize) -> InnerTable<T> {
-        self.inner
-            .read()
-            .unwrap()
-            .iter()
-            .nth(index)
-            .cloned()
-            .unwrap()
     }
 }
 
@@ -99,7 +82,7 @@ impl<T> FromIterator<T> for Table<T> {
 }
 
 #[derive(Debug)]
-pub(crate) enum TableState {
+pub enum TableState {
     /// There are no referenses to the list
     Unshared,
     /// The entire list only has immutable borrows. (full list borrows, single item immutable borrows)
@@ -116,11 +99,13 @@ pub(crate) enum TableState {
 /// - Elements within the list can still be mutated
 /// - Elements within the list can still be read
 pub struct TableWriter<T> {
+    #[allow(clippy::linkedlist)]
     val: Arc<RwLock<LinkedList<InnerTable<T>>>>,
     state: Arc<RwLock<TableState>>,
 }
 
 impl<T> TableWriter<T> {
+    #[allow(clippy::linkedlist)]
     pub fn write(&self) -> RwLockWriteGuard<'_, LinkedList<InnerTable<T>>> {
         self.val.write().unwrap()
     }
@@ -131,7 +116,7 @@ impl<T> Drop for TableWriter<T> {
         match *self.state.write().unwrap() {
             ref mut state @ TableState::Exclusive((0, 0)) => *state = TableState::Unshared,
             ref mut state @ TableState::Exclusive((immuts, muts)) => {
-                *state = TableState::SharedMuts((immuts, muts))
+                *state = TableState::SharedMuts((immuts, muts));
             }
             TableState::SharedMuts(_) | TableState::Shared(_) | TableState::Unshared => {
                 unreachable!()
@@ -145,11 +130,13 @@ impl<T> Drop for TableWriter<T> {
 /// - No element of the list can be mutated
 /// - The order of the elements cannot be mutated
 pub struct TableReader<T> {
+    #[allow(clippy::linkedlist)]
     val: Arc<RwLock<LinkedList<InnerTable<T>>>>,
     state: Arc<RwLock<TableState>>,
 }
 
 impl<T> TableReader<T> {
+    #[allow(clippy::linkedlist)]
     pub fn read(&self) -> RwLockReadGuard<'_, LinkedList<InnerTable<T>>> {
         self.val.read().unwrap()
     }
@@ -183,24 +170,24 @@ impl<T> TableLocker<T> {
 }
 
 impl<T> TableLocker<T> {
-    pub fn read(&self) -> Result<TableLockReader<T>, ()> {
+    pub fn read(&self) -> TableLockReader<T> {
         match *self.state.write().unwrap() {
             ref mut state @ TableState::Unshared => *state = TableState::Shared((1, 0)),
-            TableState::Shared((_, ref mut refs)) => *refs += 1,
-            TableState::SharedMuts((ref mut refs, _))
+            TableState::Shared((_, ref mut refs))
+            | TableState::SharedMuts((ref mut refs, _))
             | TableState::Exclusive((ref mut refs, _)) => *refs += 1,
         };
-        Ok(TableLockReader {
+        TableLockReader {
             value: self.value.read().unwrap(),
             state: Arc::clone(&self.state),
-        })
+        }
     }
 
     pub fn write(&self) -> Result<TableLockWriter<T>, ()> {
         match *self.state.write().unwrap() {
             ref mut state @ TableState::Unshared => *state = TableState::SharedMuts((0, 1)),
             ref mut state @ TableState::Shared((0, refs)) => {
-                *state = TableState::SharedMuts((refs, 1))
+                *state = TableState::SharedMuts((refs, 1));
             }
             TableState::Exclusive((_, ref mut refs))
             | TableState::SharedMuts((_, ref mut refs)) => *refs += 1,
@@ -233,8 +220,8 @@ impl<T> Drop for TableLockReader<'_, T> {
     fn drop(&mut self) {
         match *self.state.write().unwrap() {
             ref mut state @ TableState::Shared((1, 0)) => *state = TableState::Unshared,
-            TableState::Shared((_, ref mut refs)) => *refs -= 1,
-            TableState::SharedMuts((ref mut refs, _))
+            TableState::Shared((_, ref mut refs))
+            | TableState::SharedMuts((ref mut refs, _))
             | TableState::Exclusive((ref mut refs, _)) => *refs -= 1,
             TableState::Unshared => unreachable!(),
         };
@@ -298,14 +285,14 @@ where
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("InnerTable")
-            .field("inner", &self.inner.read().unwrap().value)
+            .field("inner", &self.inner.read().value)
             .field("state", &self.state)
             .finish()
     }
 }
 
 impl<T> InnerTable<T> {
-    pub fn read(&self) -> Result<TableLockReader<T>, ()> {
+    pub fn read(&self) -> TableLockReader<T> {
         self.inner.read()
     }
 
