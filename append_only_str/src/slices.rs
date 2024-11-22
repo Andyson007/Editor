@@ -1,10 +1,12 @@
 use std::{
+    convert::Infallible,
+    fmt::Display,
     ops::{Bound, Deref, RangeBounds},
-    str,
+    str::{self, FromStr},
     sync::Arc,
 };
 
-use crate::rawbuf::RawBuf;
+use crate::{rawbuf::RawBuf, AppendOnlyStr};
 
 /// `ByteSlice` is a slice wrapper valid even through `AppendOnlyStr` reallocations
 pub struct ByteSlice {
@@ -161,6 +163,11 @@ impl StrSlice {
     }
 
     #[must_use]
+    pub fn as_str(&self) -> &str {
+        str::from_utf8(self.byteslice.as_bytes()).unwrap()
+    }
+
+    #[must_use]
     pub fn subslice(&self, range: impl RangeBounds<usize>) -> Self {
         let (start, end) = get_range(range, 0, self.len());
         Self {
@@ -170,6 +177,21 @@ impl StrSlice {
                 end,
             },
         }
+    }
+}
+
+impl FromStr for StrSlice {
+    type Err = Infallible;
+
+    fn from_str(str: &str) -> Result<Self, Self::Err> {
+        let a = AppendOnlyStr::from_str(str).unwrap();
+        Ok(a.str_slice(..))
+    }
+}
+
+impl Display for StrSlice {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
     }
 }
 
