@@ -42,8 +42,8 @@ pub(crate) enum TableState {
     Shared((usize, usize)),
     /// The entire list isn't borrowed. (single item immutable bororws, single item mutable borrows)
     SharedMuts((usize, usize)),
-    /// The entire list is mutably borrowed
-    Exclusive,
+    /// The entire list is mutably borrowed (immutable element borrows, mutable element borrows)
+    Exclusive((usize, usize)),
 }
 
 impl<T> Table<T> {
@@ -51,8 +51,10 @@ impl<T> Table<T> {
         match *self.state.write().unwrap() {
             ref mut x @ TableState::Unshared => *x = TableState::Shared((1, 0)),
             TableState::Shared((ref mut amount, _)) => *amount += 1,
-            ref mut state @ TableState::SharedMuts((amount, 0)) => *state = TableState::Shared((1, amount)),
-            TableState::Exclusive | TableState::SharedMuts(_) => return Err(()),
+            ref mut state @ TableState::SharedMuts((amount, 0)) => {
+                *state = TableState::Shared((1, amount))
+            }
+            TableState::Exclusive(_) | TableState::SharedMuts(_) => return Err(()),
         };
         Ok(TableReader {
             val: Arc::clone(&self.inner),
@@ -62,10 +64,11 @@ impl<T> Table<T> {
 
     pub fn write_full(&self) -> Result<TableWriter<T>, ()> {
         match *self.state.write().unwrap() {
-            ref mut x @ TableState::Unshared => *x = TableState::Exclusive,
-            TableState::Exclusive | TableState::Shared(_) | TableState::SharedMuts(_) => {
-                return Err(())
+            ref mut state @ TableState::Unshared => *state = TableState::Exclusive((0, 0)),
+            ref mut state @ TableState::SharedMuts((immuts, muts)) => {
+                *state = TableState::Exclusive((immuts, muts))
             }
+            TableState::Exclusive(_) | TableState::Shared(_) => return Err(()),
         };
         Ok(TableWriter {
             val: Arc::clone(&self.inner),
@@ -101,6 +104,11 @@ impl<T> Table<T> {
     }
 }
 
+/// Represents a mutable lock on order of the full list
+/// This means that
+/// - No readable lock can be created on the entire list
+/// - Elements within the list can still be mutated
+/// - Elements within the list can still be read
 pub struct TableWriter<T> {
     val: Arc<RwLock<LinkedList<InnerTable<T>>>>,
     state: Arc<RwLock<TableState>>,
@@ -119,7 +127,10 @@ impl<T> TableWriter<T> {
 impl<T> Drop for TableWriter<T> {
     fn drop(&mut self) {
         match *self.state.write().unwrap() {
-            ref mut state @ TableState::Exclusive => *state = TableState::Unshared,
+            ref mut state @ TableState::Exclusive((0, 0)) => *state = TableState::Unshared,
+            ref mut state @ TableState::Exclusive((immuts, muts)) => {
+                *state = TableState::SharedMuts((immuts, muts))
+            }
             TableState::SharedMuts(_) | TableState::Shared(_) | TableState::Unshared => {
                 unreachable!()
             }
@@ -127,6 +138,10 @@ impl<T> Drop for TableWriter<T> {
     }
 }
 
+/// Represents a Lock on the entire list.
+/// This means that
+/// - No element of the list can be mutated
+/// - The order of the elements cannot be mutated
 pub struct TableReader<T> {
     val: Arc<RwLock<LinkedList<InnerTable<T>>>>,
     state: Arc<RwLock<TableState>>,
@@ -143,13 +158,14 @@ impl<T> Drop for TableReader<T> {
         match *self.state.write().unwrap() {
             ref mut state @ TableState::Shared((1, 0)) => *state = TableState::Unshared,
             TableState::Shared((ref mut amount, _)) => *amount -= 1,
-            TableState::Exclusive | TableState::Unshared | TableState::SharedMuts(_) => {
+            TableState::Exclusive(_) | TableState::Unshared | TableState::SharedMuts(_) => {
                 unreachable!()
             }
         };
     }
 }
 
+/// Represents something that can lock an item within the `Table`
 pub struct TableLocker<T> {
     value: Arc<RwLock<T>>,
     state: Arc<RwLock<TableState>>,
@@ -169,8 +185,8 @@ impl<T> TableLocker<T> {
         match *self.state.write().unwrap() {
             ref mut state @ TableState::Unshared => *state = TableState::Shared((1, 0)),
             TableState::Shared((_, ref mut refs)) => *refs += 1,
-            TableState::SharedMuts((ref mut refs, _)) => *refs += 1,
-            TableState::Exclusive => return Err(()),
+            TableState::SharedMuts((ref mut refs, _))
+            | TableState::Exclusive((ref mut refs, _)) => *refs += 1,
         };
         Ok(TableLockReader {
             value: self.value.read().unwrap(),
@@ -184,8 +200,9 @@ impl<T> TableLocker<T> {
             ref mut state @ TableState::Shared((0, refs)) => {
                 *state = TableState::SharedMuts((refs, 1))
             }
-            TableState::SharedMuts((_, ref mut refs)) => *refs += 1,
-            TableState::Shared((1.., _)) | TableState::Exclusive => return Err(()),
+            TableState::Exclusive((_, ref mut refs))
+            | TableState::SharedMuts((_, ref mut refs)) => *refs += 1,
+            TableState::Shared((1.., _)) => return Err(()),
         };
         Ok(TableLockWriter {
             value: self.value.write().unwrap(),
@@ -194,6 +211,9 @@ impl<T> TableLocker<T> {
     }
 }
 
+/// Represents a reading lock on an item within the linked list
+/// This means that
+/// - This item cannot be mutated by anything else
 pub struct TableLockReader<'a, T> {
     value: RwLockReadGuard<'a, T>,
     state: Arc<RwLock<TableState>>,
@@ -212,12 +232,18 @@ impl<T> Drop for TableLockReader<'_, T> {
         match *self.state.write().unwrap() {
             ref mut state @ TableState::Shared((1, 0)) => *state = TableState::Unshared,
             TableState::Shared((_, ref mut refs)) => *refs -= 1,
-            TableState::SharedMuts((ref mut refs, _)) => *refs -= 1,
-            TableState::Exclusive | TableState::Unshared => unreachable!(),
+            TableState::SharedMuts((ref mut refs, _))
+            | TableState::Exclusive((ref mut refs, _)) => *refs -= 1,
+            TableState::Unshared => unreachable!(),
         };
     }
 }
 
+/// Represents a write-lock on an item within the list.
+/// This means that
+/// - This item cannot be mutated by anything else
+/// - This item cannot be read by anything else
+/// - The entire list cannot be read
 pub struct TableLockWriter<'a, T> {
     value: RwLockWriteGuard<'a, T>,
     state: Arc<RwLock<TableState>>,
@@ -243,8 +269,9 @@ impl<T> Drop for TableLockWriter<'_, T> {
             // ref mut state @ TableState::Exclusive => *state = TableState::Unshared,
             // TableState::Unshared | TableState::Shared(_) => unreachable!(),
             ref mut state @ TableState::SharedMuts((0, 1)) => *state = TableState::Unshared,
-            TableState::SharedMuts((_, ref mut amount)) => *amount -= 1,
-            TableState::Exclusive | TableState::Unshared | TableState::Shared(_) => unreachable!(),
+            TableState::Exclusive((_, ref mut amount))
+            | TableState::SharedMuts((_, ref mut amount)) => *amount -= 1,
+            TableState::Unshared | TableState::Shared(_) => unreachable!(),
         };
     }
 }
