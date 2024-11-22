@@ -6,6 +6,7 @@ use std::{
     iter, mem,
     str::FromStr,
     sync::{Arc, RwLock},
+    thread::current,
 };
 
 pub mod client;
@@ -111,30 +112,42 @@ impl Piece {
         let mut to_split = binding.write();
         let mut cursor = to_split.cursor_front_mut();
         let mut curr_pos = cursor.current().unwrap().read().unwrap().len();
-        let mut nodenr = None;
-        loop {
-            if curr_pos >= pos {
-                break;
+        let is_end = loop {
+            if curr_pos > pos {
+                break false;
             }
             cursor.move_next();
-            curr_pos += cursor.current().unwrap().read().unwrap().len();
-            nodenr = Some(nodenr.map_or_else(|| 0, |x| x + 1));
-        }
+            if let Some(x) = cursor.current() {
+                curr_pos += x.read().unwrap().len();
+            } else {
+                break true;
+            }
+        };
 
-        let a = cursor.current().unwrap().read().unwrap().clone();
-        let offset = curr_pos - pos;
-        println!("{}", a);
-        if offset != 0 {
-            cursor.insert_before(InnerTable::new(
-                a.subslice(..offset),
+        if is_end {
+            cursor.move_prev();
+            cursor.insert_after(InnerTable::new(
+                StrSlice::empty(),
                 self.piece_table.table.state(),
             ));
+            cursor.current().unwrap().clone()
+        } else {
+            let current = cursor.current().unwrap().read().unwrap().clone();
+            let offset = curr_pos - pos;
+
+            if offset != 0 {
+                cursor.insert_before(InnerTable::new(
+                    current.subslice(..offset),
+                    self.piece_table.table.state(),
+                ));
+            }
+            cursor.insert_after(InnerTable::new(
+                current.subslice(offset..),
+                self.piece_table.table.state(),
+            ));
+            *cursor.current().unwrap().write().unwrap() = StrSlice::empty();
+            cursor.current().unwrap().clone()
         }
-        cursor.insert_after(InnerTable::new(
-            a.subslice(offset..),
-            self.piece_table.table.state(),
-        ));
-        cursor.current().unwrap().clone()
     }
 }
 
@@ -308,7 +321,7 @@ mod test {
     }
 
     #[test]
-    fn multiple_clients() {
+    fn two_clients_non_overlapping() {
         let mut text = Piece::new();
         let mut client = text.add_client();
         let mut client2 = text.add_client();
@@ -316,11 +329,51 @@ mod test {
         client.enter_insert(text.insert_at(0));
         client.push_str("andy");
 
-        client2.enter_insert(text.insert_at(4));
+        client2.enter_insert(text.insert_at(2));
         client2.push_str("andy");
 
         let mut iter = text.lines();
         assert_eq!(iter.next(), Some("anandydy".into()));
         assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn multiple_clients_lines() {
+        let mut text = Piece::new();
+        let mut client = text.add_client();
+        let mut client2 = text.add_client();
+
+        client.enter_insert(text.insert_at(0));
+        client.push_str("andy");
+
+        let mut client3 = text.add_client();
+
+        client2.enter_insert(text.insert_at(2));
+        client3.enter_insert(text.insert_at(4));
+        client2.push_str("andy");
+
+        client3.push_str("\n\na");
+        print_content(&text);
+
+        let mut iter = text.lines();
+        assert_eq!(iter.next(), Some("anandydy".into()));
+        assert_eq!(iter.next(), Some("".into()));
+        assert_eq!(iter.next(), Some("a".into()));
+        assert_eq!(iter.next(), None);
+    }
+
+    fn print_content(piece: &Piece) {
+        println!(
+            "{:?}",
+            piece
+                .piece_table
+                .table
+                .read_full()
+                .unwrap()
+                .read()
+                .iter()
+                .map(|x| x.read().unwrap().as_str().to_string())
+                .collect::<Vec<_>>()
+        );
     }
 }
