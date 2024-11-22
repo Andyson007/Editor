@@ -104,7 +104,7 @@ impl Piece {
         Client::new(buf)
     }
 
-    pub fn insert_at(&mut self, pos: usize) -> InnerTable<StrSlice> {
+    pub fn insert_at(&mut self, pos: usize) -> Option<InnerTable<StrSlice>> {
         let binding = self.piece_table.table.write_full().unwrap();
         let mut to_split = binding.write();
         let mut cursor = to_split.cursor_front_mut();
@@ -127,23 +127,23 @@ impl Piece {
                 StrSlice::empty(),
                 self.piece_table.table.state(),
             ));
-            cursor.current().unwrap().clone()
+            Some(cursor.current().unwrap().clone())
         } else {
             let current = cursor.current().unwrap().read().unwrap().clone();
             let offset = curr_pos - pos;
 
             if offset != 0 {
                 cursor.insert_before(InnerTable::new(
-                    current.subslice(..offset),
+                    current.subslice(..offset)?,
                     self.piece_table.table.state(),
                 ));
             }
             cursor.insert_after(InnerTable::new(
-                current.subslice(offset..),
+                current.subslice(offset..)?,
                 self.piece_table.table.state(),
             ));
             *cursor.current().unwrap().write().unwrap() = StrSlice::empty();
-            cursor.current().unwrap().clone()
+            Some(cursor.current().unwrap().clone())
         }
     }
 }
@@ -323,10 +323,10 @@ mod test {
         let mut client = text.add_client();
         let mut client2 = text.add_client();
 
-        client.enter_insert(text.insert_at(0));
+        client.enter_insert(text.insert_at(0).unwrap());
         client.push_str("andy");
 
-        client2.enter_insert(text.insert_at(2));
+        client2.enter_insert(text.insert_at(2).unwrap());
         client2.push_str("andy");
 
         let mut iter = text.lines();
@@ -340,13 +340,13 @@ mod test {
         let mut client = text.add_client();
         let mut client2 = text.add_client();
 
-        client.enter_insert(text.insert_at(0));
+        client.enter_insert(text.insert_at(0).unwrap());
         client.push_str("andy");
 
         let mut client3 = text.add_client();
 
-        client2.enter_insert(text.insert_at(2));
-        client3.enter_insert(text.insert_at(4));
+        client2.enter_insert(text.insert_at(2).unwrap());
+        client3.enter_insert(text.insert_at(4).unwrap());
         client2.push_str("andy");
 
         client3.push_str("\n\na");
