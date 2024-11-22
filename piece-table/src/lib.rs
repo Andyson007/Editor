@@ -4,9 +4,7 @@ use std::{
     collections::{LinkedList, VecDeque},
     io::{self, Read},
     iter, mem,
-    str::FromStr,
     sync::{Arc, RwLock},
-    thread::current,
 };
 
 pub mod client;
@@ -97,8 +95,7 @@ impl Piece {
     }
 
     pub fn add_client(&mut self) -> Client {
-        let append_only = AppendOnlyStr::new();
-        let buf = Arc::new(RwLock::new(append_only));
+        let buf = Arc::new(RwLock::new(AppendOnlyStr::new()));
         self.piece_table.cursors.push(Cursor {
             buffer: Arc::clone(&buf),
             location: None,

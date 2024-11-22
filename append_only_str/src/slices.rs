@@ -1,3 +1,6 @@
+//! Defines slice types for `AppendOnlyStr`.
+//! These are useful because a reallocation might move the date. Types defined in this module
+//! maintain ownership
 use std::{
     convert::Infallible,
     fmt::Display,
@@ -16,6 +19,10 @@ pub struct ByteSlice {
 }
 
 impl ByteSlice {
+    /// Creates a byteslice with no data. 
+    ///
+    /// Notably this doesn't actually point to anything
+    #[must_use]
     pub fn empty() -> Self {
         Self {
             raw: Arc::new(RawBuf::new()),
@@ -57,6 +64,7 @@ impl ByteSlice {
         }
     }
 
+    /// Creates a new `ByteSlice` with a range within the current range
     #[must_use]
     pub fn subslice(&self, range: impl RangeBounds<usize>) -> Self {
         let (start, end) = get_range(range, 0, self.len());
@@ -115,6 +123,9 @@ impl PartialEq for StrSlice {
 }
 
 impl StrSlice {
+    /// Creates an empty `StrSlice`
+    /// Notably this doesn't allocate anything
+    #[must_use]
     pub fn empty() -> Self {
         Self {
             byteslice: ByteSlice::empty(),
@@ -162,19 +173,22 @@ impl StrSlice {
         self.len() == 0
     }
 
+    /// Converts a `StrSlice` to a string slice
     #[must_use]
     pub fn as_str(&self) -> &str {
-        str::from_utf8(self.byteslice.as_bytes()).unwrap()
+        // # Safety
+        // We know that the byteslice is utf at all times
+        unsafe { str::from_utf8_unchecked(self.byteslice.as_bytes()) }
     }
 
     #[must_use]
     pub fn subslice(&self, range: impl RangeBounds<usize>) -> Self {
-        let (start, end) = get_range(range, 0, self.len());
+        let (relative_start, relative_end) = get_range(range, 0, self.len());
         Self {
             byteslice: ByteSlice {
                 raw: Arc::clone(&self.byteslice.raw),
-                start,
-                end,
+                start: self.start() + relative_start,
+                end: self.start() + relative_end,
             },
         }
     }
