@@ -1,0 +1,9 @@
+[package]
+name = "text"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+btep = {path = "../btep"}
+append_only_str = {path = "../append_only_str"}
+piece-table = {path = "../piece-table"}

@@ -8,34 +8,31 @@ use std::{
     u64,
 };
 
-pub mod client;
 pub mod iters;
-mod table;
+pub mod table;
 
 use append_only_str::{
     slices::{self, StrSlice},
     AppendOnlyStr,
 };
 use btep::{Deserialize, Serialize};
-use client::Client;
 use table::{InnerTable, Table};
 use utils::iters::{InnerIteratorExt, IteratorExt};
 
 #[derive(Debug)]
-struct Buffers {
+pub struct Buffers {
     /// The original file content
-    original: AppendOnlyStr,
+    pub original: AppendOnlyStr,
     /// The appendbuffers for each of the clients
-    clients: Vec<Arc<RwLock<AppendOnlyStr>>>,
+    pub clients: Vec<Arc<RwLock<AppendOnlyStr>>>,
 }
 
 /// A complete Piece table. It has support for handling multiple clients at the same time
 #[derive(Debug)]
 pub struct Piece {
     /// Holds the buffers that get modified when anyone inserts
-    buffers: Buffers,
+    pub buffers: Buffers,
     /// stores the pieces to reconstruct the whole file
-    #[allow(clippy::linkedlist)]
     piece_table: Table<StrSlice>,
 }
 
@@ -70,13 +67,6 @@ impl Piece {
                 clients: vec![],
             },
         })
-    }
-
-    /// Creates a `Client` with an attached buffer
-    pub fn add_client(&mut self) -> Client {
-        let buf = Arc::new(RwLock::new(AppendOnlyStr::new()));
-        self.buffers.clients.push(Arc::clone(&buf));
-        Client::new(buf, self.buffers.clients.len() - 1)
     }
 
     /// Creates an `InnerTable` within the piece table.
@@ -131,6 +121,14 @@ impl Piece {
             *cursor.current().unwrap().write().unwrap().1 = StrSlice::empty();
         }
         Some(cursor.current().unwrap().clone())
+    }
+
+    pub fn read_full(&self) -> Result<table::TableReader<StrSlice>, ()> {
+        self.piece_table.read_full()
+    }
+
+    pub fn write_full(&self) -> Result<table::TableWriter<StrSlice>, ()> {
+        self.piece_table.write_full()
     }
 }
 
@@ -235,114 +233,21 @@ impl Deserialize for Piece {
 
 #[cfg(test)]
 mod test {
-    use crate::Piece;
     use std::io::BufReader;
+
+    use crate::Piece;
 
     #[test]
     fn from_reader() {
         let mut bytes = &b"test"[..];
         let piece =
             Piece::original_from_reader(BufReader::with_capacity(bytes.len(), &mut bytes)).unwrap();
-        assert!(&*piece.buffers.original.str_slice(..) == "test");
-        assert_eq!(piece.buffers.clients.len(), 0);
-        let binding = piece.piece_table.read_full().unwrap();
+        let binding = piece.read_full().unwrap();
         let binding = binding.read();
         let mut iter = binding.iter();
         let next = iter.next().unwrap().read();
         assert_eq!(&**next.1, "test");
         assert_eq!(next.0, None);
         assert!(iter.next().is_none());
-    }
-
-    #[test]
-    fn insert() {
-        let mut piece = Piece::new();
-        let mut client = piece.add_client();
-
-        client.enter_insert(&mut piece, 0);
-        client.push_str("andy");
-
-        let mut iter = piece.lines();
-        assert_eq!(iter.next(), Some("andy".into()));
-        assert_eq!(iter.next(), None);
-    }
-
-    #[test]
-    fn two_clients_non_overlapping() {
-        let mut text = Piece::new();
-        let mut client = text.add_client();
-        let mut client2 = text.add_client();
-
-        client.enter_insert(&mut text, 0);
-        client.push_str("andy");
-
-        client2.enter_insert(&mut text, 2);
-        client2.push_str("andy");
-
-        let mut iter = text.lines();
-        assert_eq!(iter.next(), Some("anandydy".into()));
-        assert_eq!(iter.next(), None);
-    }
-
-    #[test]
-    fn multiple_clients_lines() {
-        let mut text = Piece::new();
-        let mut client = text.add_client();
-        let mut client2 = text.add_client();
-
-        client.enter_insert(&mut text, 0);
-        client.push_str("andy");
-
-        let mut client3 = text.add_client();
-
-        client2.enter_insert(&mut text, 2);
-        client3.enter_insert(&mut text, 4);
-        client2.push_str("andy");
-
-        client3.push_str("\n\na");
-
-        assert_eq!(
-            text.piece_table
-                .read_full()
-                .unwrap()
-                .read()
-                .iter()
-                .map(|x| x.read().1.as_str().to_string())
-                .collect::<Vec<_>>(),
-            vec!["an", "andy", "dy", "\n\na", ""]
-        );
-        let mut iter = text.lines();
-        assert_eq!(iter.next(), Some("anandydy".into()));
-        assert_eq!(iter.next(), Some("".into()));
-        assert_eq!(iter.next(), Some("a".into()));
-        assert_eq!(iter.next(), None);
-    }
-
-    #[test]
-    fn multiple_inserts_single_client() {
-        let mut text = Piece::new();
-        let mut client = text.add_client();
-        client.enter_insert(&mut text, 0);
-        client.push_str("Hello");
-
-        client.enter_insert(&mut text, 5);
-        client.push_str("world!");
-
-        client.enter_insert(&mut text, 5);
-        client.push_str(" ");
-
-        println!(
-            "{:?}",
-            text.piece_table
-                .read_full()
-                .unwrap()
-                .read()
-                .iter()
-                .map(|x| x.read().1.as_str().to_string())
-                .collect::<Vec<_>>()
-        );
-        let mut iter = text.lines();
-        assert_eq!(iter.next(), Some("Hello world!".to_string()));
-        assert_eq!(iter.next(), None);
     }
 }
