@@ -102,14 +102,15 @@ impl Piece {
             cursor.insert_after(InnerTable::new(StrSlice::empty(), self.piece_table.state()));
         } else {
             let current = cursor.current().unwrap().read().clone();
-            let offset = curr_pos - pos;
+            let offset = pos - (curr_pos - current.len());
 
             if offset != 0 {
                 cursor.insert_before(InnerTable::new(
-                    current.subslice(..offset)?,
+                    dbg!(current.subslice(..offset))?,
                     self.piece_table.state(),
                 ));
             }
+
             cursor.insert_after(InnerTable::new(
                 current.subslice(offset..)?,
                 self.piece_table.state(),
@@ -297,6 +298,34 @@ mod test {
         assert_eq!(iter.next(), Some("anandydy".into()));
         assert_eq!(iter.next(), Some("".into()));
         assert_eq!(iter.next(), Some("a".into()));
+        assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn multiple_inserts_single_client() {
+        let mut text = Piece::new();
+        let mut client = text.add_client();
+        client.enter_insert(text.insert_at(0).unwrap());
+        client.push_str("Hello");
+
+        client.enter_insert(text.insert_at(5).unwrap());
+        client.push_str("world!");
+
+        client.enter_insert(text.insert_at(5).unwrap());
+        client.push_str(" ");
+
+        println!(
+            "{:?}",
+            text.piece_table
+                .read_full()
+                .unwrap()
+                .read()
+                .iter()
+                .map(|x| x.read().as_str().to_string())
+                .collect::<Vec<_>>()
+        );
+        let mut iter = text.lines();
+        assert_eq!(iter.next(), Some("Hello world!".to_string()));
         assert_eq!(iter.next(), None);
     }
 }

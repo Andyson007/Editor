@@ -131,6 +131,7 @@ impl StrSlice {
             byteslice: ByteSlice::empty(),
         }
     }
+
     /// Returns the underlying byte representation of the string
     #[must_use]
     pub const fn as_bytes(&self) -> &ByteSlice {
@@ -181,7 +182,7 @@ impl StrSlice {
         unsafe { str::from_utf8_unchecked(self.byteslice.as_bytes()) }
     }
 
-    /// creates a subslice of self at a char index. 
+    /// creates a subslice of self at a char index.
     /// # Errors
     /// returns None if the index is at a char boundary
     pub fn subslice(&self, range: impl RangeBounds<usize>) -> Option<Self> {

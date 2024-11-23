@@ -157,6 +157,16 @@ impl AppendOnlyStr {
         unsafe { self.push_bytes(str.as_bytes()) }
     }
 
+    /// Returns the length of this appendonly string
+    pub const fn len(&self) -> usize {
+        self.len
+    }
+
+    pub const fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+
+
     fn get_str(&self) -> &str {
         // This shouldn't fail because utf-8
         // compliance is always guaranteed

@@ -9,6 +9,7 @@ use crate::table::InnerTable;
 pub struct Client {
     buffer: Arc<RwLock<AppendOnlyStr>>,
     slice: Option<InnerTable<StrSlice>>,
+    is_first_insert: bool,
 }
 
 impl Client {
@@ -18,6 +19,7 @@ impl Client {
         Self {
             buffer,
             slice: None,
+            is_first_insert: false,
         }
     }
 
@@ -32,12 +34,19 @@ impl Client {
             .as_mut()
             .expect("Can only call push_str in insert mode");
         let mut a = slice.write().unwrap();
-        *a = self.buffer.read().unwrap().str_slice(a.start()..);
+        let start = if self.is_first_insert {
+            self.is_first_insert = false;
+            self.buffer.read().unwrap().len() - to_push.len()
+        } else {
+            a.start()
+        };
+        *a = self.buffer.read().unwrap().str_slice(start..);
     }
 
     /// Allows for insertion.
     /// Takes an `InnerTable` as an argument as to where the text should be inserted
     pub fn enter_insert(&mut self, inner_table: InnerTable<StrSlice>) {
         self.slice = Some(inner_table);
+        self.is_first_insert = true;
     }
 }
