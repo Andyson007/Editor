@@ -5,13 +5,17 @@ use std::{
     io::{self, Read},
     iter, mem,
     sync::{Arc, RwLock},
+    u64,
 };
 
 pub mod client;
 pub mod iters;
 mod table;
 
-use append_only_str::{slices::StrSlice, AppendOnlyStr};
+use append_only_str::{
+    slices::{self, StrSlice},
+    AppendOnlyStr,
+};
 use btep::{Deserialize, Serialize};
 use client::Client;
 use table::{InnerTable, Table};
@@ -158,7 +162,6 @@ impl Serialize for &Piece {
             ret.extend((piece.0.map_or(u64::MAX, |x| x as u64)).to_be_bytes());
             ret.extend((piece.1.start() as u64).to_be_bytes());
             ret.extend((piece.1.end()).to_be_bytes());
-            ret.extend((piece.1.len() as u64).to_be_bytes());
         }
         ret
     }
@@ -198,23 +201,25 @@ impl Deserialize for Piece {
         let piece_count = usize::try_from(u64::from_be_bytes(pieces)).unwrap();
         let table = iter
             .by_ref()
-            // This should be take while in order to actually consume the next value. This is
-            // expected because it allows  for disambiguation between a value and and a control
-            // value
             .chunks::<{ 3 * mem::size_of::<u64>() }>()
             .take(piece_count)
             .map(|x| {
-                let _slices = x
+                let slices = x
                     .into_iter()
                     .chunks::<{ mem::size_of::<u64>() }>()
                     .collect::<Vec<_>>();
-                // Arc::new(Range {
-                //     buf: usize::try_from(u64::from_be_bytes(slices[0])).unwrap(),
-                //     start: usize::try_from(u64::from_be_bytes(slices[1])).unwrap(),
-                //     len: usize::try_from(u64::from_be_bytes(slices[2])).unwrap(),
-                // })
-                // StrSlice::empty()
-                todo!()
+                let start = usize::try_from(u64::from_be_bytes(slices[1])).unwrap();
+                let end = usize::try_from(u64::from_be_bytes(slices[2])).unwrap();
+                match u64::from_be_bytes(slices[0]) {
+                    u64::MAX => (None, original_buffer.str_slice(start..end)),
+                    bufnr => {
+                        let buf = usize::try_from(bufnr).unwrap();
+                        (
+                            Some(buf),
+                            client_buffers[buf].read().unwrap().str_slice(start..end),
+                        )
+                    }
+                }
             })
             .collect();
 

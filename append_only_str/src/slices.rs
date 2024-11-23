@@ -14,7 +14,9 @@ use crate::{rawbuf::RawBuf, AppendOnlyStr};
 /// `ByteSlice` is a slice wrapper valid even through `AppendOnlyStr` reallocations
 pub struct ByteSlice {
     pub(crate) raw: Arc<RawBuf>,
+    /// Inclusive starting position of the slice within the buffer
     pub(crate) start: usize,
+    /// Exclisve ending position of the slice within the buffer
     pub(crate) end: usize,
 }
 
