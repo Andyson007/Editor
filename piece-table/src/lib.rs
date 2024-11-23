@@ -41,7 +41,7 @@ impl Piece {
     pub fn new() -> Self {
         let original: AppendOnlyStr = "".into();
         Self {
-            piece_table: Table::from_iter(std::iter::once(original.str_slice(..))),
+            piece_table: Table::from_iter(std::iter::once((None, original.str_slice(..)))),
             buffers: Buffers {
                 original,
                 clients: vec![],
@@ -60,7 +60,7 @@ impl Piece {
         let original: AppendOnlyStr = string.into();
 
         Ok(Self {
-            piece_table: Table::from_iter(iter::once(original.str_slice(..))),
+            piece_table: Table::from_iter(iter::once((None, original.str_slice(..)))),
             buffers: Buffers {
                 original,
                 clients: vec![],
@@ -72,7 +72,7 @@ impl Piece {
     pub fn add_client(&mut self) -> Client {
         let buf = Arc::new(RwLock::new(AppendOnlyStr::new()));
         self.buffers.clients.push(Arc::clone(&buf));
-        Client::new(buf)
+        Client::new(buf, self.buffers.clients.len() - 1)
     }
 
     /// Creates an `InnerTable` within the piece table.
@@ -80,18 +80,18 @@ impl Piece {
     /// # Panics
     /// Shouldn't panic
     #[allow(clippy::significant_drop_tightening)]
-    pub fn insert_at(&mut self, pos: usize) -> Option<InnerTable<StrSlice>> {
+    pub fn insert_at(&mut self, pos: usize, bufnr: usize) -> Option<InnerTable<StrSlice>> {
         let binding = self.piece_table.write_full().unwrap();
         let mut to_split = binding.write();
         let mut cursor = to_split.cursor_front_mut();
-        let mut curr_pos = cursor.current().unwrap().read().len();
+        let mut curr_pos = cursor.current().unwrap().read().1.len();
         let is_end = loop {
             if curr_pos > pos {
                 break false;
             }
             cursor.move_next();
             if let Some(x) = cursor.current() {
-                curr_pos += x.read().len();
+                curr_pos += x.read().1.len();
             } else {
                 break true;
             }
@@ -99,23 +99,32 @@ impl Piece {
 
         if is_end {
             cursor.move_prev();
-            cursor.insert_after(InnerTable::new(StrSlice::empty(), self.piece_table.state()));
+            cursor.insert_after(InnerTable::new(
+                StrSlice::empty(),
+                self.piece_table.state(),
+                Some(bufnr),
+            ));
         } else {
-            let current = cursor.current().unwrap().read().clone();
+            let (bufnr, current) = {
+                let current = cursor.current().unwrap().read();
+                (current.0, current.1.clone())
+            };
             let offset = pos - (curr_pos - current.len());
 
             if offset != 0 {
                 cursor.insert_before(InnerTable::new(
-                    dbg!(current.subslice(..offset))?,
+                    current.subslice(..offset)?,
                     self.piece_table.state(),
+                    bufnr,
                 ));
             }
 
             cursor.insert_after(InnerTable::new(
                 current.subslice(offset..)?,
                 self.piece_table.state(),
+                bufnr,
             ));
-            *cursor.current().unwrap().write().unwrap() = StrSlice::empty();
+            *cursor.current().unwrap().write().unwrap().1 = StrSlice::empty();
         }
         Some(cursor.current().unwrap().clone())
     }
@@ -145,11 +154,12 @@ impl Serialize for &Piece {
 
         for piece in self.piece_table.read_full().unwrap().read().iter() {
             let piece = piece.read();
-            ret.extend((piece.start() as u64).to_be_bytes());
-            ret.extend((piece.end()).to_be_bytes());
-            ret.extend((piece.len() as u64).to_be_bytes());
+            // NOTE: This probably shouldn't use u64::MAX, but idk about a better way
+            ret.extend((piece.0.map_or(u64::MAX, |x| x as u64)).to_be_bytes());
+            ret.extend((piece.1.start() as u64).to_be_bytes());
+            ret.extend((piece.1.end()).to_be_bytes());
+            ret.extend((piece.1.len() as u64).to_be_bytes());
         }
-
         ret
     }
 }
@@ -233,7 +243,9 @@ mod test {
         let binding = piece.piece_table.read_full().unwrap();
         let binding = binding.read();
         let mut iter = binding.iter();
-        assert_eq!(&**iter.next().unwrap().read(), "test");
+        let next = iter.next().unwrap().read();
+        assert_eq!(&**next.1, "test");
+        assert_eq!(next.0, None);
         assert!(iter.next().is_none());
     }
 
@@ -242,7 +254,7 @@ mod test {
         let mut piece = Piece::new();
         let mut client = piece.add_client();
 
-        client.enter_insert(piece.insert_at(0).unwrap());
+        client.enter_insert(&mut piece, 0);
         client.push_str("andy");
 
         let mut iter = piece.lines();
@@ -256,10 +268,10 @@ mod test {
         let mut client = text.add_client();
         let mut client2 = text.add_client();
 
-        client.enter_insert(text.insert_at(0).unwrap());
+        client.enter_insert(&mut text, 0);
         client.push_str("andy");
 
-        client2.enter_insert(text.insert_at(2).unwrap());
+        client2.enter_insert(&mut text, 2);
         client2.push_str("andy");
 
         let mut iter = text.lines();
@@ -273,13 +285,13 @@ mod test {
         let mut client = text.add_client();
         let mut client2 = text.add_client();
 
-        client.enter_insert(text.insert_at(0).unwrap());
+        client.enter_insert(&mut text, 0);
         client.push_str("andy");
 
         let mut client3 = text.add_client();
 
-        client2.enter_insert(text.insert_at(2).unwrap());
-        client3.enter_insert(text.insert_at(4).unwrap());
+        client2.enter_insert(&mut text, 2);
+        client3.enter_insert(&mut text, 4);
         client2.push_str("andy");
 
         client3.push_str("\n\na");
@@ -290,7 +302,7 @@ mod test {
                 .unwrap()
                 .read()
                 .iter()
-                .map(|x| x.read().as_str().to_string())
+                .map(|x| x.read().1.as_str().to_string())
                 .collect::<Vec<_>>(),
             vec!["an", "andy", "dy", "\n\na", ""]
         );
@@ -305,13 +317,13 @@ mod test {
     fn multiple_inserts_single_client() {
         let mut text = Piece::new();
         let mut client = text.add_client();
-        client.enter_insert(text.insert_at(0).unwrap());
+        client.enter_insert(&mut text, 0);
         client.push_str("Hello");
 
-        client.enter_insert(text.insert_at(5).unwrap());
+        client.enter_insert(&mut text, 5);
         client.push_str("world!");
 
-        client.enter_insert(text.insert_at(5).unwrap());
+        client.enter_insert(&mut text, 5);
         client.push_str(" ");
 
         println!(
@@ -321,7 +333,7 @@ mod test {
                 .unwrap()
                 .read()
                 .iter()
-                .map(|x| x.read().as_str().to_string())
+                .map(|x| x.read().1.as_str().to_string())
                 .collect::<Vec<_>>()
         );
         let mut iter = text.lines();

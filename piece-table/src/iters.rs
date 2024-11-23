@@ -76,7 +76,7 @@ impl Piece {
                 .read()
                 .clone()
                 .into_iter()
-                .map(|x| x.read().clone()),
+                .map(|x| x.read().1.clone()),
             current_iter: None,
         }
     }
@@ -107,7 +107,7 @@ mod test {
         let text = "test\nmore tests\n";
         let original: AppendOnlyStr = text.into();
         let piece = Piece {
-            piece_table: iter::once(original.str_slice(..)).collect(),
+            piece_table: iter::once((None, original.str_slice(..))).collect(),
             buffers: Buffers {
                 original,
                 clients: vec![],
@@ -123,7 +123,7 @@ mod test {
         let text = "test\nmore tests\n";
         let original: AppendOnlyStr = text.into();
         let piece = Piece {
-            piece_table: iter::once(original.str_slice(..)).collect(),
+            piece_table: iter::once((None, original.str_slice(..))).collect(),
             buffers: Buffers {
                 original,
                 clients: vec![],
@@ -141,7 +141,7 @@ mod test {
         let text = "test\nmore tests\na";
         let original: AppendOnlyStr = text.into();
         let piece = Piece {
-            piece_table: Table::from_iter(std::iter::once(original.str_slice(..))),
+            piece_table: Table::from_iter(std::iter::once((None, original.str_slice(..)))),
             buffers: Buffers {
                 original,
                 clients: vec![],
@@ -161,8 +161,8 @@ mod test {
         let client1: Arc<RwLock<AppendOnlyStr>> = Arc::new(RwLock::new("def".into()));
         let piece = Piece {
             piece_table: [
-                original.str_slice(..),
-                Arc::clone(&client1).read().unwrap().str_slice(..),
+                (None, original.str_slice(..)),
+                (Some(0), Arc::clone(&client1).read().unwrap().str_slice(..)),
             ]
             .into_iter()
             .collect(),
@@ -190,10 +190,16 @@ mod test {
         let piece = Piece {
             piece_table: Table::from_iter(
                 [
-                    original.str_slice(0..1),
-                    Arc::clone(&client1).read().unwrap().str_slice(0..1),
-                    original.str_slice(1..3),
-                    Arc::clone(&client1).read().unwrap().str_slice(1..3),
+                    (None, original.str_slice(0..1)),
+                    (
+                        Some(0),
+                        Arc::clone(&client1).read().unwrap().str_slice(0..1),
+                    ),
+                    (None, original.str_slice(1..3)),
+                    (
+                        Some(0),
+                        Arc::clone(&client1).read().unwrap().str_slice(1..3),
+                    ),
                 ]
                 .into_iter(),
             ),
