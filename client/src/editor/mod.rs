@@ -208,6 +208,7 @@ impl State {
         }
         false
     }
+
     fn execute_commad(&self, cmd: &str) -> bool {
         cmd == "q"
     }

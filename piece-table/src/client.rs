@@ -1,15 +1,19 @@
+//! Implements a client type which can be used to insert data into the piece table
 use std::sync::{Arc, RwLock};
 
 use append_only_str::{slices::StrSlice, AppendOnlyStr};
 
 use crate::table::InnerTable;
 
+/// A client which can input text into a `Piece`
 pub struct Client {
     buffer: Arc<RwLock<AppendOnlyStr>>,
     slice: Option<InnerTable<StrSlice>>,
 }
 
 impl Client {
+    /// Creates a new client.
+    /// takes a buffer to write to as an input
     pub const fn new(buffer: Arc<RwLock<AppendOnlyStr>>) -> Self {
         Self {
             buffer,
@@ -31,6 +35,8 @@ impl Client {
         *a = self.buffer.read().unwrap().str_slice(a.start()..);
     }
 
+    /// Allows for insertion.
+    /// Takes an `InnerTable` as an argument as to where the text should be inserted
     pub fn enter_insert(&mut self, inner_table: InnerTable<StrSlice>) {
         self.slice = Some(inner_table);
     }

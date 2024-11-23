@@ -1,3 +1,6 @@
+//! Bundles together the entire editor. 
+//! This is in order to avoid multiple different cli commands being required to run the server,
+//! connect with a client etc.
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use tracing::{info, level_filters::LevelFilter};
 

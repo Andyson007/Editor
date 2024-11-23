@@ -3,6 +3,8 @@ use append_only_str::{iters::Chars as AppendChars, slices::StrSlice};
 
 use crate::Piece;
 
+/// An iterator over the chars of a piece.
+/// This locks the `Piece` for writing
 pub struct Chars<T>
 where
     T: Iterator<Item = StrSlice>,
@@ -30,6 +32,8 @@ where
     }
 }
 
+/// Iterates over the piece table
+/// This locks the `Piece` for writing
 pub struct Lines<T>
 where
     T: Iterator<Item = char>,
@@ -77,6 +81,9 @@ impl Piece {
         }
     }
 
+    /// Creates an iterator over the lines of the file
+    /// # Panics
+    /// panics if a lock can't be made on the full piece table
     pub fn lines(&self) -> impl Iterator<Item = String> {
         Lines {
             chars: self.chars(),

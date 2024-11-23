@@ -35,15 +35,9 @@ pub struct Piece {
     piece_table: Table<StrSlice>,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct Range {
-    pub buf: usize,
-    pub start: usize,
-    pub len: usize,
-}
-
 impl Piece {
     #[must_use]
+    /// Creates an empty piece table
     pub fn new() -> Self {
         let original: AppendOnlyStr = "".into();
         Self {
@@ -74,6 +68,7 @@ impl Piece {
         })
     }
 
+    /// Creates a `Client` with an attached buffer
     pub fn add_client(&mut self) -> Client {
         let buf = Arc::new(RwLock::new(AppendOnlyStr::new()));
         self.buffers.clients.push(Arc::clone(&buf));
@@ -84,6 +79,7 @@ impl Piece {
     /// This allows the list to be mutated at that point.
     /// # Panics
     /// Shouldn't panic
+    #[allow(clippy::significant_drop_tightening)]
     pub fn insert_at(&mut self, pos: usize) -> Option<InnerTable<StrSlice>> {
         let binding = self.piece_table.write_full().unwrap();
         let mut to_split = binding.write();

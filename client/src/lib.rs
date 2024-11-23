@@ -31,6 +31,9 @@ use tungstenite::{
     WebSocket,
 };
 
+/// Runs a the client side of the editor
+#[allow(clippy::missing_panics_doc)]
+#[allow(clippy::missing_errors_doc)]
 pub fn run() -> color_eyre::Result<()> {
     let mut out = io::stdout();
     errors::install_hooks()?;
