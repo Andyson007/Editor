@@ -282,26 +282,21 @@ mod test {
         client2.push_str("andy");
 
         client3.push_str("\n\na");
-        print_content(&text);
 
-        let mut iter = text.lines();
-        assert_eq!(iter.next(), Some("anandydy".into()));
-        assert_eq!(iter.next(), Some("".into()));
-        assert_eq!(iter.next(), Some("a".into()));
-        assert_eq!(iter.next(), None);
-    }
-
-    fn print_content(piece: &Piece) {
-        println!(
-            "{:?}",
-            piece
-                .piece_table
+        assert_eq!(
+            text.piece_table
                 .read_full()
                 .unwrap()
                 .read()
                 .iter()
                 .map(|x| x.read().as_str().to_string())
-                .collect::<Vec<_>>()
+                .collect::<Vec<_>>(),
+            vec!["an", "andy", "dy", "\n\na", ""]
         );
+        let mut iter = text.lines();
+        assert_eq!(iter.next(), Some("anandydy".into()));
+        assert_eq!(iter.next(), Some("".into()));
+        assert_eq!(iter.next(), Some("a".into()));
+        assert_eq!(iter.next(), None);
     }
 }
