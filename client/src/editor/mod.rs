@@ -6,14 +6,16 @@ use core::str;
 use std::cmp;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
-use piece_table::Piece;
+use text::Text;
 
 #[derive(Debug)]
 /// The main state for the entire editor. The entireity of the
 /// view presented to the user can be rebuild from this
 pub struct State {
     /// The rope stores the entire file being edited.
-    pub text: Piece,
+    pub text: Text,
+    /// Our own id within the Text
+    id: usize,
     /// Stores the current editing mode. This is
     /// effectively the same as Vims insert/Normal mode
     mode: Mode,
@@ -33,9 +35,11 @@ pub struct CursorPos {
 impl State {
     /// Creates a new appstate
     #[must_use]
-    pub fn new(data: Piece) -> Self {
+    pub fn new(mut text: Text) -> Self {
+        let id = text.add_client();
         Self {
-            text: data,
+            text,
+            id,
             mode: Mode::Normal,
             cursorpos: CursorPos::default(),
         }

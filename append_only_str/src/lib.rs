@@ -8,6 +8,7 @@
 //! architecture was the way it was, but credit where credits due
 use std::{
     convert::Infallible,
+    fmt::Display,
     num::NonZeroUsize,
     ops::{Index, RangeBounds},
     slice::SliceIndex,
@@ -42,6 +43,12 @@ impl std::fmt::Debug for AppendOnlyStr {
             .field("data", &&*self.slice(..))
             .field("len", &self.len)
             .finish()
+    }
+}
+
+impl Display for AppendOnlyStr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.str_slice(..).as_str())
     }
 }
 

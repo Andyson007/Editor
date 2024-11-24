@@ -7,4 +7,3 @@ edition = "2021"
 btep = { version = "0.1.0", path = "../btep" }
 append_only_str = { path = "../append_only_str" }
 utils = {path = "../utils"}
-tracing = "0.1.40"

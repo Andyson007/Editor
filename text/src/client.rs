@@ -1,5 +1,6 @@
 //! Implements a client type which can be used to insert data into the piece table
 use std::{
+    fmt::Debug,
     ops::Deref,
     sync::{Arc, RwLock},
 };
@@ -9,6 +10,7 @@ use append_only_str::{slices::StrSlice, AppendOnlyStr};
 use piece_table::{table::InnerTable, Piece};
 
 /// A client which can input text into a `Piece`
+#[derive(Debug)]
 pub struct Client {
     pub(crate) piece: Arc<RwLock<Piece>>,
     pub(crate) buffer: Arc<RwLock<AppendOnlyStr>>,

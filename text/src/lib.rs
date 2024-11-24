@@ -2,6 +2,8 @@
 
 use std::{
     collections::VecDeque,
+    io,
+    io::Read,
     mem,
     sync::{Arc, RwLock},
 };
@@ -13,16 +15,18 @@ use piece_table::Piece;
 use utils::iters::IteratorExt;
 pub mod client;
 
+#[derive(Debug)]
 pub struct Text {
     table: Arc<RwLock<Piece>>,
     clients: Vec<Client>,
 }
 
-impl Serialize for Text {
+impl Serialize for &Text {
     fn serialize(&self) -> std::collections::VecDeque<u8> {
         let mut ret = VecDeque::new();
         let to_extend = (&*self.table.read().unwrap()).serialize();
         ret.extend((to_extend.len() as u64).to_be_bytes());
+        println!("{}", ret.len());
         ret.extend(to_extend);
         ret.extend(self.clients.iter().flat_map(|x| {
             let mut ret = VecDeque::new();
@@ -118,6 +122,10 @@ impl Deserialize for Text {
 }
 
 impl Text {
+    pub fn original_from_reader<T: Read>(read: T) -> io::Result<Self> {
+        let piece = Piece::original_from_reader(read)?;
+        Ok(Self::with_piece(piece))
+    }
     pub fn with_piece(piece: Piece) -> Self {
         Self {
             table: Arc::new(RwLock::new(piece)),

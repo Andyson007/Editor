@@ -8,7 +8,7 @@ use std::{
 };
 
 use btep::Btep;
-use piece_table::Piece;
+use text::Text;
 // I want to keep the tracing tools in scope
 #[allow(unused_imports)]
 use tracing::{debug, error, info, trace, warn};
@@ -24,7 +24,7 @@ pub fn run() {
     let server = TcpListener::bind("127.0.0.1:3012").unwrap();
     let file = File::open("./file.txt").unwrap();
     let text = Arc::new(RwLock::new(
-            Piece::original_from_reader(BufReader::new(file)).unwrap(),
+            Text::original_from_reader(BufReader::new(file)).unwrap(),
     ));
     for stream in server.incoming() {
         let text = text.clone();
