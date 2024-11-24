@@ -34,6 +34,14 @@ impl Client {
         }
     }
 
+    /// appends a char at the current location
+    /// # Panics
+    /// - Insert mode isn't entered
+    /// - We can't read our own buffer. This is most likely this crates fault
+    pub fn push_char(&mut self, to_push: char) {
+        self.push_str(&to_push.to_string());
+    }
+
     /// appends a string at the current location
     /// # Panics
     /// - Insert mode isn't entered
