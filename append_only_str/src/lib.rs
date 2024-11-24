@@ -170,6 +170,7 @@ impl AppendOnlyStr {
         self.len
     }
 
+    /// Checks whether the `AppendOnlyStr` is empty or not
     #[must_use]
     pub const fn is_empty(&self) -> bool {
         self.len == 0

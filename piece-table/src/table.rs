@@ -26,15 +26,31 @@ where
     }
 }
 
+#[derive(Debug)]
+pub enum LockError {
+    FaliedLock,
+}
+
 impl<T> Table<T> {
-    pub fn read_full(&self) -> Result<TableReader<T>, ()> {
+    /// Returns a reading lock on the entire linked list
+    /// This means that
+    /// - Elements of the list cannot be modified
+    /// - The order of listelements cannot be modified
+    /// # Panics
+    /// - The state has been poisoned
+    /// # Errors
+    /// - There is already a mutable lock on an element
+    /// - There is already a mutable lock on the full list
+    pub fn read_full(&self) -> Result<TableReader<T>, LockError> {
         match *self.state.write().unwrap() {
             ref mut x @ TableState::Unshared => *x = TableState::Shared((1, 0)),
             TableState::Shared((ref mut amount, _)) => *amount += 1,
             ref mut state @ TableState::SharedMuts((amount, 0)) => {
                 *state = TableState::Shared((1, amount));
             }
-            TableState::Exclusive(_) | TableState::SharedMuts(_) => return Err(()),
+            TableState::Exclusive(_) | TableState::SharedMuts(_) => {
+                return Err(LockError::FaliedLock)
+            }
         };
         Ok(TableReader {
             val: Arc::clone(&self.inner),
@@ -42,13 +58,22 @@ impl<T> Table<T> {
         })
     }
 
-    pub fn write_full(&self) -> Result<TableWriter<T>, ()> {
+    /// Returns a writing lock on the order of the linked list
+    /// This menas that
+    /// - Elemens of the list *can* still be modified
+    /// - No reading lock can be made on the entire linked list
+    /// # Panics
+    /// - The state has been poisoned
+    /// # Errors
+    /// - There is already a writing lock on the list
+    /// - There is already a reading lock on the list
+    pub fn write_full(&self) -> Result<TableWriter<T>, LockError> {
         match *self.state.write().unwrap() {
             ref mut state @ TableState::Unshared => *state = TableState::Exclusive((0, 0)),
             ref mut state @ TableState::SharedMuts((immuts, muts)) => {
                 *state = TableState::Exclusive((immuts, muts));
             }
-            TableState::Exclusive(_) | TableState::Shared(_) => return Err(()),
+            TableState::Exclusive(_) | TableState::Shared(_) => return Err(LockError::FaliedLock),
         };
         Ok(TableWriter {
             val: Arc::clone(&self.inner),
@@ -56,28 +81,24 @@ impl<T> Table<T> {
         })
     }
 
-    pub fn from_iter<I>(iter: I) -> Self
-    where
-        I: Iterator<Item = (Option<usize>, T)>,
-    {
-        let state = Arc::new(RwLock::new(TableState::Unshared));
-        Self {
-            inner: Arc::new(RwLock::new(
-                iter.map(|(i, x)| InnerTable::new(x, Arc::clone(&state), i))
-                    .collect(),
-            )),
-            state,
-        }
-    }
-
-    pub fn state(&self) -> Arc<RwLock<TableState>> {
+    /// Creates a clone of the state of this `Table`
+    #[must_use]
+    pub(crate) fn state(&self) -> Arc<RwLock<TableState>> {
         Arc::clone(&self.state)
     }
 }
 
 impl<T> FromIterator<(Option<usize>, T)> for Table<T> {
     fn from_iter<I: IntoIterator<Item = (Option<usize>, T)>>(iter: I) -> Self {
-        Self::from_iter(iter.into_iter())
+        let state = Arc::new(RwLock::new(TableState::Unshared));
+        Self {
+            inner: Arc::new(RwLock::new(
+                iter.into_iter()
+                    .map(|(i, x)| InnerTable::new(x, Arc::clone(&state), i))
+                    .collect(),
+            )),
+            state,
+        }
     }
 }
 
@@ -105,7 +126,11 @@ pub struct TableWriter<T> {
 }
 
 impl<T> TableWriter<T> {
-    #[allow(clippy::linkedlist)]
+    /// locks down the list for reordering purposes
+    /// This means that
+    /// - You can't lock the entire list for reading/writing
+    /// # Panics
+    /// - The `RwLock` is poisoned
     pub fn write(&self) -> RwLockWriteGuard<'_, LinkedList<InnerTable<T>>> {
         self.val.write().unwrap()
     }
