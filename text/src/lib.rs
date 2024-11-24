@@ -1,4 +1,5 @@
 //! A crate above the piece table for handling actual text with more helper functions
+#![feature(linked_list_cursors)]
 
 use std::{
     collections::VecDeque,

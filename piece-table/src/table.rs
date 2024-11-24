@@ -7,8 +7,8 @@ use std::{
 
 pub struct Table<T> {
     #[allow(clippy::linkedlist)]
-    pub(crate) inner: Arc<RwLock<LinkedList<InnerTable<T>>>>,
-    pub(crate) state: Arc<RwLock<TableState>>,
+    pub inner: Arc<RwLock<LinkedList<InnerTable<T>>>>,
+    pub state: Arc<RwLock<TableState>>,
 }
 
 impl<T> Debug for Table<T>

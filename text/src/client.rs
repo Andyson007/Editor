@@ -1,7 +1,6 @@
 //! Implements a client type which can be used to insert data into the piece table
 use std::{
     fmt::Debug,
-    ops::Deref,
     sync::{Arc, RwLock},
 };
 
@@ -36,10 +35,24 @@ impl Client {
 
     pub fn backspace(&mut self) {
         let binding = self.slice.as_ref().unwrap();
-        let (_, mut slice) = binding.write().unwrap();
+        let (_, slice) = binding.read();
         if slice.is_empty() {
-            todo!()
+            let binding = &self.piece.write().unwrap().piece_table;
+            let mut binding2 = binding.inner.write().unwrap();
+            let mut cursor = binding2.cursor_front_mut();
+            loop {
+                if *cursor.current().unwrap().read().1 == *slice {
+                    break;
+                }
+                cursor.move_next();
+            }
+            drop(slice);
+            let (_, mut slice) = cursor.peek_prev().unwrap().write().unwrap();
+            *slice = slice
+                .subslice(0..slice.len() - slice.chars().last().unwrap().len_utf8())
+                .unwrap();
         } else {
+            let (_, mut slice) = binding.write().unwrap();
             *slice = slice
                 .subslice(0..slice.len() - slice.chars().last().unwrap().len_utf8())
                 .unwrap()
