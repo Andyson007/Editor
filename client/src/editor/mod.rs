@@ -76,8 +76,22 @@ impl State {
         }
 
         match input.code {
-            KeyCode::Backspace => {
-                todo!()
+            KeyCode::Backspace => 'backspace: {
+                if self.cursorpos == (CursorPos { row: 0, col: 0 }) {
+                    break 'backspace;
+                }
+                if self.cursorpos.col == 0 {
+                    self.cursorpos.row -= 1;
+                    self.cursorpos.col = self
+                        .text
+                        .lines()
+                        .nth(self.cursorpos.row)
+                        .unwrap()
+                        .len()
+                } else {
+                    self.cursorpos.col -= 1;
+                }
+                self.text.client(self.id).backspace();
             }
             KeyCode::Enter => {
                 self.text.client(self.id).push_char('\n');

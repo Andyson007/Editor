@@ -34,6 +34,18 @@ impl Client {
         }
     }
 
+    pub fn backspace(&mut self) {
+        let binding = self.slice.as_ref().unwrap();
+        let (_, mut slice) = binding.write().unwrap();
+        if slice.is_empty() {
+            todo!()
+        } else {
+            *slice = slice
+                .subslice(0..slice.len() - slice.chars().last().unwrap().len_utf8())
+                .unwrap()
+        }
+    }
+
     /// appends a char at the current location
     /// # Panics
     /// - Insert mode isn't entered
