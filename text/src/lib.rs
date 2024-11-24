@@ -6,7 +6,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use append_only_str::{slices::StrSlice, AppendOnlyStr};
+use append_only_str::AppendOnlyStr;
 use btep::{Deserialize, Serialize};
 use client::Client;
 use piece_table::Piece;
@@ -90,7 +90,13 @@ impl Deserialize for Text {
                         .unwrap()
                         .read()
                         .iter()
-                        .nth(5)
+                        .find(|x| {
+                            let (buf, inner) = x.read();
+                            if buf != Some(counter) {
+                                return false;
+                            };
+                            inner.start() == start && inner.end() == end
+                        })
                         .cloned(),
                     bufnr: counter,
                 });
@@ -102,6 +108,7 @@ impl Deserialize for Text {
                     bufnr: counter,
                 });
             }
+            counter += 1;
         }
         Self {
             table: arced,
