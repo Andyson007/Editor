@@ -6,14 +6,16 @@ use core::str;
 use std::cmp;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
-use piece_table::Piece;
+use text::Text;
 
 #[derive(Debug)]
 /// The main state for the entire editor. The entireity of the
 /// view presented to the user can be rebuild from this
 pub struct State {
     /// The rope stores the entire file being edited.
-    pub text: Piece,
+    pub text: Text,
+    /// Our own id within the Text
+    id: usize,
     /// Stores the current editing mode. This is
     /// effectively the same as Vims insert/Normal mode
     mode: Mode,
@@ -33,9 +35,11 @@ pub struct CursorPos {
 impl State {
     /// Creates a new appstate
     #[must_use]
-    pub fn new(data: Piece) -> Self {
+    pub fn new(mut text: Text) -> Self {
+        let id = text.add_client();
         Self {
-            text: data,
+            text,
+            id,
             mode: Mode::Normal,
             cursorpos: CursorPos::default(),
         }
@@ -72,80 +76,51 @@ impl State {
         }
 
         match input.code {
-            KeyCode::Backspace => {
-                todo!()
-            }
-            KeyCode::Left => self.cursorpos.col = self.cursorpos.col.saturating_sub(1),
-            KeyCode::Right => {
-                self.cursorpos.col = cmp::min(
-                    self.cursorpos.col + 1,
-                    todo!("I need to get the length of this line"), // self.text
-                                                                    //     .lines_at(self.cursorpos.row)
-                                                                    //     .next()
-                                                                    //     .unwrap()
-                                                                    //     .len_chars()
-                                                                    //     - 1,
-                );
-            }
-            KeyCode::Up => {
-                // self.cursorpos.row = self.cursorpos.row.saturating_sub(1);
-                // self.cursorpos.col = cmp::min(
-                //     self.cursorpos.col,
-                //     self.text
-                //         .lines_at(self.cursorpos.row)
-                //         .next()
-                //         .unwrap()
-                //         .len_chars()
-                //         .saturating_sub(1),
-                // );
-                todo!("I need to get the length of this line");
-            }
-            KeyCode::Down => {
-                todo!("get the amount of lines");
-                // self.cursorpos.row = cmp::min(self.cursorpos.row + 1, self.text.len_lines() - 1);
-                // self.cursorpos.col = cmp::min(
-                //     self.cursorpos.col,
-                //     self.text
-                //         .lines_at(self.cursorpos.row)
-                //         .next()
-                //         .unwrap()
-                //         .len_chars()
-                //         .saturating_sub(2),
-                // );
+            KeyCode::Backspace => 'backspace: {
+                if self.cursorpos == (CursorPos { row: 0, col: 0 }) {
+                    break 'backspace;
+                }
+                if self.cursorpos.col == 0 {
+                    self.cursorpos.row -= 1;
+                    self.cursorpos.col = self
+                        .text
+                        .lines()
+                        .nth(self.cursorpos.row)
+                        .unwrap()
+                        .len()
+                } else {
+                    self.cursorpos.col -= 1;
+                }
+                self.text.client(self.id).backspace();
             }
             KeyCode::Enter => {
-                todo!()
-                // let cursor_pos = self.text.line_to_byte(self.cursorpos.row);
-                // self.text.insert_char(cursor_pos + self.cursorpos.col, '\n');
-                // self.cursorpos.row += 1;
-                // self.cursorpos.col = 0;
+                self.text.client(self.id).push_char('\n');
+                self.cursorpos.col = 0;
+                self.cursorpos.row += 1;
             }
             KeyCode::Char(c) => {
-                todo!()
-                // let cursor_pos = self.text.line_to_byte(self.cursorpos.row);
-                // self.text.insert_char(cursor_pos + self.cursorpos.col, c);
-                // self.cursorpos.col += 1;
+                self.text.client(self.id).push_char(c);
+                self.cursorpos.col += 1;
             }
             KeyCode::Esc => self.mode = Mode::Normal,
             KeyCode::Home => todo!(),
             KeyCode::End => todo!(),
-            KeyCode::PageUp => todo!(),
-            KeyCode::PageDown => todo!(),
-            KeyCode::Tab => todo!(),
-            KeyCode::BackTab => todo!(),
+            KeyCode::PageUp | KeyCode::PageDown => todo!(),
+            KeyCode::Tab | KeyCode::BackTab => todo!(),
             KeyCode::Delete => todo!(),
             KeyCode::Insert => todo!(),
             KeyCode::F(_) => todo!(),
             KeyCode::Null => todo!(),
             KeyCode::CapsLock => todo!(),
-            KeyCode::ScrollLock => todo!(),
-            KeyCode::NumLock => todo!(),
-            KeyCode::PrintScreen => todo!(),
-            KeyCode::Pause => todo!(),
-            KeyCode::Menu => todo!(),
-            KeyCode::KeypadBegin => todo!(),
-            KeyCode::Media(_) => todo!(),
+            KeyCode::ScrollLock
+            | KeyCode::NumLock
+            | KeyCode::PrintScreen
+            | KeyCode::Pause
+            | KeyCode::Menu
+            | KeyCode::KeypadBegin
+            | KeyCode::Media(_) => todo!(),
             KeyCode::Modifier(_) => todo!(),
+            KeyCode::Left | KeyCode::Right | KeyCode::Up | KeyCode::Down => (),
         };
         false
     }
@@ -154,8 +129,61 @@ impl State {
     fn handle_normal_keyevent(&mut self, input: &KeyEvent) -> bool {
         match input.code {
             KeyCode::Char('q') => return true,
-            KeyCode::Char('i') => self.mode = Mode::Insert,
+            KeyCode::Char('i') => {
+                let bytes_to_row: usize = self
+                    .text
+                    .lines()
+                    .take(self.cursorpos.row)
+                    .map(|x| x.len() + 1)
+                    .sum();
+                self.text
+                    .client(self.id)
+                    .enter_insert(bytes_to_row + self.cursorpos.col);
+                self.mode = Mode::Insert;
+            }
             KeyCode::Char(':') => self.mode = Mode::Command(String::new()),
+            KeyCode::Left | KeyCode::Char('h') => {
+                self.cursorpos.col = self.cursorpos.col.saturating_sub(1)
+            }
+            KeyCode::Right | KeyCode::Char('l') => {
+                self.cursorpos.col = cmp::min(
+                    self.cursorpos.col + 1,
+                    self.text
+                        .lines()
+                        .nth(self.cursorpos.row)
+                        .unwrap()
+                        .chars()
+                        .count()
+                        - 1,
+                );
+            }
+            KeyCode::Up | KeyCode::Char('k') => {
+                self.cursorpos.row = self.cursorpos.row.saturating_sub(1);
+                self.cursorpos.col = cmp::min(
+                    self.cursorpos.col,
+                    self.text
+                        .lines()
+                        .nth(self.cursorpos.row)
+                        .unwrap()
+                        .chars()
+                        .count()
+                        .saturating_sub(1),
+                );
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                self.cursorpos.row =
+                    cmp::min(self.cursorpos.row + 1, self.text.lines().count() - 1);
+                self.cursorpos.col = cmp::min(
+                    self.cursorpos.col,
+                    self.text
+                        .lines()
+                        .nth(self.cursorpos.row)
+                        .unwrap()
+                        .chars()
+                        .count()
+                        .saturating_sub(2),
+                );
+            }
             _ => (),
         };
         false
@@ -204,6 +232,7 @@ impl State {
         }
         false
     }
+
     fn execute_commad(&self, cmd: &str) -> bool {
         cmd == "q"
     }

@@ -15,7 +15,7 @@ use crossterm::{
     ExecutableCommand, QueueableCommand,
 };
 use editor::State;
-use piece_table::Piece;
+use text::Text;
 
 use core::str;
 use std::{
@@ -31,6 +31,9 @@ use tungstenite::{
     WebSocket,
 };
 
+/// Runs a the client side of the editor
+#[allow(clippy::missing_panics_doc)]
+#[allow(clippy::missing_errors_doc)]
 pub fn run() -> color_eyre::Result<()> {
     let mut out = io::stdout();
     errors::install_hooks()?;
@@ -40,11 +43,11 @@ pub fn run() -> color_eyre::Result<()> {
 
     let (mut socket, _response) = connect_with_auth("ws://localhost:3012");
 
-    let Btep::Full(initial_file) = Btep::<Piece>::from_message(socket.read()?) else {
+    let Btep::Full(initial_text) = Btep::<Text>::from_message(socket.read()?) else {
         panic!("Initial message in wrong protocol")
     };
 
-    let mut app = State::new(initial_file);
+    let mut app = State::new(initial_text);
 
     redraw(&mut out, 0, &app)?;
 

@@ -1,54 +1,49 @@
 //! Implements iterator types for Pieces
-use std::{iter, str, sync::Arc};
+use append_only_str::{iters::Chars as AppendChars, slices::StrSlice};
 
-use append_only_str::AppendOnlyStr;
+use crate::Piece;
 
-use crate::{Piece, Range};
-
-pub struct Chars<'a, T>
+/// An iterator over the chars of a piece.
+/// This locks the `Piece` for writing
+pub struct Chars<T>
 where
-    T: Iterator<Item = Range>,
+    T: Iterator<Item = StrSlice>,
 {
     ranges: T,
-    main: &'a str,
-    clients: &'a Vec<Arc<AppendOnlyStr>>,
-    current_iter: Option<iter::Take<iter::Skip<str::Chars<'a>>>>,
+    current_iter: Option<AppendChars>,
 }
 
-impl<T> Iterator for Chars<'_, T>
+impl<T> Iterator for Chars<T>
 where
-    T: Iterator<Item = Range>,
+    T: Iterator<Item = StrSlice>,
 {
     type Item = char;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.current_iter.is_none() {
-            let Range { buf, start, len } = self.ranges.next()?;
-            self.current_iter = Some(if buf == 0 {
-                self.main.chars().skip(start).take(len)
-            } else {
-                self.clients[buf - 1].chars().skip(start).take(len)
-            });
+        let Some(ref mut current_iter) = self.current_iter else {
+            self.current_iter = Some(self.ranges.next()?.owned_chars());
+            return self.next();
+        };
+        if let Some(next) = current_iter.next() {
+            return Some(next);
         }
-        if let Some(x) = self.current_iter.as_mut().unwrap().next() {
-            return Some(x);
-        }
-
-        self.current_iter = None;
+        *current_iter = self.ranges.next()?.owned_chars();
         self.next()
     }
 }
 
-pub struct Lines<'a, T>
+/// Iterates over the piece table
+/// This locks the `Piece` for writing
+pub struct Lines<T>
 where
-    T: Iterator<Item = Range>,
+    T: Iterator<Item = char>,
 {
-    chars: Chars<'a, T>,
+    chars: T,
 }
 
-impl<T> Iterator for Lines<'_, T>
+impl<T> Iterator for Lines<T>
 where
-    T: Iterator<Item = Range>,
+    T: Iterator<Item = char>,
 {
     type Item = String;
 
@@ -69,24 +64,27 @@ where
 }
 
 impl Piece {
-    #[must_use]
-    pub fn chars(&self) -> Chars<'_, std::vec::IntoIter<Range>> {
+    /// Iterates over the piece table one char at the time.
+    /// # Panics
+    /// panics if a lock can't be made on the full piece table
+    pub fn chars(&self) -> impl Iterator<Item = char> {
         Chars {
             ranges: self
                 .piece_table
-                .table
-                .iter()
-                .map(|x| Range::clone(x))
-                .collect::<Vec<_>>()
-                .into_iter(),
-            main: &self.buffers.original,
+                .read_full()
+                .unwrap()
+                .read()
+                .clone()
+                .into_iter()
+                .map(|x| x.read().1.clone()),
             current_iter: None,
-            clients: &self.buffers.clients,
         }
     }
 
-    #[must_use]
-    pub fn lines(&self) -> Lines<'_, std::vec::IntoIter<Range>> {
+    /// Creates an iterator over the lines of the file
+    /// # Panics
+    /// panics if a lock can't be made on the full piece table
+    pub fn lines(&self) -> impl Iterator<Item = String> {
         Lines {
             chars: self.chars(),
         }
@@ -95,27 +93,24 @@ impl Piece {
 
 #[cfg(test)]
 mod test {
-    use std::{collections::LinkedList, str::FromStr, sync::Arc};
+    use std::{
+        iter,
+        sync::{Arc, RwLock},
+    };
 
     use append_only_str::AppendOnlyStr;
 
-    use crate::{Buffers, Piece, PieceTable, Range};
-
-    fn with_len(buf: usize, start: usize, len: usize) -> Arc<Range> {
-        Arc::new(Range { buf, start, len })
-    }
+    use crate::{table::Table, Buffers, Piece};
 
     #[test]
     fn test_chars_no_clients() {
         let text = "test\nmore tests\n";
+        let original: AppendOnlyStr = text.into();
         let piece = Piece {
+            piece_table: iter::once((None, original.str_slice(..))).collect(),
             buffers: Buffers {
-                original: text.to_string().into_boxed_str(),
+                original,
                 clients: vec![],
-            },
-            piece_table: PieceTable {
-                table: LinkedList::from_iter(std::iter::once(with_len(0, 0, text.len()))),
-                cursors: vec![],
             },
         };
         let mut chars = piece.chars();
@@ -126,14 +121,12 @@ mod test {
     #[test]
     fn lines_no_clients() {
         let text = "test\nmore tests\n";
+        let original: AppendOnlyStr = text.into();
         let piece = Piece {
+            piece_table: iter::once((None, original.str_slice(..))).collect(),
             buffers: Buffers {
-                original: text.to_string().into_boxed_str(),
+                original,
                 clients: vec![],
-            },
-            piece_table: PieceTable {
-                table: LinkedList::from_iter(std::iter::once(with_len(0, 0, text.len()))),
-                cursors: vec![],
             },
         };
 
@@ -146,14 +139,12 @@ mod test {
     #[test]
     fn trailing_no_clients() {
         let text = "test\nmore tests\na";
+        let original: AppendOnlyStr = text.into();
         let piece = Piece {
+            piece_table: Table::from_iter(std::iter::once((None, original.str_slice(..)))),
             buffers: Buffers {
-                original: text.to_string().into_boxed_str(),
+                original,
                 clients: vec![],
-            },
-            piece_table: PieceTable {
-                table: LinkedList::from_iter(std::iter::once(with_len(0, 0, text.len()))),
-                cursors: vec![],
             },
         };
 
@@ -166,31 +157,19 @@ mod test {
 
     #[test]
     fn chars_one_client_trailing() {
-        let original = "abc";
-        let client1 = "def";
+        let original: AppendOnlyStr = "abc".into();
+        let client1: Arc<RwLock<AppendOnlyStr>> = Arc::new(RwLock::new("def".into()));
         let piece = Piece {
+            piece_table: [
+                (None, original.str_slice(..)),
+                (Some(0), Arc::clone(&client1).read().unwrap().str_slice(..)),
+            ]
+            .into_iter()
+            .collect(),
+
             buffers: Buffers {
-                original: original.to_string().into_boxed_str(),
-                clients: vec![Arc::new(AppendOnlyStr::from_str(client1).unwrap())],
-            },
-            piece_table: PieceTable {
-                table: LinkedList::from_iter(
-                    [
-                        Range {
-                            buf: 0,
-                            start: 0,
-                            len: original.len(),
-                        },
-                        Range {
-                            buf: 1,
-                            start: 0,
-                            len: client1.len(),
-                        },
-                    ]
-                    .into_iter()
-                    .map(Arc::new),
-                ),
-                cursors: vec![],
+                original,
+                clients: vec![client1],
             },
         };
 
@@ -206,41 +185,27 @@ mod test {
 
     #[test]
     fn chars_one_client_interleaved() {
-        let original = "acd";
-        let client1 = "bef";
+        let original: AppendOnlyStr = "acd".into();
+        let client1: Arc<RwLock<AppendOnlyStr>> = Arc::new(RwLock::new("bef".into()));
         let piece = Piece {
+            piece_table: Table::from_iter(
+                [
+                    (None, original.str_slice(0..1)),
+                    (
+                        Some(0),
+                        Arc::clone(&client1).read().unwrap().str_slice(0..1),
+                    ),
+                    (None, original.str_slice(1..3)),
+                    (
+                        Some(0),
+                        Arc::clone(&client1).read().unwrap().str_slice(1..3),
+                    ),
+                ]
+                .into_iter(),
+            ),
             buffers: Buffers {
-                original: original.to_string().into_boxed_str(),
-                clients: vec![Arc::new(AppendOnlyStr::from_str(client1).unwrap())],
-            },
-            piece_table: PieceTable {
-                table: LinkedList::from_iter(
-                    [
-                        Range {
-                            buf: 0,
-                            start: 0,
-                            len: 1,
-                        },
-                        Range {
-                            buf: 1,
-                            start: 0,
-                            len: 1,
-                        },
-                        Range {
-                            buf: 0,
-                            start: 1,
-                            len: 2,
-                        },
-                        Range {
-                            buf: 1,
-                            start: 1,
-                            len: 2,
-                        },
-                    ]
-                    .into_iter()
-                    .map(Arc::new),
-                ),
-                cursors: vec![],
+                original,
+                clients: vec![client1],
             },
         };
 

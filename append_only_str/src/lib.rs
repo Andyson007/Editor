@@ -8,17 +8,20 @@
 //! architecture was the way it was, but credit where credits due
 use std::{
     convert::Infallible,
+    fmt::Display,
     num::NonZeroUsize,
-    ops::{Deref, Index, RangeBounds},
+    ops::{Index, RangeBounds},
     slice::SliceIndex,
     str::{self, FromStr},
     sync::Arc,
 };
 
 use rawbuf::RawBuf;
+use slices::{get_range, ByteSlice, StrSlice};
 mod rawbuf;
 
 pub mod iters;
+pub mod slices;
 
 /// A thread safe append only string
 pub struct AppendOnlyStr {
@@ -43,6 +46,12 @@ impl std::fmt::Debug for AppendOnlyStr {
     }
 }
 
+impl Display for AppendOnlyStr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.str_slice(..).as_str())
+    }
+}
+
 impl Default for AppendOnlyStr {
     fn default() -> Self {
         Self::new()
@@ -59,6 +68,7 @@ impl FromStr for AppendOnlyStr {
     }
 }
 
+#[allow(clippy::fallible_impl_from)]
 impl From<&str> for AppendOnlyStr {
     fn from(value: &str) -> Self {
         Self::from_str(value).unwrap()
@@ -109,7 +119,12 @@ impl AppendOnlyStr {
             return;
         }
         let mut new_capacity = self.rawbuf.capacity();
-        while target > new_capacity {
+
+        if new_capacity == 0 {
+            new_capacity = 1;
+        }
+
+        while new_capacity < target {
             match new_capacity.checked_mul(2) {
                 Some(x) => new_capacity = x,
                 // This ensures that the new buffer is at least as large as
@@ -149,12 +164,25 @@ impl AppendOnlyStr {
         unsafe { self.push_bytes(str.as_bytes()) }
     }
 
+    /// Returns the length of this appendonly string
+    #[must_use]
+    pub const fn len(&self) -> usize {
+        self.len
+    }
+
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+
+    #[must_use]
     fn get_str(&self) -> &str {
-        // : This shouldn't fail because utf-8
+        // This shouldn't fail because utf-8
         // compliance is always guaranteed
         str::from_utf8(self.get_byte_slice()).unwrap()
     }
 
+    #[must_use]
     fn get_byte_slice(&self) -> &[u8] {
         //// SAFETY: ---------------------------------------------
         //// We never make the capacity greater than the amount of
@@ -169,8 +197,9 @@ impl AppendOnlyStr {
 
     /// Creates a slice referring to that place in memory. This slice is guaranteed to be valid
     /// after the buffer has been reallocated!
+    #[must_use]
     pub fn slice(&self, range: impl RangeBounds<usize>) -> ByteSlice {
-        let (start, end) = get_range(range, self.len);
+        let (start, end) = get_range(range, 0, self.len);
         ByteSlice {
             raw: self.rawbuf.clone(),
             start,
@@ -204,113 +233,6 @@ where
 /// without exclusive access and is therefore `Sync` & `Send`
 unsafe impl Sync for AppendOnlyStr {}
 unsafe impl Send for AppendOnlyStr {}
-
-/// `ByteSlice` is a slice wrapper valid even through `AppendOnlyStr` reallocations
-pub struct ByteSlice {
-    raw: Arc<RawBuf>,
-    start: usize,
-    end: usize,
-}
-
-impl ByteSlice {
-    pub const fn start(&self) -> usize {
-        self.start
-    }
-
-    pub const fn end(&self) -> usize {
-        self.end
-    }
-
-    pub fn as_bytes(&self) -> &[u8] {
-        //// SAFETY: ---------------------------------------------
-        //// We never make the capacity greater than the amount of
-        //// space allocated. and therefore a slice won't read
-        //// uninitialized memory
-        unsafe {
-            std::ptr::slice_from_raw_parts(
-                self.raw.ptr().cast_const().add(self.start),
-                self.end - self.start,
-            )
-            .as_ref()
-            .unwrap()
-        }
-    }
-}
-
-impl PartialEq for ByteSlice {
-    fn eq(&self, other: &Self) -> bool {
-        self.as_bytes() == other.as_bytes() && self.start == other.start && self.end == other.end
-    }
-}
-
-impl Eq for ByteSlice {}
-
-impl Deref for ByteSlice {
-    type Target = [u8];
-
-    fn deref(&self) -> &Self::Target {
-        unsafe { std::slice::from_raw_parts(self.raw.ptr().add(self.start), self.end - self.start) }
-    }
-}
-
-/// `StrSlice` is a string slice wrapper valid even through `AppendOnlyStr` reallocations
-pub struct StrSlice {
-    byteslice: ByteSlice,
-}
-
-impl std::fmt::Debug for StrSlice {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_list()
-            .entries(str::from_utf8(&self.byteslice))
-            .finish()
-    }
-}
-
-impl PartialEq for StrSlice {
-    fn eq(&self, other: &Self) -> bool {
-        self.byteslice == other.byteslice
-    }
-}
-
-impl StrSlice {
-    pub const fn as_bytes(&self) -> &ByteSlice {
-        &self.byteslice
-    }
-
-    pub const fn len(&self) -> usize {
-        self.byteslice.end - self.byteslice.start
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-}
-
-impl Deref for StrSlice {
-    type Target = str;
-
-    fn deref(&self) -> &Self::Target {
-        // # Safety
-        // This is safe because we checked for utf-8 compilance when creating the struct
-        unsafe { str::from_utf8_unchecked(&self.byteslice) }
-    }
-}
-
-fn get_range(range: impl RangeBounds<usize>, max_len: usize) -> (usize, usize) {
-    let start = match range.start_bound() {
-        std::ops::Bound::Included(&v) => v,
-        std::ops::Bound::Excluded(&v) => v + 1,
-        std::ops::Bound::Unbounded => 0,
-    };
-    let end = match range.end_bound() {
-        std::ops::Bound::Included(&v) => v + 1,
-        std::ops::Bound::Excluded(&v) => v,
-        std::ops::Bound::Unbounded => max_len,
-    };
-    assert!(start <= end);
-    assert!(end <= max_len);
-    (start, end)
-}
 
 #[cfg(test)]
 mod test {

@@ -1,3 +1,4 @@
+//! A server side for an editor meant to be used by multiple clients
 use std::{
     fs::File,
     io::BufReader,
@@ -7,7 +8,9 @@ use std::{
 };
 
 use btep::Btep;
-use piece_table::Piece;
+use text::Text;
+// I want to keep the tracing tools in scope
+#[allow(unused_imports)]
 use tracing::{debug, error, info, trace, warn};
 use tungstenite::{
     accept_hdr,
@@ -15,11 +18,13 @@ use tungstenite::{
     http::{self, StatusCode},
 };
 
+/// Runs the server for the editor.
+#[allow(clippy::missing_panics_doc)]
 pub fn run() {
     let server = TcpListener::bind("127.0.0.1:3012").unwrap();
     let file = File::open("./file.txt").unwrap();
     let text = Arc::new(RwLock::new(
-            Piece::original_from_reader(BufReader::new(file)).unwrap(),
+            Text::original_from_reader(BufReader::new(file)).unwrap(),
     ));
     for stream in server.incoming() {
         let text = text.clone();
@@ -45,7 +50,7 @@ pub fn run() {
             let mut websocket = accept_hdr(stream.unwrap(), callback).unwrap();
             {
                 let data = text.read().unwrap();
-                dbg!(&data);
+                // dbg!(&data);
                 websocket.send(Btep::Full(&*data).into_message()).unwrap();
             }
             loop {
