@@ -5,16 +5,12 @@ use std::{
     io::{self, Read},
     iter, mem,
     sync::{Arc, RwLock},
-    u64,
 };
 
 pub mod iters;
 pub mod table;
 
-use append_only_str::{
-    slices::{self, StrSlice},
-    AppendOnlyStr,
-};
+use append_only_str::{slices::StrSlice, AppendOnlyStr};
 use btep::{Deserialize, Serialize};
 use table::{InnerTable, Table};
 use utils::iters::{InnerIteratorExt, IteratorExt};
@@ -33,7 +29,7 @@ pub struct Piece {
     /// Holds the buffers that get modified when anyone inserts
     pub buffers: Buffers,
     /// stores the pieces to reconstruct the whole file
-    piece_table: Table<StrSlice>,
+    pub piece_table: Table<StrSlice>,
 }
 
 impl Piece {

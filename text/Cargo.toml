@@ -7,3 +7,4 @@ edition = "2021"
 btep = {path = "../btep"}
 append_only_str = {path = "../append_only_str"}
 piece-table = {path = "../piece-table"}
+utils = {path = "../utils"}

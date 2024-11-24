@@ -722,6 +722,7 @@ dependencies = [
  "append_only_str",
  "btep",
  "piece-table",
+ "utils",
 ]
 
 [[package]]

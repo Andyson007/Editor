@@ -1,13 +1,16 @@
 //! A crate above the piece table for handling actual text with more helper functions
 
 use std::{
-    ops::Index,
+    collections::VecDeque,
+    mem,
     sync::{Arc, RwLock},
 };
 
-use append_only_str::AppendOnlyStr;
+use append_only_str::{slices::StrSlice, AppendOnlyStr};
+use btep::{Deserialize, Serialize};
 use client::Client;
 use piece_table::Piece;
+use utils::iters::IteratorExt;
 pub mod client;
 
 pub struct Text {
@@ -15,7 +18,106 @@ pub struct Text {
     clients: Vec<Client>,
 }
 
+impl Serialize for Text {
+    fn serialize(&self) -> std::collections::VecDeque<u8> {
+        let mut ret = VecDeque::new();
+        let to_extend = (&*self.table.read().unwrap()).serialize();
+        ret.extend((to_extend.len() as u64).to_be_bytes());
+        ret.extend(to_extend);
+        ret.extend(self.clients.iter().flat_map(|x| {
+            let mut ret = VecDeque::new();
+            if let Some(x) = &x.slice {
+                ret.push_back(1);
+                ret.extend((x.read().1.start() as u64).to_be_bytes());
+                ret.extend((x.read().1.end() as u64).to_be_bytes());
+            } else {
+                ret.push_back(0);
+            }
+            ret
+        }));
+        ret
+    }
+}
+
+impl Deserialize for Text {
+    fn deserialize(data: &[u8]) -> Self {
+        let mut iter = data.iter();
+        let len = u64::from_be_bytes(
+            iter.by_ref()
+                .cloned()
+                .chunks::<{ mem::size_of::<u64>() }>()
+                .next()
+                .unwrap(),
+        ) as usize;
+        let piece: Piece = Deserialize::deserialize(
+            iter.by_ref()
+                .cloned()
+                .take(len)
+                .collect::<Vec<_>>()
+                .as_slice(),
+        );
+
+        let arced = Arc::new(RwLock::new(piece));
+        let mut counter = 0;
+
+        let mut clients = Vec::new();
+
+        while let Some(x) = iter.next() {
+            if *x == 0 {
+                let start = u64::from_be_bytes(
+                    iter.by_ref()
+                        .cloned()
+                        .chunks::<{ mem::size_of::<u64>() }>()
+                        .next()
+                        .unwrap(),
+                ) as usize;
+                let end = u64::from_be_bytes(
+                    iter.by_ref()
+                        .cloned()
+                        .chunks::<{ mem::size_of::<u64>() }>()
+                        .next()
+                        .unwrap(),
+                ) as usize;
+
+                clients.push(Client {
+                    piece: Arc::clone(&arced),
+                    buffer: Arc::clone(&arced.read().unwrap().buffers.clients[counter]),
+                    slice: arced
+                        .read()
+                        .unwrap()
+                        .piece_table
+                        .read_full()
+                        .unwrap()
+                        .read()
+                        .iter()
+                        .nth(5)
+                        .cloned(),
+                    bufnr: counter,
+                });
+            } else {
+                clients.push(Client {
+                    piece: Arc::clone(&arced),
+                    buffer: Arc::clone(&arced.read().unwrap().buffers.clients[counter]),
+                    slice: None,
+                    bufnr: counter,
+                });
+            }
+        }
+        Self {
+            table: arced,
+            clients,
+        }
+    }
+}
+
 impl Text {
+    pub fn with_piece(piece: Piece) -> Self {
+        Self {
+            table: Arc::new(RwLock::new(piece)),
+            clients: Vec::new(),
+        }
+    }
+
     pub fn new() -> Self {
         Self {
             table: Arc::new(RwLock::new(Piece::new())),
@@ -35,7 +137,7 @@ impl Text {
         self.clients.push(Client::new(
             Arc::clone(&self.table),
             buf,
-            self.table.read().unwrap().buffers.clients.len() - 1,
+            self.clients.len(),
         ));
         self.clients.len() - 1
     }

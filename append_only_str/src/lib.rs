@@ -158,21 +158,24 @@ impl AppendOnlyStr {
     }
 
     /// Returns the length of this appendonly string
+    #[must_use]
     pub const fn len(&self) -> usize {
         self.len
     }
 
+    #[must_use]
     pub const fn is_empty(&self) -> bool {
         self.len == 0
     }
 
-
+    #[must_use]
     fn get_str(&self) -> &str {
         // This shouldn't fail because utf-8
         // compliance is always guaranteed
         str::from_utf8(self.get_byte_slice()).unwrap()
     }
 
+    #[must_use]
     fn get_byte_slice(&self) -> &[u8] {
         //// SAFETY: ---------------------------------------------
         //// We never make the capacity greater than the amount of
@@ -187,6 +190,7 @@ impl AppendOnlyStr {
 
     /// Creates a slice referring to that place in memory. This slice is guaranteed to be valid
     /// after the buffer has been reallocated!
+    #[must_use]
     pub fn slice(&self, range: impl RangeBounds<usize>) -> ByteSlice {
         let (start, end) = get_range(range, 0, self.len);
         ByteSlice {

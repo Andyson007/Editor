@@ -1,20 +1,19 @@
 //! Implements a client type which can be used to insert data into the piece table
 use std::{
-    collections::VecDeque,
+    ops::Deref,
     sync::{Arc, RwLock},
 };
 
 use append_only_str::{slices::StrSlice, AppendOnlyStr};
-use btep::Serialize;
 
 use piece_table::{table::InnerTable, Piece};
 
 /// A client which can input text into a `Piece`
 pub struct Client {
-    piece: Arc<RwLock<Piece>>,
-    buffer: Arc<RwLock<AppendOnlyStr>>,
-    slice: Option<InnerTable<StrSlice>>,
-    bufnr: usize,
+    pub(crate) piece: Arc<RwLock<Piece>>,
+    pub(crate) buffer: Arc<RwLock<AppendOnlyStr>>,
+    pub(crate) slice: Option<InnerTable<StrSlice>>,
+    pub(crate) bufnr: usize,
 }
 
 impl Client {
@@ -62,20 +61,5 @@ impl Client {
             .unwrap()
             .str_slice(self.buffer.read().unwrap().len()..);
         self.slice = Some(inner_table);
-    }
-}
-
-impl Serialize for Client {
-    fn serialize(&self) -> std::collections::VecDeque<u8> {
-        let mut ret = VecDeque::new();
-        ret.extend((self.bufnr as u64).to_be_bytes());
-        if let Some(x) = &self.slice {
-            ret.push_back(1);
-            ret.extend((x.read().1.start() as u64).to_be_bytes());
-            ret.extend((x.read().1.end() as u64).to_be_bytes());
-        } else {
-            ret.push_back(0);
-        }
-        ret
     }
 }
