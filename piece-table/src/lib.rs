@@ -12,7 +12,7 @@ pub mod table;
 
 use append_only_str::{slices::StrSlice, AppendOnlyStr};
 use btep::{Deserialize, Serialize};
-use table::{InnerTable, Table};
+use table::{InnerTable, LockError, Table};
 use utils::iters::{InnerIteratorExt, IteratorExt};
 
 #[derive(Debug)]
@@ -119,11 +119,11 @@ impl Piece {
         Some(cursor.current().unwrap().clone())
     }
 
-    pub fn read_full(&self) -> Result<table::TableReader<StrSlice>, ()> {
+    pub fn read_full(&self) -> Result<table::TableReader<StrSlice>, LockError> {
         self.piece_table.read_full()
     }
 
-    pub fn write_full(&self) -> Result<table::TableWriter<StrSlice>, ()> {
+    pub fn write_full(&self) -> Result<table::TableWriter<StrSlice>, LockError> {
         self.piece_table.write_full()
     }
 }

@@ -26,15 +26,31 @@ where
     }
 }
 
+#[derive(Debug)]
+pub enum LockError {
+    FailedLock,
+}
+
 impl<T> Table<T> {
-    pub fn read_full(&self) -> Result<TableReader<T>, ()> {
+    /// Returns a reading lock on the entire linked list
+    /// This means that
+    /// - Elements of the list cannot be modified
+    /// - The order of listelements cannot be modified
+    /// # Panics
+    /// - The state has been poisoned
+    /// # Errors
+    /// - There is already a mutable lock on an element
+    /// - There is already a mutable lock on the full list
+    pub fn read_full(&self) -> Result<TableReader<T>, LockError> {
         match *self.state.write().unwrap() {
             ref mut x @ TableState::Unshared => *x = TableState::Shared((1, 0)),
             TableState::Shared((ref mut amount, _)) => *amount += 1,
             ref mut state @ TableState::SharedMuts((amount, 0)) => {
                 *state = TableState::Shared((1, amount));
             }
-            TableState::Exclusive(_) | TableState::SharedMuts(_) => return Err(()),
+            TableState::Exclusive(_) | TableState::SharedMuts(_) => {
+                return Err(LockError::FailedLock)
+            }
         };
         Ok(TableReader {
             val: Arc::clone(&self.inner),
@@ -42,13 +58,22 @@ impl<T> Table<T> {
         })
     }
 
-    pub fn write_full(&self) -> Result<TableWriter<T>, ()> {
+    /// Returns a writing lock on the order of the linked list
+    /// This menas that
+    /// - Elemens of the list *can* still be modified
+    /// - No reading lock can be made on the entire linked list
+    /// # Panics
+    /// - The state has been poisoned
+    /// # Errors
+    /// - There is already a writing lock on the list
+    /// - There is already a reading lock on the list
+    pub fn write_full(&self) -> Result<TableWriter<T>, LockError> {
         match *self.state.write().unwrap() {
             ref mut state @ TableState::Unshared => *state = TableState::Exclusive((0, 0)),
             ref mut state @ TableState::SharedMuts((immuts, muts)) => {
                 *state = TableState::Exclusive((immuts, muts));
             }
-            TableState::Exclusive(_) | TableState::Shared(_) => return Err(()),
+            TableState::Exclusive(_) | TableState::Shared(_) => return Err(LockError::FailedLock),
         };
         Ok(TableWriter {
             val: Arc::clone(&self.inner),
@@ -56,28 +81,24 @@ impl<T> Table<T> {
         })
     }
 
-    pub fn from_iter<I>(iter: I) -> Self
-    where
-        I: Iterator<Item = (Option<usize>, T)>,
-    {
-        let state = Arc::new(RwLock::new(TableState::Unshared));
-        Self {
-            inner: Arc::new(RwLock::new(
-                iter.map(|(i, x)| InnerTable::new(x, Arc::clone(&state), i))
-                    .collect(),
-            )),
-            state,
-        }
-    }
-
-    pub fn state(&self) -> Arc<RwLock<TableState>> {
+    /// Creates a clone of the state of this `Table`
+    #[must_use]
+    pub(crate) fn state(&self) -> Arc<RwLock<TableState>> {
         Arc::clone(&self.state)
     }
 }
 
 impl<T> FromIterator<(Option<usize>, T)> for Table<T> {
     fn from_iter<I: IntoIterator<Item = (Option<usize>, T)>>(iter: I) -> Self {
-        Self::from_iter(iter.into_iter())
+        let state = Arc::new(RwLock::new(TableState::Unshared));
+        Self {
+            inner: Arc::new(RwLock::new(
+                iter.into_iter()
+                    .map(|(i, x)| InnerTable::new(x, Arc::clone(&state), i))
+                    .collect(),
+            )),
+            state,
+        }
     }
 }
 
@@ -105,7 +126,11 @@ pub struct TableWriter<T> {
 }
 
 impl<T> TableWriter<T> {
-    #[allow(clippy::linkedlist)]
+    /// locks down the list for reordering purposes
+    /// This means that
+    /// - You can't lock the entire list for reading/writing
+    /// # Panics
+    /// - The `RwLock` is poisoned
     pub fn write(&self) -> RwLockWriteGuard<'_, LinkedList<InnerTable<T>>> {
         self.val.write().unwrap()
     }
@@ -137,6 +162,10 @@ pub struct TableReader<T> {
 
 impl<T> TableReader<T> {
     #[allow(clippy::linkedlist)]
+    /// Returns a reading lock on the List.
+    /// Read the docs for `TableReader` for more
+    /// # Panics
+    /// the lock around the list has been poisoned
     pub fn read(&self) -> RwLockReadGuard<'_, LinkedList<InnerTable<T>>> {
         self.val.read().unwrap()
     }
@@ -170,6 +199,11 @@ impl<T> TableLocker<T> {
 }
 
 impl<T> TableLocker<T> {
+    /// Actually locks the item and returns a Reader
+    /// # Panics
+    /// - The state is poisoned
+    /// - The value you are trying to access is poisoned
+    #[must_use]
     pub fn read(&self) -> TableLockReader<T> {
         match *self.state.write().unwrap() {
             ref mut state @ TableState::Unshared => *state = TableState::Shared((1, 0)),
@@ -183,7 +217,11 @@ impl<T> TableLocker<T> {
         }
     }
 
-    pub fn write(&self) -> Result<TableLockWriter<T>, ()> {
+    /// Actually locks the item and returns a Writer
+    /// # Panics
+    /// - The state is poisoned
+    /// - The value you are trying to access is poisoned
+    pub fn write(&self) -> Result<TableLockWriter<T>, LockError> {
         match *self.state.write().unwrap() {
             ref mut state @ TableState::Unshared => *state = TableState::SharedMuts((0, 1)),
             ref mut state @ TableState::Shared((0, refs)) => {
@@ -191,7 +229,7 @@ impl<T> TableLocker<T> {
             }
             TableState::Exclusive((_, ref mut refs))
             | TableState::SharedMuts((_, ref mut refs)) => *refs += 1,
-            TableState::Shared((1.., _)) => return Err(()),
+            TableState::Shared((1.., _)) => return Err(LockError::FailedLock),
         };
         Ok(TableLockWriter {
             value: self.value.write().unwrap(),
@@ -300,7 +338,7 @@ impl<T> InnerTable<T> {
         (self.bufnr, self.inner.read())
     }
 
-    pub fn write(&self) -> Result<(Option<usize>, TableLockWriter<'_, T>), ()> {
+    pub fn write(&self) -> Result<(Option<usize>, TableLockWriter<'_, T>), LockError> {
         Ok((self.bufnr, self.inner.write()?))
     }
 

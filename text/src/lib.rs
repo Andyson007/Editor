@@ -87,6 +87,7 @@ impl Deserialize for Text {
                 clients.push(Client {
                     piece: Arc::clone(&arced),
                     buffer: Arc::clone(&arced.read().unwrap().buffers.clients[counter]),
+                    prev: None,
                     slice: arced
                         .read()
                         .unwrap()
@@ -110,6 +111,7 @@ impl Deserialize for Text {
                     piece: Arc::clone(&arced),
                     buffer: Arc::clone(&arced.read().unwrap().buffers.clients[counter]),
                     slice: None,
+                    prev: None,
                     bufnr: counter,
                 });
             }
