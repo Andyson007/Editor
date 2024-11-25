@@ -14,6 +14,7 @@ pub struct Client {
     pub(crate) piece: Arc<RwLock<Piece>>,
     pub(crate) buffer: Arc<RwLock<AppendOnlyStr>>,
     pub(crate) slice: Option<InnerTable<StrSlice>>,
+    pub(crate) prev: Option<InnerTable<StrSlice>>,
     pub(crate) bufnr: usize,
 }
 
@@ -29,6 +30,7 @@ impl Client {
             piece,
             buffer,
             slice: None,
+            prev: None,
             bufnr,
         }
     }
@@ -37,17 +39,23 @@ impl Client {
         let binding = self.slice.as_ref().unwrap();
         let (_, slice) = binding.read();
         if slice.is_empty() {
-            let binding = &self.piece.write().unwrap().piece_table;
-            let mut binding2 = binding.inner.write().unwrap();
-            let mut cursor = binding2.cursor_front_mut();
-            loop {
-                if *cursor.current().unwrap().read().1 == *slice {
-                    break;
+            if self.prev.is_none() {
+                let binding = &self.piece.write().unwrap().piece_table;
+                let mut binding2 = binding.inner.write().unwrap();
+                let mut cursor = binding2.cursor_front_mut();
+                loop {
+                    if *cursor.current().unwrap().read().1 == *slice {
+                        break;
+                    }
+                    cursor.move_next();
                 }
-                cursor.move_next();
+                let Some(prev) = cursor.peek_prev() else {
+                    return;
+                };
+                self.prev = Some(prev.clone());
             }
             drop(slice);
-            let (_, mut slice) = cursor.peek_prev().unwrap().write().unwrap();
+            let (_, mut slice) = self.prev.as_ref().unwrap().write().unwrap();
             *slice = slice
                 .subslice(0..slice.len() - slice.chars().last().unwrap().len_utf8())
                 .unwrap();
@@ -95,6 +103,7 @@ impl Client {
             .read()
             .unwrap()
             .str_slice(self.buffer.read().unwrap().len()..);
+        self.prev = None;
         self.slice = Some(inner_table);
     }
 }
