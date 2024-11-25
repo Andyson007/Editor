@@ -28,7 +28,7 @@ where
 
 #[derive(Debug)]
 pub enum LockError {
-    FaliedLock,
+    FailedLock,
 }
 
 impl<T> Table<T> {
@@ -49,7 +49,7 @@ impl<T> Table<T> {
                 *state = TableState::Shared((1, amount));
             }
             TableState::Exclusive(_) | TableState::SharedMuts(_) => {
-                return Err(LockError::FaliedLock)
+                return Err(LockError::FailedLock)
             }
         };
         Ok(TableReader {
@@ -73,7 +73,7 @@ impl<T> Table<T> {
             ref mut state @ TableState::SharedMuts((immuts, muts)) => {
                 *state = TableState::Exclusive((immuts, muts));
             }
-            TableState::Exclusive(_) | TableState::Shared(_) => return Err(LockError::FaliedLock),
+            TableState::Exclusive(_) | TableState::Shared(_) => return Err(LockError::FailedLock),
         };
         Ok(TableWriter {
             val: Arc::clone(&self.inner),
@@ -162,6 +162,10 @@ pub struct TableReader<T> {
 
 impl<T> TableReader<T> {
     #[allow(clippy::linkedlist)]
+    /// Returns a reading lock on the List.
+    /// Read the docs for `TableReader` for more
+    /// # Panics
+    /// the lock around the list has been poisoned
     pub fn read(&self) -> RwLockReadGuard<'_, LinkedList<InnerTable<T>>> {
         self.val.read().unwrap()
     }
@@ -195,6 +199,11 @@ impl<T> TableLocker<T> {
 }
 
 impl<T> TableLocker<T> {
+    /// Actually locks the item and returns a Reader
+    /// # Panics
+    /// - The state is poisoned
+    /// - The value you are trying to access is poisoned
+    #[must_use]
     pub fn read(&self) -> TableLockReader<T> {
         match *self.state.write().unwrap() {
             ref mut state @ TableState::Unshared => *state = TableState::Shared((1, 0)),
@@ -208,7 +217,11 @@ impl<T> TableLocker<T> {
         }
     }
 
-    pub fn write(&self) -> Result<TableLockWriter<T>, ()> {
+    /// Actually locks the item and returns a Writer
+    /// # Panics
+    /// - The state is poisoned
+    /// - The value you are trying to access is poisoned
+    pub fn write(&self) -> Result<TableLockWriter<T>, LockError> {
         match *self.state.write().unwrap() {
             ref mut state @ TableState::Unshared => *state = TableState::SharedMuts((0, 1)),
             ref mut state @ TableState::Shared((0, refs)) => {
@@ -216,7 +229,7 @@ impl<T> TableLocker<T> {
             }
             TableState::Exclusive((_, ref mut refs))
             | TableState::SharedMuts((_, ref mut refs)) => *refs += 1,
-            TableState::Shared((1.., _)) => return Err(()),
+            TableState::Shared((1.., _)) => return Err(LockError::FailedLock),
         };
         Ok(TableLockWriter {
             value: self.value.write().unwrap(),
@@ -325,7 +338,7 @@ impl<T> InnerTable<T> {
         (self.bufnr, self.inner.read())
     }
 
-    pub fn write(&self) -> Result<(Option<usize>, TableLockWriter<'_, T>), ()> {
+    pub fn write(&self) -> Result<(Option<usize>, TableLockWriter<'_, T>), LockError> {
         Ok((self.bufnr, self.inner.write()?))
     }
 
