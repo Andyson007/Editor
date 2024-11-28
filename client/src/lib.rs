@@ -118,7 +118,7 @@ fn connect_with_auth(
         .method("GET")
         .header("Host", host)
         .header("Connection", "Upgrade")
-        .header("test", "test")
+        .header("Authorization", "Basic YTpi")
         .header("Upgrade", "websocket")
         .header("Sec-WebSocket-Version", "13")
         .header("Sec-WebSocket-Key", generate_key())
