@@ -14,6 +14,8 @@ use std::{
 mod security;
 #[cfg(feature = "security")]
 use security::{auth_check, create_tables};
+#[cfg(feature = "security")]
+pub use security::add_user;
 
 use text::Text;
 // I want to keep the tracing tools in scope
@@ -27,17 +29,9 @@ use tracing::{debug, error, info, trace, warn};
 /// Runs the server for the editor.
 #[allow(clippy::missing_panics_doc)]
 #[tokio::main]
-pub async fn run() {
+pub async fn run(#[cfg(feature = "security")] pool: SqlitePool) {
     #[cfg(feature = "security")]
-    let pool = Arc::new(
-        SqlitePool::connect_with(
-            SqliteConnectOptions::from_str("sqlite://data.db")
-                .unwrap()
-                .create_if_missing(true),
-        )
-        .await
-        .unwrap(),
-    );
+    let pool = Arc::new(pool);
     #[cfg(feature = "security")]
     create_tables(&pool).await.unwrap();
 
@@ -99,5 +93,3 @@ pub async fn run() {
         });
     }
 }
-
-async fn callbac() {}

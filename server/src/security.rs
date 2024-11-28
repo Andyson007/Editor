@@ -20,9 +20,11 @@ pub(crate) async fn auth_check(value: &HeaderValue, pool: &SqlitePool) -> Option
         .fetch_optional(pool)
         .await
         .unwrap()?;
+
     Argon2::default()
         .verify_password(password.as_bytes(), &PasswordHash::new(&phc.0).unwrap())
-        .err()?;
+        .ok()?;
+
     Some(username.to_string())
 }
 
@@ -39,4 +41,19 @@ pub(crate) async fn create_tables(pool: &SqlitePool) -> Result<(), sqlx::Error> 
     .execute(pool)
     .await?;
     Ok(())
+}
+
+pub async fn add_user(pool: &SqlitePool, username: &str, password: &str) {
+    create_tables(pool).await;
+    let phc = Argon2::default()
+        .hash_password(password.as_bytes(), &SaltString::generate(&mut OsRng))
+        .unwrap()
+        .to_string();
+    println!("{phc}");
+    sqlx::query("INSERT INTO users (username, phc) VALUES ($1, $2)")
+        .bind(username)
+        .bind(phc)
+        .execute(pool)
+        .await
+        .unwrap();
 }
