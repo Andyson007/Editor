@@ -5,6 +5,18 @@ edition = "2021"
 
 [dependencies]
 tracing = "0.1.40"
-tungstenite = "0.24.0"
+tokio-tungstenite = "0.24.0"
 btep = { path = "../btep" }
 text = { path = "../text" }
+base64 = "0.22.1"
+sqlx = { version = "0.8.2", features = [
+  "runtime-tokio",
+  "sqlite",
+  "macros",
+], optional = true }
+futures = { version = "0.3.31", optional = true }
+argon2 = { version = "0.5.3", optional = true }
+tokio = "1.41.1"
+
+[features]
+security = ["dep:sqlx", "dep:futures", "dep:argon2"]
