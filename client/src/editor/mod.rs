@@ -100,7 +100,7 @@ impl State {
             }
             KeyCode::Char(c) => {
                 self.text.client(self.id).push_char(c);
-                self.cursorpos.col += 1;
+                self.cursorpos.col += c.len_utf8();
             }
             KeyCode::Esc => self.mode = Mode::Normal,
             KeyCode::Home => todo!(),

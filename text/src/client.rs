@@ -39,10 +39,12 @@ impl Client {
         let binding = self.slice.as_ref().unwrap();
         let (_, slice) = binding.read();
         if slice.is_empty() {
-            if self.prev.is_none() {
-                let binding = &self.piece.write().unwrap().piece_table;
-                let mut binding2 = binding.inner.write().unwrap();
-                let mut cursor = binding2.cursor_front_mut();
+            let binding = &self.piece.write().unwrap().piece_table;
+            let mut binding2 = binding.inner.write().unwrap();
+            let mut cursor = binding2.cursor_front_mut();
+            let delete_from = if let Some(prev) = self.prev.as_ref() {
+                prev
+            } else {
                 loop {
                     if *cursor.current().unwrap().read().1 == *slice {
                         break;
@@ -52,10 +54,18 @@ impl Client {
                 let Some(prev) = cursor.peek_prev() else {
                     return;
                 };
-                self.prev = Some(prev.clone());
-            }
+                if prev.read().1.is_empty() {
+                    self.prev = Some(prev.clone());
+                    &*prev
+                } else {
+                    while cursor.current().as_ref().unwrap().read().1.is_empty() {
+                        cursor.move_prev();
+                    }
+                    cursor.current().unwrap()
+                }
+            };
             drop(slice);
-            let (_, mut slice) = self.prev.as_ref().unwrap().write().unwrap();
+            let (_, mut slice) = delete_from.write().unwrap();
             *slice = slice
                 .subslice(0..slice.len() - slice.chars().last().unwrap().len_utf8())
                 .unwrap();

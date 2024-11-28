@@ -189,10 +189,7 @@ impl StrSlice {
     /// returns None if the index is at a char boundary
     pub fn subslice(&self, range: impl RangeBounds<usize>) -> Option<Self> {
         let (relative_start, relative_end) = get_range(range, 0, self.len());
-        if !self
-            .as_str()
-            .is_char_boundary(self.start() + relative_start)
-        {
+        if !self.as_str().is_char_boundary(relative_start) {
             return None;
         }
         Some(Self {
