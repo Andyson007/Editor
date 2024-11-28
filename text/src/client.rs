@@ -54,7 +54,7 @@ impl Client {
                 let Some(prev) = cursor.peek_prev() else {
                     return;
                 };
-                if prev.read().1.is_empty() {
+                if !prev.read().1.is_empty() {
                     self.prev = Some(prev.clone());
                     &*prev
                 } else {
