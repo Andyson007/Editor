@@ -60,6 +60,7 @@ impl Client {
                 .subslice(0..slice.len() - slice.chars().last().unwrap().len_utf8())
                 .unwrap();
         } else {
+            drop(slice);
             let (_, mut slice) = binding.write().unwrap();
             *slice = slice
                 .subslice(0..slice.len() - slice.chars().last().unwrap().len_utf8())
