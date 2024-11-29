@@ -18,7 +18,7 @@ pub mod client;
 
 #[derive(Debug)]
 pub struct Text {
-    table: Arc<RwLock<Piece>>,
+    pub(crate) table: Arc<RwLock<Piece>>,
     clients: Vec<Client>,
 }
 
@@ -87,7 +87,6 @@ impl Deserialize for Text {
                 clients.push(Client {
                     piece: Arc::clone(&arced),
                     buffer: Arc::clone(&arced.read().unwrap().buffers.clients[counter]),
-                    prev: None,
                     slice: arced
                         .read()
                         .unwrap()
@@ -105,14 +104,15 @@ impl Deserialize for Text {
                         })
                         .cloned(),
                     bufnr: counter,
+                    has_deleted: false,
                 });
             } else {
                 clients.push(Client {
                     piece: Arc::clone(&arced),
                     buffer: Arc::clone(&arced.read().unwrap().buffers.clients[counter]),
                     slice: None,
-                    prev: None,
                     bufnr: counter,
+                    has_deleted: false,
                 });
             }
             counter += 1;
@@ -182,7 +182,6 @@ impl Default for Text {
 #[cfg(test)]
 mod test {
     use crate::Text;
-    use piece_table::Piece;
 
     #[test]
     fn insert() {
@@ -253,6 +252,101 @@ mod test {
 
         let mut iter = text.lines();
         assert_eq!(iter.next(), Some("Hello world!".to_string()));
+        assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn backspace() {
+        let mut text = Text::new();
+        text.add_client();
+
+        text.client(0).enter_insert(0);
+        text.client(0).push_str("Hello");
+
+        text.client(0).enter_insert(5);
+        text.client(0).push_str("world!");
+
+        text.client(0).enter_insert(5);
+        text.client(0).push_str(" ");
+
+        text.client(0).enter_insert(1);
+        println!(
+            "{:?}",
+            text.table
+                .read()
+                .unwrap()
+                .read_full()
+                .unwrap()
+                .read()
+                .iter()
+                .map(|x| x.read().1.as_str().to_string())
+                .collect::<Vec<_>>()
+        );
+        text.client(0).enter_insert(2);
+        println!(
+            "{:?}",
+            text.table
+                .read()
+                .unwrap()
+                .read_full()
+                .unwrap()
+                .read()
+                .iter()
+                .map(|x| x.read().1.as_str().to_string())
+                .collect::<Vec<_>>()
+        );
+
+        text.client(0).backspace();
+
+        println!(
+            "{:?}",
+            text.table
+                .read()
+                .unwrap()
+                .read_full()
+                .unwrap()
+                .read()
+                .iter()
+                .map(|x| x.read().1.as_str().to_string())
+                .collect::<Vec<_>>()
+        );
+
+        let mut iter = text.lines();
+        assert_eq!(iter.next(), Some("Hllo world!".to_string()));
+        assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn backspace_typing() {
+        let mut text = Text::new();
+        text.add_client();
+        text.clients[0].enter_insert(0);
+        text.clients[0].enter_insert(0);
+        text.clients[0].push_char('t');
+        text.clients[0].push_char('e');
+        text.clients[0].push_char('k');
+        text.clients[0].push_char('s');
+        text.clients[0].push_char('t');
+        text.clients[0].backspace();
+        text.clients[0].backspace();
+        text.clients[0].backspace();
+        text.clients[0].push_char('x');
+        text.clients[0].push_char('t');
+
+        println!(
+            "{:?}",
+            text.table
+                .read()
+                .unwrap()
+                .read_full()
+                .unwrap()
+                .read()
+                .iter()
+                .collect::<Vec<_>>()
+        );
+
+        let mut iter = text.lines();
+        assert_eq!(iter.next(), Some("text".to_string()));
         assert_eq!(iter.next(), None);
     }
 }

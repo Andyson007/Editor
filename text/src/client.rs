@@ -14,8 +14,12 @@ pub struct Client {
     pub(crate) piece: Arc<RwLock<Piece>>,
     pub(crate) buffer: Arc<RwLock<AppendOnlyStr>>,
     pub(crate) slice: Option<InnerTable<StrSlice>>,
-    pub(crate) prev: Option<InnerTable<StrSlice>>,
     pub(crate) bufnr: usize,
+    /// Stores whether its safe to insert a chracter again
+    /// # Necessity
+    /// This is required because pressing backspace and writing the character again cannot be
+    /// represented (effeciently) in an append_only buffer.
+    pub(crate) has_deleted: bool,
 }
 
 impl Client {
@@ -30,8 +34,8 @@ impl Client {
             piece,
             buffer,
             slice: None,
-            prev: None,
             bufnr,
+            has_deleted: false,
         }
     }
 
@@ -42,30 +46,17 @@ impl Client {
             let binding = &self.piece.write().unwrap().piece_table;
             let mut binding2 = binding.inner.write().unwrap();
             let mut cursor = binding2.cursor_front_mut();
-            let delete_from = if let Some(prev) = self.prev.as_ref() {
-                prev
-            } else {
-                loop {
-                    if *cursor.current().unwrap().read().1 == *slice {
-                        break;
-                    }
-                    cursor.move_next();
-                }
-                let Some(prev) = cursor.peek_prev() else {
-                    return;
-                };
-                if !prev.read().1.is_empty() {
-                    self.prev = Some(prev.clone());
-                    &*prev
-                } else {
-                    while cursor.current().as_ref().unwrap().read().1.is_empty() {
-                        cursor.move_prev();
-                    }
-                    cursor.current().unwrap()
-                }
-            };
+            while *cursor.current().unwrap().read().1 != *slice {
+                cursor.move_next();
+            }
+            while cursor.current().unwrap().read().1.is_empty() {
+                cursor.move_prev();
+            }
             drop(slice);
-            let (_, mut slice) = delete_from.write().unwrap();
+            let Some(prev) = cursor.current() else {
+                return;
+            };
+            let (_, mut slice) = prev.write().unwrap();
             *slice = slice
                 .subslice(0..slice.len() - slice.chars().last().unwrap().len_utf8())
                 .unwrap();
@@ -76,6 +67,7 @@ impl Client {
                 .subslice(0..slice.len() - slice.chars().last().unwrap().len_utf8())
                 .unwrap()
         }
+        self.has_deleted = true;
     }
 
     /// appends a char at the current location
@@ -91,11 +83,35 @@ impl Client {
     /// - Insert mode isn't entered
     /// - We can't read our own buffer. This is most likely this crates fault
     pub fn push_str(&mut self, to_push: &str) {
+        assert!(
+            self.slice.is_some(),
+            "You can only push stuff after entering insert mode"
+        );
+        if to_push.is_empty() {
+            return;
+        }
+
+        if self.has_deleted {
+            let slice = self.slice.as_mut().unwrap();
+
+            let binding = &self.piece.write().unwrap().piece_table;
+            let mut binding2 = binding.inner.write().unwrap();
+            let mut cursor = binding2.cursor_front_mut();
+            while *cursor.current().unwrap().read().1 != *slice.read().1 {
+                cursor.move_next();
+            }
+            cursor.insert_after(InnerTable::new(
+                self.buffer.read().unwrap().str_slice_end(),
+                binding.state(),
+                Some(self.bufnr),
+            ));
+            self.slice = Some(cursor.peek_next().unwrap().clone());
+            self.has_deleted = false;
+        }
+
+        let slice = self.slice.as_mut().unwrap();
+
         self.buffer.write().unwrap().push_str(to_push);
-        let slice = self
-            .slice
-            .as_mut()
-            .expect("Can only call push_str in insert mode");
         let mut a = slice.write().unwrap().1;
         *a = self.buffer.read().unwrap().str_slice(a.start()..);
     }
@@ -109,12 +125,17 @@ impl Client {
             .unwrap()
             .insert_at(index, self.bufnr)
             .unwrap();
+        // FIXME: The reason this is here is to fix a stupid bug. I should use std::pin::Pin to fix
+        // this.
+        // The issue is that entering insert mode and immediately exiting insert mode results in
+        // two identical slices. They will have the same start, end **and** pointers. We push an
+        // arbitrary string here to offset this pointer.
+        self.buffer.write().unwrap().push_str("\0");
         *inner_table.write().unwrap().1 = self
             .buffer
             .read()
             .unwrap()
             .str_slice(self.buffer.read().unwrap().len()..);
-        self.prev = None;
         self.slice = Some(inner_table);
     }
 }

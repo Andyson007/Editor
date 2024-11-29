@@ -89,13 +89,14 @@ impl Piece {
 
         if is_end {
             cursor.move_prev();
+            let curr = self.buffers.clients[bufnr].read().unwrap();
             cursor.insert_after(InnerTable::new(
-                StrSlice::empty(),
+                curr.str_slice(curr.len()..),
                 self.piece_table.state(),
                 Some(bufnr),
             ));
         } else {
-            let (bufnr, current) = {
+            let (buf_of_split, current) = {
                 let current = cursor.current().unwrap().read();
                 (current.0, current.1.clone())
             };
@@ -105,16 +106,17 @@ impl Piece {
                 cursor.insert_before(InnerTable::new(
                     current.subslice(..offset)?,
                     self.piece_table.state(),
-                    bufnr,
+                    buf_of_split,
                 ));
             }
 
             cursor.insert_after(InnerTable::new(
                 current.subslice(offset..)?,
                 self.piece_table.state(),
-                bufnr,
+                buf_of_split,
             ));
-            *cursor.current().unwrap().write().unwrap().1 = StrSlice::empty();
+            let curr = self.buffers.clients[bufnr].read().unwrap();
+            *cursor.current().unwrap().write().unwrap().1 = curr.str_slice(curr.len()..);
         }
         Some(cursor.current().unwrap().clone())
     }

@@ -80,7 +80,7 @@ impl ByteSlice {
 
 impl PartialEq for ByteSlice {
     fn eq(&self, other: &Self) -> bool {
-        self.as_bytes() == other.as_bytes() && self.start == other.start && self.end == other.end
+        self.raw.ptr() == other.raw.ptr() && self.start == other.start && self.end == other.end
     }
 }
 
@@ -112,8 +112,10 @@ pub struct StrSlice {
 
 impl std::fmt::Debug for StrSlice {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_list()
-            .entries(str::from_utf8(&self.byteslice))
+        f.debug_struct("StrSlice")
+            .field("text", &str::from_utf8(&self.byteslice))
+            .field("start", &self.byteslice.start)
+            .field("end", &self.byteslice.end)
             .finish()
     }
 }
@@ -199,6 +201,11 @@ impl StrSlice {
                 end: self.start() + relative_end,
             },
         })
+    }
+
+    /// Creates a zero-sized subslice located at the end of this slice
+    pub fn end_slice(&self) -> Self {
+        self.subslice(self.len()..).unwrap()
     }
 }
 
