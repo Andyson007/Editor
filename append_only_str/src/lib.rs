@@ -216,6 +216,11 @@ impl AppendOnlyStr {
         debug_assert!(str::from_utf8(&byteslice).is_ok());
         StrSlice { byteslice }
     }
+
+    /// Creates a string slice pointing at the end of the buffer
+    pub fn str_slice_end(&self) -> StrSlice {
+        self.str_slice(self.len..)
+    }
 }
 
 impl<Idx> Index<Idx> for AppendOnlyStr

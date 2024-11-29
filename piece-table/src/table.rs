@@ -83,7 +83,7 @@ impl<T> Table<T> {
 
     /// Creates a clone of the state of this `Table`
     #[must_use]
-    pub(crate) fn state(&self) -> Arc<RwLock<TableState>> {
+    pub fn state(&self) -> Arc<RwLock<TableState>> {
         Arc::clone(&self.state)
     }
 }
@@ -342,7 +342,7 @@ impl<T> InnerTable<T> {
         Ok((self.bufnr, self.inner.write()?))
     }
 
-    pub(crate) fn new(value: T, state: Arc<RwLock<TableState>>, bufnr: Option<usize>) -> Self {
+    pub fn new(value: T, state: Arc<RwLock<TableState>>, bufnr: Option<usize>) -> Self {
         Self {
             inner: Arc::new(TableLocker::new(value, Arc::clone(&state))),
             state,

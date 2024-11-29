@@ -82,12 +82,7 @@ impl State {
                 }
                 if self.cursorpos.col == 0 {
                     self.cursorpos.row -= 1;
-                    self.cursorpos.col = self
-                        .text
-                        .lines()
-                        .nth(self.cursorpos.row)
-                        .unwrap()
-                        .len()
+                    self.cursorpos.col = self.text.lines().nth(self.cursorpos.row).unwrap().len()
                 } else {
                     self.cursorpos.col -= 1;
                 }
