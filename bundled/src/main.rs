@@ -8,6 +8,7 @@ use sqlx::{sqlite::SqliteConnectOptions, SqlitePool};
 use std::str::FromStr;
 use std::{
     io::{self, Write},
+    net::{Ipv4Addr, SocketAddrV4},
     path::PathBuf,
 };
 use termion::input::TermRead;
@@ -44,6 +45,15 @@ struct ServerArgs {
     ///
     /// it is not a feature yet to share folders
     path: PathBuf,
+    /// IP-address the server should be hosted on
+    ///
+    /// 0.0.0.0 in order to host on the local network
+    #[arg(short = 'i', default_value = "127.0.0.1", conflicts_with = "address")]
+    ip: Ipv4Addr,
+    #[arg(short = 'p', default_value = "3012", conflicts_with = "address")]
+    port: u16,
+    #[arg(short = 'a')]
+    address: Option<SocketAddrV4>,
     #[cfg(feature = "security")]
     /// Add a new user which can access files hosted
     #[arg(long, action = clap::ArgAction::SetTrue)]
@@ -64,6 +74,15 @@ struct ClientArgs {
     /// A prompt will appear if you don't specify the password with the flag
     #[arg(long, short = 'p')]
     password: Option<Option<String>>,
+    /// IP-address the server should be hosted on
+    ///
+    /// 0.0.0.0 in order to host on the local network
+    #[arg(short = 'i', default_value = "127.0.0.1", conflicts_with = "address")]
+    ip: Ipv4Addr,
+    #[arg(default_value = "3012", conflicts_with = "address")]
+    port: u16,
+    #[arg(short = 'a')]
+    address: Option<SocketAddrV4>,
 }
 
 fn main() -> color_eyre::Result<()> {
@@ -87,48 +106,33 @@ fn main() -> color_eyre::Result<()> {
         .unwrap();
 
     match &cli.command {
-        #[cfg(not(feature = "security"))]
-        Commands::Server(ServerArgs { path }) => {
-            server::run(path);
-        }
-        #[cfg(feature = "security")]
         Commands::Server(ServerArgs {
             path,
-            add_user: false,
+            ip,
+            port,
+            address,
+            #[cfg(feature = "security")]
+                add_user: false,
         }) => {
-            server::run(path, pool);
+            let address = address.unwrap_or(SocketAddrV4::new(*ip, *port));
+            server::run(
+                address,
+                path,
+                #[cfg(feature = "security")]
+                pool,
+            );
         }
         #[cfg(feature = "security")]
-        Commands::Server(ServerArgs {
-            path: _,
-            add_user: true,
-        }) => {
-            let mut stdout = std::io::stdout();
-            print!("Enter username: ");
-            let mut stdin = std::io::stdin();
-            stdout.flush().unwrap();
-            let mut username = String::new();
-            stdin.read_line(&mut username);
-            print!("Enter password: ");
-
-            use std::io::Write;
-
-            stdout.flush().unwrap();
-            let Some(password) = stdin.read_passwd(&mut stdout).unwrap() else {
-                // Entering the password was aborted
-                std::process::exit(0x82)
-            };
-            tokio::runtime::Builder::new_current_thread()
-                .enable_time()
-                .build()
-                .unwrap()
-                .block_on(server::add_user(
-                    &pool,
-                    &username.lines().next().unwrap(),
-                    &password.lines().next().unwrap(),
-                ));
+        Commands::Server(ServerArgs { add_user: true, .. }) => {
+            add_user(&pool);
         }
-        Commands::Client(ClientArgs { username, password }) => {
+        Commands::Client(ClientArgs {
+            username,
+            password,
+            ip,
+            port,
+            address,
+        }) => {
             let username = username.clone().unwrap_or_else(|| {
                 print!("Enter username: ");
                 io::stdout().flush().unwrap();
@@ -147,8 +151,37 @@ fn main() -> color_eyre::Result<()> {
                     password
                 })
             });
-            client::run(username.as_str(), password.as_deref())?
+            let address = address.unwrap_or(SocketAddrV4::new(*ip, *port));
+            client::run(address, username.as_str(), password.as_deref())?
         }
     };
     Ok(())
+}
+
+#[cfg(feature = "security")]
+fn add_user(pool: &SqlitePool) {
+    let mut stdout = std::io::stdout();
+    print!("Enter username: ");
+    let mut stdin = std::io::stdin();
+    stdout.flush().unwrap();
+    let mut username = String::new();
+    stdin.read_line(&mut username);
+    print!("Enter password: ");
+
+    use std::io::Write;
+
+    stdout.flush().unwrap();
+    let Some(password) = stdin.read_passwd(&mut stdout).unwrap() else {
+        // Entering the password was aborted
+        std::process::exit(0x82)
+    };
+    tokio::runtime::Builder::new_current_thread()
+        .enable_time()
+        .build()
+        .unwrap()
+        .block_on(server::add_user(
+            &pool,
+            &username.lines().next().unwrap(),
+            &password.lines().next().unwrap(),
+        ));
 }
