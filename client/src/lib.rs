@@ -16,14 +16,12 @@ use crossterm::{
     ExecutableCommand, QueueableCommand,
 };
 use editor::State;
-use text::Text;
-
-use core::str;
 use std::{
     io::{self, Write},
-    net::TcpStream,
-    str::FromStr,
+    net::{SocketAddrV4, TcpStream},
+    str::{self, FromStr},
 };
+use text::Text;
 use tungstenite::{
     connect,
     handshake::client::{generate_key, Request},
@@ -35,14 +33,18 @@ use tungstenite::{
 /// Runs a the client side of the editor
 #[allow(clippy::missing_panics_doc)]
 #[allow(clippy::missing_errors_doc)]
-pub fn run(username: &str, password: Option<&str>) -> color_eyre::Result<()> {
+pub fn run(
+    address: SocketAddrV4,
+    username: &str,
+    password: Option<&str>,
+) -> color_eyre::Result<()> {
     let mut out = io::stdout();
     errors::install_hooks()?;
 
     execute!(out, EnterAlternateScreen, EnableBracketedPaste)?;
     enable_raw_mode().unwrap();
 
-    let (mut socket, _response) = connect_with_auth("ws://localhost:3012", username, password);
+    let (mut socket, _response) = connect_with_auth(address, username, password);
 
     let Btep::Full(initial_text) = Btep::<Text>::from_message(socket.read()?) else {
         panic!("Initial message in wrong protocol")
@@ -102,14 +104,19 @@ where
 }
 
 fn connect_with_auth(
-    uri: &str,
+    address: SocketAddrV4,
     username: &str,
     password: Option<&str>,
 ) -> (
     WebSocket<MaybeTlsStream<TcpStream>>,
     http::Response<Option<Vec<u8>>>,
 ) {
-    let uri = Uri::from_str(uri).unwrap();
+    let uri = Uri::builder()
+        .scheme("ws")
+        .authority(address.to_string())
+        .path_and_query("/")
+        .build()
+        .unwrap();
     let authority = uri.authority().unwrap().as_str();
     let host = authority
         .find('@')
