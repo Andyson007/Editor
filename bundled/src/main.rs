@@ -97,12 +97,15 @@ fn main() -> color_eyre::Result<()> {
                 // Entering the password was aborted
                 std::process::exit(0x82)
             };
-            println!("\n{password:?}");
             tokio::runtime::Builder::new_current_thread()
                 .enable_time()
                 .build()
                 .unwrap()
-                .block_on(server::add_user(&pool, &username, &password));
+                .block_on(server::add_user(
+                    &pool,
+                    &username.lines().next().unwrap(),
+                    &password.lines().next().unwrap(),
+                ));
         }
         Commands::Client(_) => client::run()?,
     };

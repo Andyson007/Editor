@@ -2,6 +2,7 @@
 pub mod editor;
 pub mod errors;
 
+use base64::{prelude::BASE64_STANDARD, Engine};
 use btep::Btep;
 use crossterm::{
     cursor,
@@ -118,7 +119,7 @@ fn connect_with_auth(
         .method("GET")
         .header("Host", host)
         .header("Connection", "Upgrade")
-        .header("Authorization", "Basic YTpi")
+        .header("Authorization", format!("Basic {}", BASE64_STANDARD.encode("andy:andy")))
         .header("Upgrade", "websocket")
         .header("Sec-WebSocket-Version", "13")
         .header("Sec-WebSocket-Key", generate_key())

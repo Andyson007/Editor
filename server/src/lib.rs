@@ -1,21 +1,22 @@
 //! A server side for an editor meant to be used by multiple clients
+#[cfg(feature = "security")]
+mod security;
 use btep::Btep;
 #[cfg(feature = "security")]
 use sqlx::{sqlite::SqliteConnectOptions, SqlitePool};
+#[cfg(feature = "security")]
+use std::str::FromStr;
 use std::{
     fs::File,
     io::BufReader,
     net::TcpListener,
-    str::FromStr,
     sync::{Arc, RwLock},
 };
 
 #[cfg(feature = "security")]
-mod security;
+pub use security::add_user;
 #[cfg(feature = "security")]
 use security::{auth_check, create_tables};
-#[cfg(feature = "security")]
-pub use security::add_user;
 
 use text::Text;
 // I want to keep the tracing tools in scope
