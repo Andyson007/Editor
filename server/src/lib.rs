@@ -12,6 +12,7 @@ use std::{
     fs::File,
     io::BufReader,
     net::TcpListener,
+    path::Path,
     str,
     sync::{Arc, RwLock},
 };
@@ -25,7 +26,7 @@ use text::Text;
 // I want to keep the tracing tools in scope
 use tokio_tungstenite::tungstenite::{
     accept_hdr,
-    handshake::server::{Callback, Request, Response},
+    handshake::server::{Request, Response},
 };
 #[allow(unused_imports)]
 use tracing::{debug, error, info, trace, warn};
@@ -33,14 +34,14 @@ use tracing::{debug, error, info, trace, warn};
 /// Runs the server for the editor.
 #[allow(clippy::missing_panics_doc)]
 #[tokio::main]
-pub async fn run(#[cfg(feature = "security")] pool: SqlitePool) {
+pub async fn run(path: &Path, #[cfg(feature = "security")] pool: SqlitePool) {
     #[cfg(feature = "security")]
     let pool = Arc::new(pool);
     #[cfg(feature = "security")]
     create_tables(&pool).await.unwrap();
 
     let server = TcpListener::bind("127.0.0.1:3012").unwrap();
-    let file = File::open("./file.txt").unwrap();
+    let file = File::open(path).unwrap();
     let text = Arc::new(RwLock::new(
         Text::original_from_reader(BufReader::new(file)).unwrap(),
     ));

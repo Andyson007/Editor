@@ -4,9 +4,12 @@
 use clap::{Args, Parser, Subcommand, ValueEnum};
 #[cfg(feature = "security")]
 use sqlx::{sqlite::SqliteConnectOptions, SqlitePool};
-use std::io::{self, Write};
 #[cfg(feature = "security")]
 use std::str::FromStr;
+use std::{
+    io::{self, Write},
+    path::PathBuf,
+};
 use termion::input::TermRead;
 use tracing::{info, level_filters::LevelFilter};
 
@@ -31,16 +34,17 @@ enum Verbosity {
 
 #[derive(Subcommand, Debug)]
 enum Commands {
-    #[cfg(feature = "security")]
     Server(ServerArgs),
-    #[cfg(not(feature = "security"))]
-    Server,
     Client(ClientArgs),
 }
 
-#[cfg(feature = "security")]
 #[derive(Args, Debug)]
 struct ServerArgs {
+    /// path to the file that should be opened
+    ///
+    /// it is not a feature yet to share folders
+    path: PathBuf,
+    #[cfg(feature = "security")]
     /// Add a new user which can access files hosted
     #[arg(long, action = clap::ArgAction::SetTrue)]
     add_user: bool,
@@ -84,15 +88,21 @@ fn main() -> color_eyre::Result<()> {
 
     match &cli.command {
         #[cfg(not(feature = "security"))]
-        Commands::Server => {
-            server::run();
+        Commands::Server(ServerArgs { path }) => {
+            server::run(path);
         }
         #[cfg(feature = "security")]
-        Commands::Server(ServerArgs { add_user: false }) => {
-            server::run(pool);
+        Commands::Server(ServerArgs {
+            path,
+            add_user: false,
+        }) => {
+            server::run(path, pool);
         }
         #[cfg(feature = "security")]
-        Commands::Server(ServerArgs { add_user: true }) => {
+        Commands::Server(ServerArgs {
+            path: _,
+            add_user: true,
+        }) => {
             let mut stdout = std::io::stdout();
             print!("Enter username: ");
             let mut stdin = std::io::stdin();
