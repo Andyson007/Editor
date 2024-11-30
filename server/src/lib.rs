@@ -11,7 +11,7 @@ use std::str::FromStr;
 use std::{
     fs::File,
     io::BufReader,
-    net::TcpListener,
+    net::{SocketAddrV4, TcpListener},
     path::Path,
     str,
     sync::{Arc, RwLock},
@@ -34,13 +34,17 @@ use tracing::{debug, error, info, trace, warn};
 /// Runs the server for the editor.
 #[allow(clippy::missing_panics_doc)]
 #[tokio::main]
-pub async fn run(path: &Path, #[cfg(feature = "security")] pool: SqlitePool) {
+pub async fn run(
+    address: SocketAddrV4,
+    path: &Path,
+    #[cfg(feature = "security")] pool: SqlitePool,
+) {
     #[cfg(feature = "security")]
     let pool = Arc::new(pool);
     #[cfg(feature = "security")]
     create_tables(&pool).await.unwrap();
 
-    let server = TcpListener::bind("127.0.0.1:3012").unwrap();
+    let server = TcpListener::bind(address).unwrap();
     let file = File::open(path).unwrap();
     let text = Arc::new(RwLock::new(
         Text::original_from_reader(BufReader::new(file)).unwrap(),

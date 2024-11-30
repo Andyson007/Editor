@@ -8,6 +8,7 @@ use sqlx::{sqlite::SqliteConnectOptions, SqlitePool};
 use std::str::FromStr;
 use std::{
     io::{self, Write},
+    net::{Ipv4Addr, SocketAddrV4},
     path::PathBuf,
 };
 use termion::input::TermRead;
@@ -44,6 +45,15 @@ struct ServerArgs {
     ///
     /// it is not a feature yet to share folders
     path: PathBuf,
+    /// IP-address the server should be hosted on
+    ///
+    /// 0.0.0.0 in order to host on the local network
+    #[arg(short = 'i', default_value = "127.0.0.1", conflicts_with = "address")]
+    ip: Ipv4Addr,
+    #[arg(short = 'p', default_value = "3012", conflicts_with = "address")]
+    port: u16,
+    #[arg(short = 'a')]
+    address: Option<SocketAddrV4>,
     #[cfg(feature = "security")]
     /// Add a new user which can access files hosted
     #[arg(long, action = clap::ArgAction::SetTrue)]
@@ -88,15 +98,21 @@ fn main() -> color_eyre::Result<()> {
 
     match &cli.command {
         #[cfg(not(feature = "security"))]
-        Commands::Server(ServerArgs { path }) => {
-            server::run(path);
-        }
-        #[cfg(feature = "security")]
         Commands::Server(ServerArgs {
             path,
-            add_user: false,
+            ip,
+            port,
+            address,
+            #[cfg(feature = "security")]
+                add_user: false,
         }) => {
-            server::run(path, pool);
+            let address = address.unwrap_or(SocketAddrV4::new(*ip, *port));
+            server::run(
+                address,
+                path,
+                #[cfg(feature = "security")]
+                pool,
+            );
         }
         #[cfg(feature = "security")]
         Commands::Server(ServerArgs {
