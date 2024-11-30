@@ -33,7 +33,7 @@ pub(crate) async fn create_tables(pool: &SqlitePool) -> Result<(), sqlx::Error> 
         r#"
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY NOT NULL,
-            username TEXT NOT NULL,
+            username TEXT NOT NULL UNIQUE,
             phc TEXT NOT NULL
         );
         "#,

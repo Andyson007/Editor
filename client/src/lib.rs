@@ -2,6 +2,7 @@
 pub mod editor;
 pub mod errors;
 
+use base64::{prelude::BASE64_STANDARD, Engine};
 use btep::Btep;
 use crossterm::{
     cursor,
@@ -34,14 +35,14 @@ use tungstenite::{
 /// Runs a the client side of the editor
 #[allow(clippy::missing_panics_doc)]
 #[allow(clippy::missing_errors_doc)]
-pub fn run() -> color_eyre::Result<()> {
+pub fn run(username: &str, password: Option<&str>) -> color_eyre::Result<()> {
     let mut out = io::stdout();
     errors::install_hooks()?;
 
     execute!(out, EnterAlternateScreen, EnableBracketedPaste)?;
     enable_raw_mode().unwrap();
 
-    let (mut socket, _response) = connect_with_auth("ws://localhost:3012");
+    let (mut socket, _response) = connect_with_auth("ws://localhost:3012", username, password);
 
     let Btep::Full(initial_text) = Btep::<Text>::from_message(socket.read()?) else {
         panic!("Initial message in wrong protocol")
@@ -102,6 +103,8 @@ where
 
 fn connect_with_auth(
     uri: &str,
+    username: &str,
+    password: Option<&str>,
 ) -> (
     WebSocket<MaybeTlsStream<TcpStream>>,
     http::Response<Option<Vec<u8>>>,
@@ -118,7 +121,13 @@ fn connect_with_auth(
         .method("GET")
         .header("Host", host)
         .header("Connection", "Upgrade")
-        .header("Authorization", "Basic YTpi")
+        .header(
+            "Authorization",
+            format!(
+                "Basic {}",
+                BASE64_STANDARD.encode(format!("{username}:{}", password.unwrap_or("")))
+            ),
+        )
         .header("Upgrade", "websocket")
         .header("Sec-WebSocket-Version", "13")
         .header("Sec-WebSocket-Key", generate_key())

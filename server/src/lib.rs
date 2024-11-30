@@ -1,27 +1,31 @@
 //! A server side for an editor meant to be used by multiple clients
+#![feature(try_blocks)]
+#[cfg(feature = "security")]
+mod security;
+use base64::{prelude::BASE64_STANDARD, Engine};
 use btep::Btep;
 #[cfg(feature = "security")]
 use sqlx::{sqlite::SqliteConnectOptions, SqlitePool};
+#[cfg(feature = "security")]
+use std::str::FromStr;
 use std::{
     fs::File,
     io::BufReader,
     net::TcpListener,
-    str::FromStr,
+    str,
     sync::{Arc, RwLock},
 };
 
 #[cfg(feature = "security")]
-mod security;
+pub use security::add_user;
 #[cfg(feature = "security")]
 use security::{auth_check, create_tables};
-#[cfg(feature = "security")]
-pub use security::add_user;
 
 use text::Text;
 // I want to keep the tracing tools in scope
 use tokio_tungstenite::tungstenite::{
     accept_hdr,
-    handshake::server::{Request, Response},
+    handshake::server::{Callback, Request, Response},
 };
 #[allow(unused_imports)]
 use tracing::{debug, error, info, trace, warn};
@@ -45,6 +49,7 @@ pub async fn run(#[cfg(feature = "security")] pool: SqlitePool) {
         #[cfg(feature = "security")]
         let pool = Arc::clone(&pool);
         tokio::spawn(async move {
+            let mut username = None;
             let callback = |req: &Request, response: Response| {
                 debug!("Received new ws handshake");
                 trace!("Received a new ws handshake");
@@ -58,7 +63,8 @@ pub async fn run(#[cfg(feature = "security")] pool: SqlitePool) {
                 {
                     use tokio_tungstenite::tungstenite::http::{self, StatusCode};
                     if let Some(auth) = req.headers().get("Authorization") {
-                        if futures::executor::block_on(auth_check(auth, &pool)).is_some() {
+                        if let Some(user) = futures::executor::block_on(auth_check(auth, &pool)) {
+                            username = Some(user);
                             Ok(response)
                         } else {
                             Err(http::Response::builder()
@@ -75,10 +81,24 @@ pub async fn run(#[cfg(feature = "security")] pool: SqlitePool) {
                 }
 
                 #[cfg(not(feature = "security"))]
-                Ok(response)
+                {
+                    username = try {
+                        let auth = req.headers().get("Authorization")?;
+                        let (credential_type, credentials) =
+                            auth.to_str().unwrap().split_once(' ')?;
+                        if credential_type != "Basic" {
+                            None?;
+                        }
+                        let base64 = BASE64_STANDARD.decode(credentials).ok()?;
+                        let raw = str::from_utf8(base64.as_slice()).ok()?;
+                        raw.split_once(':')?.0.to_string()
+                    };
+                    Ok(response)
+                }
             };
             if let Ok(mut websocket) = accept_hdr(stream.unwrap(), callback) {
                 {
+                    debug!("Connected {:?}", username);
                     let data = text.read().unwrap();
                     // dbg!(&data);
                     websocket.send(Btep::Full(&*data).into_message()).unwrap();

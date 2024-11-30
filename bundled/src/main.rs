@@ -1,12 +1,13 @@
 //! Bundles together the entire editor.
 //! This is in order to avoid multiple different cli commands being required to run the server,
 //! connect with a client etc.
-#[cfg(feature = "security")]
-use std::str::FromStr;
-
 use clap::{Args, Parser, Subcommand, ValueEnum};
 #[cfg(feature = "security")]
 use sqlx::{sqlite::SqliteConnectOptions, SqlitePool};
+use std::io::{self, Write};
+#[cfg(feature = "security")]
+use std::str::FromStr;
+use termion::input::TermRead;
 use tracing::{info, level_filters::LevelFilter};
 
 #[derive(Parser, Debug)]
@@ -47,7 +48,18 @@ struct ServerArgs {
 
 #[derive(Args, Debug)]
 struct ClientArgs {
-    name: Option<String>,
+    #[arg(long, short = 'u')]
+    /// Supply the username inline.
+    ///
+    /// Not supplying a username will prompt for it
+    username: Option<String>,
+    /// Supply the password
+    ///
+    /// When not present no password will be assumed. A password might be required however if the
+    /// target server is running with security enabled.
+    /// A prompt will appear if you don't specify the password with the flag
+    #[arg(long, short = 'p')]
+    password: Option<Option<String>>,
 }
 
 fn main() -> color_eyre::Result<()> {
@@ -90,21 +102,43 @@ fn main() -> color_eyre::Result<()> {
             print!("Enter password: ");
 
             use std::io::Write;
-            use termion::input::TermRead;
 
             stdout.flush().unwrap();
             let Some(password) = stdin.read_passwd(&mut stdout).unwrap() else {
                 // Entering the password was aborted
                 std::process::exit(0x82)
             };
-            println!("\n{password:?}");
             tokio::runtime::Builder::new_current_thread()
                 .enable_time()
                 .build()
                 .unwrap()
-                .block_on(server::add_user(&pool, &username, &password));
+                .block_on(server::add_user(
+                    &pool,
+                    &username.lines().next().unwrap(),
+                    &password.lines().next().unwrap(),
+                ));
         }
-        Commands::Client(_) => client::run()?,
+        Commands::Client(ClientArgs { username, password }) => {
+            let username = username.clone().unwrap_or_else(|| {
+                print!("Enter username: ");
+                io::stdout().flush().unwrap();
+                let mut buf = String::new();
+                io::stdin().read_line(&mut buf).unwrap();
+                buf.lines().next().unwrap().to_string()
+            });
+            let password = password.as_ref().map(|x| {
+                x.clone().unwrap_or_else(|| {
+                    print!("Enter password: ");
+
+                    io::stdout().flush().unwrap();
+                    let Some(password) = io::stdin().read_passwd(&mut io::stdout()).unwrap() else {
+                        std::process::exit(0x82);
+                    };
+                    password
+                })
+            });
+            client::run(username.as_str(), password.as_deref())?
+        }
     };
     Ok(())
 }
