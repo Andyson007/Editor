@@ -52,14 +52,14 @@ impl Deserialize for Text {
         let mut iter = data.iter();
         let len = u64::from_be_bytes(
             iter.by_ref()
-                .cloned()
+                .copied()
                 .chunks::<{ mem::size_of::<u64>() }>()
                 .next()
                 .unwrap(),
         ) as usize;
         let piece: Piece = Deserialize::deserialize(
             iter.by_ref()
-                .cloned()
+                .copied()
                 .take(len)
                 .collect::<Vec<_>>()
                 .as_slice(),
@@ -74,14 +74,14 @@ impl Deserialize for Text {
             if *x == 0 {
                 let start = u64::from_be_bytes(
                     iter.by_ref()
-                        .cloned()
+                        .copied()
                         .chunks::<{ mem::size_of::<u64>() }>()
                         .next()
                         .unwrap(),
                 ) as usize;
                 let end = u64::from_be_bytes(
                     iter.by_ref()
-                        .cloned()
+                        .copied()
                         .chunks::<{ mem::size_of::<u64>() }>()
                         .next()
                         .unwrap(),
