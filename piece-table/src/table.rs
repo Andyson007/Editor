@@ -24,7 +24,7 @@ where
         f.debug_struct("Table")
             .field(
                 "inner",
-                &self.inner.read().unwrap().front().unwrap().read().1.value,
+                &self.inner.read().unwrap().front().unwrap().read().value,
             )
             .field("state", &self.state)
             .finish()
@@ -80,13 +80,13 @@ impl<T> Table<T> {
     }
 }
 
-impl<T> FromIterator<(Option<usize>, T)> for Table<T> {
-    fn from_iter<I: IntoIterator<Item = (Option<usize>, T)>>(iter: I) -> Self {
+impl<T> FromIterator<T> for Table<T> {
+    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
         let state = Arc::new(RwLock::new(TableState::Unshared));
         Self {
             inner: Arc::new(RwLock::new(
                 iter.into_iter()
-                    .map(|(i, x)| InnerTable::new(x, Arc::clone(&state), i))
+                    .map(|x| InnerTable::new(x, Arc::clone(&state)))
                     .collect(),
             )),
             state,
@@ -359,7 +359,6 @@ pub struct InnerTable<T> {
     inner: Arc<TableLocker<T>>,
     /// The client whichs buffer is being referred to a `None` value signifies that it is from the
     /// original buffer
-    bufnr: Option<usize>,
     state: Arc<RwLock<TableState>>,
 }
 
@@ -368,7 +367,6 @@ impl<T> Clone for InnerTable<T> {
         Self {
             inner: self.inner.clone(),
             state: Arc::clone(&self.state),
-            bufnr: self.bufnr,
         }
     }
 }
@@ -381,7 +379,6 @@ where
         f.debug_struct("InnerTable")
             .field("inner", &self.inner.read().value)
             .field("state", &self.state)
-            .field("bufnr", &self.bufnr)
             .finish()
     }
 }
@@ -389,24 +386,23 @@ where
 impl<T> InnerTable<T> {
     #[must_use]
     /// locks down the value within this `InnerLock` for writing
-    pub fn read(&self) -> (Option<usize>, TableLockReader<T>) {
-        (self.bufnr, self.inner.read())
+    pub fn read(&self) -> TableLockReader<T> {
+        self.inner.read()
     }
 
     /// locks down the value within this `InnerLock` for writing
     /// # Errors
     /// - There is already a reading lock on this value
     /// - There is already a reading lock on the full list
-    pub fn write(&self) -> Result<(Option<usize>, TableLockWriter<'_, T>), LockError> {
-        Ok((self.bufnr, self.inner.write()?))
+    pub fn write(&self) -> Result<TableLockWriter<'_, T>, LockError> {
+        self.inner.write()
     }
 
     #[must_use]
-    pub fn new(value: T, state: Arc<RwLock<TableState>>, bufnr: Option<usize>) -> Self {
+    pub fn new(value: T, state: Arc<RwLock<TableState>>) -> Self {
         Self {
             inner: Arc::new(TableLocker::new(value, Arc::clone(&state))),
             state,
-            bufnr,
         }
     }
 }

@@ -96,11 +96,11 @@ impl Deserialize for Text {
                         .read()
                         .iter()
                         .find(|x| {
-                            let (buf, inner) = x.read();
-                            if buf != Some(counter) {
+                            let inner = x.read();
+                            if inner.0 != Some(counter) {
                                 return false;
                             };
-                            inner.start() == start && inner.end() == end
+                            inner.1.start() == start && inner.1.end() == end
                         })
                         .cloned(),
                     bufnr: counter,

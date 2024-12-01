@@ -13,7 +13,7 @@ use piece_table::{table::InnerTable, Piece};
 pub struct Client {
     pub(crate) piece: Arc<RwLock<Piece>>,
     pub(crate) buffer: Arc<RwLock<AppendOnlyStr>>,
-    pub(crate) slice: Option<InnerTable<StrSlice>>,
+    pub(crate) slice: Option<InnerTable<(Option<usize>, StrSlice)>>,
     pub(crate) bufnr: usize,
     /// Stores whether its safe to insert a chracter again
     /// # Necessity
@@ -41,13 +41,19 @@ impl Client {
 
     pub fn backspace(&mut self) {
         let binding = self.slice.as_ref().unwrap();
-        let (_, slice) = binding.read();
-        if slice.is_empty() {
-            let binding = self.piece.write().unwrap().piece_table.write_full().unwrap();
+        let slice = binding.read();
+        if slice.1.is_empty() {
+            let binding = self
+                .piece
+                .write()
+                .unwrap()
+                .piece_table
+                .write_full()
+                .unwrap();
 
             let binding2 = binding.write();
             let mut cursor = binding2.cursor_front();
-            while *cursor.current().unwrap().read().1 != *slice {
+            while cursor.current().unwrap().read().1 != slice.1 {
                 cursor.move_next();
             }
             while cursor.current().unwrap().read().1.is_empty() {
@@ -57,15 +63,17 @@ impl Client {
                 return;
             };
             drop(slice);
-            let (_, mut slice) = prev.write().unwrap();
-            *slice = slice
-                .subslice(0..slice.len() - slice.chars().last().unwrap().len_utf8())
+            let slice = &mut prev.write().unwrap();
+            slice.1 = slice
+                .1
+                .subslice(0..slice.1.len() - slice.1.chars().last().unwrap().len_utf8())
                 .unwrap();
         } else {
             drop(slice);
-            let (_, mut slice) = binding.write().unwrap();
-            *slice = slice
-                .subslice(0..slice.len() - slice.chars().last().unwrap().len_utf8())
+            let slice = &mut binding.write().unwrap();
+            slice.1 = slice
+                .1
+                .subslice(0..slice.1.len() - slice.1.chars().last().unwrap().len_utf8())
                 .unwrap()
         }
         self.has_deleted = true;
@@ -99,13 +107,15 @@ impl Client {
             let binding2 = binding.write_full().unwrap();
             let mut binding3 = binding2.write();
             let mut cursor = binding3.cursor_front_mut();
-            while *cursor.current().unwrap().read().1 != *slice.read().1 {
+            while cursor.current().unwrap().read().1 != slice.read().1 {
                 cursor.move_next();
             }
             cursor.insert_after(InnerTable::new(
-                self.buffer.read().unwrap().str_slice_end(),
+                (
+                    Some(self.bufnr),
+                    self.buffer.read().unwrap().str_slice_end(),
+                ),
                 binding.state(),
-                Some(self.bufnr),
             ));
             self.slice = Some(cursor.peek_next().unwrap().clone());
             self.has_deleted = false;
@@ -114,7 +124,7 @@ impl Client {
         let slice = self.slice.as_mut().unwrap();
 
         self.buffer.write().unwrap().push_str(to_push);
-        let mut a = slice.write().unwrap().1;
+        let a = &mut slice.write().unwrap().1;
         *a = self.buffer.read().unwrap().str_slice(a.start()..);
     }
 
@@ -133,7 +143,7 @@ impl Client {
         // two identical slices. They will have the same start, end **and** pointers. We push an
         // arbitrary string here to offset this pointer.
         self.buffer.write().unwrap().push_str("\0");
-        *inner_table.write().unwrap().1 = self
+        inner_table.write().unwrap().1 = self
             .buffer
             .read()
             .unwrap()

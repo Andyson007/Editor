@@ -31,7 +31,7 @@ pub struct Piece {
     /// Holds the buffers that get modified when anyone inserts
     pub buffers: Buffers,
     /// stores the pieces to reconstruct the whole file
-    pub piece_table: Table<StrSlice>,
+    pub piece_table: Table<(Option<usize>, StrSlice)>,
 }
 
 impl Piece {
@@ -72,7 +72,11 @@ impl Piece {
     /// # Panics
     /// Shouldn't panic
     #[allow(clippy::significant_drop_tightening)]
-    pub fn insert_at(&mut self, pos: usize, bufnr: usize) -> Option<InnerTable<StrSlice>> {
+    pub fn insert_at(
+        &mut self,
+        pos: usize,
+        bufnr: usize,
+    ) -> Option<InnerTable<(Option<usize>, StrSlice)>> {
         let binding = self.piece_table.write_full().unwrap();
         let mut to_split = binding.write();
         let mut cursor = to_split.cursor_front_mut();
@@ -93,9 +97,8 @@ impl Piece {
             cursor.move_prev();
             let curr = self.buffers.clients[bufnr].read().unwrap();
             cursor.insert_after(InnerTable::new(
-                curr.str_slice(curr.len()..),
+                (Some(bufnr), curr.str_slice(curr.len()..)),
                 self.piece_table.state(),
-                Some(bufnr),
             ));
         } else {
             let (buf_of_split, current) = {
@@ -106,40 +109,38 @@ impl Piece {
 
             if offset != 0 {
                 cursor.insert_before(InnerTable::new(
-                    current.subslice(..offset)?,
+                    (buf_of_split, current.subslice(..offset)?),
                     self.piece_table.state(),
-                    buf_of_split,
                 ));
             }
 
             cursor.insert_after(InnerTable::new(
-                current.subslice(offset..)?,
+                (buf_of_split, current.subslice(offset..)?),
                 self.piece_table.state(),
-                buf_of_split,
             ));
             let curr = self.buffers.clients[bufnr].read().unwrap();
-            *cursor.current().unwrap().write().unwrap().1 = curr.str_slice(curr.len()..);
+            cursor.current().unwrap().write().unwrap().1 = curr.str_slice(curr.len()..);
         }
         Some(cursor.current().unwrap().clone())
     }
 
-    /// Locks down the full list for reading. 
+    /// Locks down the full list for reading.
     /// This means that
     /// - No value within the list can be mutated
     /// - The order of elements cannot be changed
     /// # Errors
     /// - The state value is poisoned
-    pub fn read_full(&self) -> Result<table::TableReader<StrSlice>, LockError> {
+    pub fn read_full(&self) -> Result<table::TableReader<(Option<usize>, StrSlice)>, LockError> {
         self.piece_table.read_full()
     }
 
-    /// Locks down the full list for reading. 
+    /// Locks down the full list for reading.
     /// This means that
     /// - This is the sole write lock on the full list
     /// - No reading lock can be made
     /// # Errors
     /// - The state value is poisoned
-    pub fn write_full(&self) -> Result<table::TableWriter<StrSlice>, LockError> {
+    pub fn write_full(&self) -> Result<table::TableWriter<(Option<usize>, StrSlice)>, LockError> {
         self.piece_table.write_full()
     }
 }
@@ -259,7 +260,7 @@ mod test {
         let binding = binding.read();
         let mut iter = binding.iter();
         let next = iter.next().unwrap().read();
-        assert_eq!(&**next.1, "test");
+        assert_eq!(&*next.1, "test");
         assert_eq!(next.0, None);
         assert!(iter.next().is_none());
     }
