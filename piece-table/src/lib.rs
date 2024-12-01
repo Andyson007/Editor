@@ -15,6 +15,8 @@ use btep::{Deserialize, Serialize};
 use table::{InnerTable, LockError, Table};
 use utils::iters::{InnerIteratorExt, IteratorExt};
 
+/// A wrapper around all the buffers
+/// This includes the append buffers for each of the clients, and the original buffer
 #[derive(Debug)]
 pub struct Buffers {
     /// The original file content

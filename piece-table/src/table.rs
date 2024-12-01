@@ -7,6 +7,9 @@ use std::{
     sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard},
 };
 
+/// A wrapper struct around a type T
+/// It allows for a list of T's to be read and mutated concurrently and has methods for locking
+/// down the entire method for reading and reordering purposes
 pub struct Table<T> {
     #[allow(clippy::linkedlist)]
     inner: Arc<RwLock<LinkedList<InnerTable<T>>>>,
@@ -28,8 +31,10 @@ where
     }
 }
 
+/// The error type for locking operations
 #[derive(Debug)]
 pub enum LockError {
+    /// There is already an incompatible lock on the element you want to lock
     FailedLock,
 }
 
@@ -89,6 +94,7 @@ impl<T> FromIterator<(Option<usize>, T)> for Table<T> {
     }
 }
 
+/// A state machine to control what kinds of locks can be made at what time
 #[derive(Debug)]
 pub enum TableState {
     /// There are no referenses to the list
@@ -102,7 +108,7 @@ pub enum TableState {
 }
 
 impl TableState {
-    pub fn lock_single(&mut self) {
+    pub(crate) fn lock_single(&mut self) {
         match self {
             Self::Shared((0, _)) => unreachable!(),
 
@@ -114,7 +120,7 @@ impl TableState {
         }
     }
 
-    pub fn drop_single(&mut self) {
+    pub(crate) fn drop_single(&mut self) {
         match self {
             Self::Unshared
             | Self::Shared((0, _) | (_, 0))
@@ -127,7 +133,7 @@ impl TableState {
         }
     }
 
-    pub fn lock_single_mut(&mut self) -> Result<(), LockError> {
+    pub(crate) fn lock_single_mut(&mut self) -> Result<(), LockError> {
         match self {
             Self::Shared((0, _)) => unreachable!(),
 
@@ -138,7 +144,7 @@ impl TableState {
         Ok(())
     }
 
-    pub fn drop_single_mut(&mut self) {
+    pub(crate) fn drop_single_mut(&mut self) {
         match self {
             Self::SharedMuts((_, 0))
             | Self::Exclusive((_, 0))
@@ -150,7 +156,7 @@ impl TableState {
         };
     }
 
-    pub fn lock_full(&mut self) -> Result<(), LockError> {
+    pub(crate) fn lock_full(&mut self) -> Result<(), LockError> {
         match self {
             Self::Shared((0, _)) => unreachable!(),
 
@@ -163,7 +169,7 @@ impl TableState {
         Ok(())
     }
 
-    pub fn drop_full(&mut self) {
+    pub(crate) fn drop_full(&mut self) {
         match self {
             Self::Shared((0, _)) | Self::Unshared | Self::Exclusive(_) | Self::SharedMuts(_) => {
                 unreachable!()
@@ -175,7 +181,7 @@ impl TableState {
         };
     }
 
-    pub fn lock_full_mut(&mut self) -> Result<(), LockError> {
+    pub(crate) fn lock_full_mut(&mut self) -> Result<(), LockError> {
         match self {
             Self::Unshared => *self = Self::Exclusive((0, 0)),
             Self::SharedMuts((immuts, muts)) => *self = Self::Exclusive((*immuts, *muts)),
@@ -185,7 +191,7 @@ impl TableState {
         Ok(())
     }
 
-    pub fn drop_full_mut(&mut self) {
+    pub(crate) fn drop_full_mut(&mut self) {
         match self {
             Self::Unshared | Self::SharedMuts(_) | Self::Shared(_) => unreachable!(),
             Self::Exclusive((immuts, muts)) => *self = Self::SharedMuts((*immuts, *muts)),
@@ -382,14 +388,15 @@ where
 
 impl<T> InnerTable<T> {
     #[must_use]
+    /// locks down the value within this `InnerLock` for writing
     pub fn read(&self) -> (Option<usize>, TableLockReader<T>) {
         (self.bufnr, self.inner.read())
     }
 
-    /// attemps to lock down the value within this `InnerLock`.
+    /// locks down the value within this `InnerLock` for writing
     /// # Errors
-    /// - There is already a lock on this value
-    /// - There is already a lock on the full list
+    /// - There is already a reading lock on this value
+    /// - There is already a reading lock on the full list
     pub fn write(&self) -> Result<(Option<usize>, TableLockWriter<'_, T>), LockError> {
         Ok((self.bufnr, self.inner.write()?))
     }
