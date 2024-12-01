@@ -398,6 +398,7 @@ impl<T> InnerTable<T> {
         self.inner.write()
     }
 
+    /// Creates a new `InnerTable`. This can be used for insertion after having used `read_full`
     #[must_use]
     pub fn new(value: T, state: Arc<RwLock<TableState>>) -> Self {
         Self {

@@ -16,6 +16,9 @@ use piece_table::Piece;
 use utils::iters::IteratorExt;
 pub mod client;
 
+/// A wrapper around a piece table. 
+/// It creates wrapper methods and adds support for multiple clients to interface more easily with
+/// the piece table
 #[derive(Debug)]
 pub struct Text {
     pub(crate) table: Arc<RwLock<Piece>>,
@@ -125,10 +128,15 @@ impl Deserialize for Text {
 }
 
 impl Text {
+    /// Creates a new piece table with the orginal buffer filled in from the reader. 
+    /// # Errors
+    /// - The reader failed to read
     pub fn original_from_reader<T: Read>(read: T) -> io::Result<Self> {
         let piece = Piece::original_from_reader(read)?;
         Ok(Self::with_piece(piece))
     }
+
+    /// Wraps an existsing piece inside a `Text`
     pub fn with_piece(piece: Piece) -> Self {
         Self {
             table: Arc::new(RwLock::new(piece)),
@@ -136,6 +144,7 @@ impl Text {
         }
     }
 
+    /// Creates a new `Text` with an empty original buffer
     pub fn new() -> Self {
         Self {
             table: Arc::new(RwLock::new(Piece::new())),
@@ -144,6 +153,8 @@ impl Text {
     }
 
     /// Creates a `Client` with an attached buffer
+    /// # Panics
+    /// probably only when failing to lock the buffers
     pub fn add_client(&mut self) -> usize {
         let buf = Arc::new(RwLock::new(AppendOnlyStr::new()));
         self.table
@@ -160,14 +171,21 @@ impl Text {
         self.clients.len() - 1
     }
 
+    /// Creates an iterator over the lines in the buffer
+    /// # Panics
+    /// A failed lock on reading the entire list
     pub fn lines(&self) -> impl Iterator<Item = String> {
         self.table.read().unwrap().lines()
     }
 
+    /// Creates an iterator characters in the list
+    /// # Panics
+    /// A failed lock on reading the entire list
     pub fn chars(&self) -> impl Iterator<Item = char> {
         self.table.read().unwrap().chars()
     }
 
+    /// returns a mutable reference to a given client
     pub fn client(&mut self, idx: usize) -> &mut Client {
         &mut self.clients[idx]
     }

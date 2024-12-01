@@ -39,6 +39,11 @@ impl Client {
         }
     }
 
+    /// Handles a backspace press by the client
+    /// # Panics
+    /// - function called without ever entering insert mode
+    ///
+    /// this function will probably only panic when there are locking errors though
     pub fn backspace(&mut self) {
         let binding = self.slice.as_ref().unwrap();
         let slice = binding.read();
@@ -74,7 +79,7 @@ impl Client {
             slice.1 = slice
                 .1
                 .subslice(0..slice.1.len() - slice.1.chars().last().unwrap().len_utf8())
-                .unwrap()
+                .unwrap();
         }
         self.has_deleted = true;
     }
@@ -130,6 +135,8 @@ impl Client {
 
     /// Allows for insertion.
     /// Takes an `InnerTable` as an argument as to where the text should be inserted
+    /// # Panics
+    /// probably only failed locks
     pub fn enter_insert(&mut self, index: usize) {
         let inner_table = self
             .piece
