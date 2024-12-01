@@ -82,7 +82,7 @@ impl State {
                 }
                 if self.cursorpos.col == 0 {
                     self.cursorpos.row -= 1;
-                    self.cursorpos.col = self.text.lines().nth(self.cursorpos.row).unwrap().len()
+                    self.cursorpos.col = self.text.lines().nth(self.cursorpos.row).unwrap().len();
                 } else {
                     self.cursorpos.col -= 1;
                 }
@@ -138,7 +138,7 @@ impl State {
             }
             KeyCode::Char(':') => self.mode = Mode::Command(String::new()),
             KeyCode::Left | KeyCode::Char('h') => {
-                self.cursorpos.col = self.cursorpos.col.saturating_sub(1)
+                self.cursorpos.col = self.cursorpos.col.saturating_sub(1);
             }
             KeyCode::Right | KeyCode::Char('l') => {
                 self.cursorpos.col = cmp::min(

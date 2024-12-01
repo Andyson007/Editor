@@ -73,6 +73,7 @@ struct ClientArgs {
     /// target server is running with security enabled.
     /// A prompt will appear if you don't specify the password with the flag
     #[arg(long, short = 'p')]
+    #[allow(clippy::option_option)]
     password: Option<Option<String>>,
     /// IP-address the server should be hosted on
     ///
@@ -152,7 +153,7 @@ fn main() -> color_eyre::Result<()> {
                 })
             });
             let address = address.unwrap_or(SocketAddrV4::new(*ip, *port));
-            client::run(address, username.as_str(), password.as_deref())?
+            client::run(address, username.as_str(), password.as_deref())?;
         }
     };
     Ok(())

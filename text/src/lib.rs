@@ -137,6 +137,7 @@ impl Text {
     }
 
     /// Wraps an existsing piece inside a `Text`
+    #[must_use]
     pub fn with_piece(piece: Piece) -> Self {
         Self {
             table: Arc::new(RwLock::new(piece)),
@@ -145,6 +146,7 @@ impl Text {
     }
 
     /// Creates a new `Text` with an empty original buffer
+    #[must_use]
     pub fn new() -> Self {
         Self {
             table: Arc::new(RwLock::new(Piece::new())),

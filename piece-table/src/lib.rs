@@ -71,7 +71,6 @@ impl Piece {
     /// This allows the list to be mutated at that point.
     /// # Panics
     /// Shouldn't panic
-    #[allow(clippy::significant_drop_tightening)]
     pub fn insert_at(
         &mut self,
         pos: usize,
