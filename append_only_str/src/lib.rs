@@ -154,9 +154,13 @@ impl AppendOnlyStr {
     /// pushes a series of bytes onto the `AppendOnlyStr`. You are probably looking for `push_str`
     /// # Safety
     /// This assumes that the bytes are utf-8 compliant
-    pub unsafe fn push_bytes(&mut self, bytes: &[u8]) {
+    unsafe fn push_bytes(&mut self, bytes: &[u8]) {
         self.reserve(bytes.len());
-        self.write_unchecked(bytes);
+        // # Safety
+        // We just reserved enough bytes
+        unsafe {
+            self.write_unchecked(bytes);
+        }
     }
 
     /// Pushes a string onto the `AppendOnlyStr`

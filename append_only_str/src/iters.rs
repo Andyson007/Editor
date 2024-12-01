@@ -48,7 +48,10 @@ impl FromIterator<u8> for AppendOnlyStr {
     where
         I: IntoIterator<Item = u8>,
     {
-        Self::from_str(str::from_utf8(iter.into_iter().collect::<Vec<_>>().as_slice()).unwrap())
-            .unwrap()
+        Self::from_str(
+            str::from_utf8(iter.into_iter().collect::<Vec<_>>().as_slice())
+                .expect("The u8 stream was not utf-8"),
+        )
+        .unwrap()
     }
 }

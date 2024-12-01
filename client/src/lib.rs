@@ -46,7 +46,7 @@ pub fn run(
 
     let (mut socket, _response) = connect_with_auth(address, username, password);
 
-    let Btep::Full(initial_text) = Btep::<Text>::from_message(socket.read()?) else {
+    let Btep::Full(initial_text) = Btep::<Text>::from_message(socket.read()?).unwrap() else {
         panic!("Initial message in wrong protocol")
     };
 

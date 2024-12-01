@@ -18,8 +18,8 @@ impl RawBuf {
     }
 
     pub fn with_capacity(capacity: NonZeroUsize) -> Self {
-        assert!(capacity < NonZeroUsize::new(isize::MAX as usize).unwrap());
-        let layout = Layout::array::<u8>(capacity.get()).unwrap();
+        let layout =
+            Layout::array::<u8>(capacity.get()).expect("The capicity was greater than isize::Max");
         // This is unchecked because alloc returns a nullptr
         // when failing to alloc
 
@@ -54,7 +54,9 @@ impl Drop for RawBuf {
             unsafe {
                 alloc::dealloc(
                     self.ptr.as_ptr(),
-                    Layout::array::<u8>(self.capacity).unwrap(),
+                    Layout::array::<u8>(self.capacity).expect(
+                        "The capicity exceeded isize::MAX at dealloc. This shouldn't be possible",
+                    ),
                 );
             }
         }

@@ -85,7 +85,7 @@ where
         let mut ret = [MaybeUninit::<T::Item>::uninit(); N];
         let mut ret_iter = ret.iter_mut();
         for _ in 0..N {
-            ret_iter.next().unwrap().write(self.iter.next()?);
+            ret_iter.next()?.write(self.iter.next()?);
         }
         //// # Safety
         //// We have iterated over the entirity of ret meaning that every item has been written to.

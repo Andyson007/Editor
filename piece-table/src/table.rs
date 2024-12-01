@@ -36,6 +36,15 @@ where
 pub enum LockError {
     /// There is already an incompatible lock on the element you want to lock
     FailedLock,
+    /// There is already an incompatible lock on the element you want to lock
+    Poisoned,
+}
+
+impl<T> From<std::sync::PoisonError<T>> for LockError {
+    fn from(value: std::sync::PoisonError<T>) -> Self {
+        println!("{value:?}");
+        Self::Poisoned
+    }
 }
 
 impl<T> Table<T> {
@@ -43,13 +52,11 @@ impl<T> Table<T> {
     /// This means that
     /// - Elements of the list cannot be modified
     /// - The order of listelements cannot be modified
-    /// # Panics
-    /// - The state has been poisoned
     /// # Errors
     /// - There is already a mutable lock on an element
     /// - There is already a mutable lock on the full list
     pub fn read_full(&self) -> Result<TableReader<T>, LockError> {
-        self.state.write().unwrap().lock_full()?;
+        self.state.write()?.lock_full()?;
         Ok(TableReader {
             val: Arc::clone(&self.inner),
             state: self.state.clone(),
@@ -60,13 +67,11 @@ impl<T> Table<T> {
     /// This menas that
     /// - Elemens of the list *can* still be modified
     /// - No reading lock can be made on the entire linked list
-    /// # Panics
-    /// - The state has been poisoned
     /// # Errors
     /// - There is already a writing lock on the list
     /// - There is already a reading lock on the list
     pub fn write_full(&self) -> Result<TableWriter<T>, LockError> {
-        self.state.write().unwrap().lock_full_mut()?;
+        self.state.write()?.lock_full_mut()?;
         Ok(TableWriter {
             val: Arc::clone(&self.inner),
             state: self.state.clone(),
@@ -290,13 +295,10 @@ impl<T> TableLocker<T> {
     /// - no one can read the value you are reading
     /// # Errors
     /// - There is already a reading lock on the list
-    /// # Panics
-    /// - The state is poisoned
-    /// - The value you are trying to access is poisoned
     pub fn write(&self) -> Result<TableLockWriter<T>, LockError> {
-        self.state.write().unwrap().lock_single_mut()?;
+        self.state.write()?.lock_single_mut()?;
         Ok(TableLockWriter {
-            value: self.value.write().unwrap(),
+            value: self.value.write()?,
             state: Arc::clone(&self.state),
         })
     }
