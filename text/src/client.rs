@@ -43,9 +43,9 @@ impl Client {
         let binding = self.slice.as_ref().unwrap();
         let (_, slice) = binding.read();
         if slice.is_empty() {
-            let binding = &self.piece.write().unwrap().piece_table.read_full().unwrap();
+            let binding = self.piece.write().unwrap().piece_table.write_full().unwrap();
 
-            let binding2 = binding.read();
+            let binding2 = binding.write();
             let mut cursor = binding2.cursor_front();
             while *cursor.current().unwrap().read().1 != *slice {
                 cursor.move_next();
@@ -53,10 +53,10 @@ impl Client {
             while cursor.current().unwrap().read().1.is_empty() {
                 cursor.move_prev();
             }
-            drop(slice);
             let Some(prev) = cursor.current() else {
                 return;
             };
+            drop(slice);
             let (_, mut slice) = prev.write().unwrap();
             *slice = slice
                 .subslice(0..slice.len() - slice.chars().last().unwrap().len_utf8())

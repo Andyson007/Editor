@@ -19,7 +19,7 @@ use editor::State;
 use std::{
     io::{self, Write},
     net::{SocketAddrV4, TcpStream},
-    str::{self, FromStr},
+    str,
 };
 use text::Text;
 use tungstenite::{

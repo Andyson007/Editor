@@ -9,7 +9,7 @@ use std::{
 
 pub struct Table<T> {
     #[allow(clippy::linkedlist)]
-    pub inner: Arc<RwLock<LinkedList<InnerTable<T>>>>,
+    inner: Arc<RwLock<LinkedList<InnerTable<T>>>>,
     state: Arc<RwLock<TableState>>,
 }
 
@@ -44,16 +44,7 @@ impl<T> Table<T> {
     /// - There is already a mutable lock on an element
     /// - There is already a mutable lock on the full list
     pub fn read_full(&self) -> Result<TableReader<T>, LockError> {
-        match *self.state.write().unwrap() {
-            ref mut x @ TableState::Unshared => *x = TableState::Shared((1, 0)),
-            TableState::Shared((ref mut amount, _)) => *amount += 1,
-            ref mut state @ TableState::SharedMuts((amount, 0)) => {
-                *state = TableState::Shared((1, amount));
-            }
-            TableState::Exclusive(_) | TableState::SharedMuts((_, 1..)) => {
-                return Err(LockError::FailedLock)
-            }
-        };
+        self.state.write().unwrap().lock_full()?;
         Ok(TableReader {
             val: Arc::clone(&self.inner),
             state: self.state.clone(),
@@ -70,13 +61,7 @@ impl<T> Table<T> {
     /// - There is already a writing lock on the list
     /// - There is already a reading lock on the list
     pub fn write_full(&self) -> Result<TableWriter<T>, LockError> {
-        match *self.state.write().unwrap() {
-            ref mut state @ TableState::Unshared => *state = TableState::Exclusive((0, 0)),
-            ref mut state @ TableState::SharedMuts((immuts, muts)) => {
-                *state = TableState::Exclusive((immuts, muts));
-            }
-            TableState::Exclusive(_) | TableState::Shared(_) => return Err(LockError::FailedLock),
-        };
+        self.state.write().unwrap().lock_full_mut()?;
         Ok(TableWriter {
             val: Arc::clone(&self.inner),
             state: self.state.clone(),
@@ -116,6 +101,98 @@ pub enum TableState {
     Exclusive((usize, usize)),
 }
 
+impl TableState {
+    pub fn lock_single(&mut self) {
+        match self {
+            Self::Shared((0, _)) => unreachable!(),
+
+            Self::Unshared => *self = Self::SharedMuts((1, 0)),
+
+            Self::Shared((1.., ref mut immuts))
+            | Self::Exclusive((ref mut immuts, _))
+            | Self::SharedMuts((ref mut immuts, _)) => *immuts += 1,
+        }
+    }
+
+    pub fn drop_single(&mut self) {
+        match self {
+            Self::Unshared
+            | Self::Shared((0, _) | (_, 0))
+            | Self::SharedMuts((0, _))
+            | Self::Exclusive((0, _)) => unreachable!(),
+
+            Self::SharedMuts((ref mut immuts @ 1.., _))
+            | Self::Exclusive((ref mut immuts @ 1.., _))
+            | Self::Shared((1.., ref mut immuts @ 1..)) => *immuts -= 1,
+        }
+    }
+
+    pub fn lock_single_mut(&mut self) -> Result<(), LockError> {
+        match self {
+            Self::Shared((0, _)) => unreachable!(),
+
+            Self::Unshared => *self = Self::SharedMuts((0, 1)),
+            Self::Shared(_) => return Err(LockError::FailedLock),
+            Self::SharedMuts((_, ref mut muts)) | Self::Exclusive((_, ref mut muts)) => *muts += 1,
+        };
+        Ok(())
+    }
+
+    pub fn drop_single_mut(&mut self) {
+        match self {
+            Self::SharedMuts((_, 0))
+            | Self::Exclusive((_, 0))
+            | Self::Unshared
+            | Self::Shared(_) => unreachable!(),
+
+            Self::SharedMuts((_, ref mut muts @ 1..))
+            | Self::Exclusive((_, ref mut muts @ 1..)) => *muts -= 1,
+        };
+    }
+
+    pub fn lock_full(&mut self) -> Result<(), LockError> {
+        match self {
+            Self::Shared((0, _)) => unreachable!(),
+
+            Self::SharedMuts((_, 1..)) | Self::Exclusive(_) => return Err(LockError::FailedLock),
+
+            Self::Unshared => *self = Self::Shared((1, 0)),
+            Self::Shared((ref mut amount @ 1.., _)) => *amount += 1,
+            Self::SharedMuts((amount, _)) => *self = Self::Shared((1, *amount)),
+        };
+        Ok(())
+    }
+
+    pub fn drop_full(&mut self) {
+        match self {
+            Self::Shared((0, _)) | Self::Unshared | Self::Exclusive(_) | Self::SharedMuts(_) => {
+                unreachable!()
+            }
+
+            Self::Shared((1, 0)) => *self = Self::Unshared,
+            Self::Shared((1, amount)) => *self = Self::SharedMuts((*amount, 0)),
+            Self::Shared((ref mut amount @ 1.., _)) => *amount -= 1,
+        };
+    }
+
+    pub fn lock_full_mut(&mut self) -> Result<(), LockError> {
+        match self {
+            Self::Unshared => *self = Self::Exclusive((0, 0)),
+            Self::SharedMuts((immuts, muts)) => *self = Self::Exclusive((*immuts, *muts)),
+            Self::Shared((1.., _)) | Self::Exclusive((_, _)) => return Err(LockError::FailedLock),
+            Self::Shared((0, _)) => unreachable!(),
+        };
+        Ok(())
+    }
+
+    pub fn drop_full_mut(&mut self) {
+        match self {
+            Self::Unshared | Self::SharedMuts(_) | Self::Shared(_) => unreachable!(),
+            Self::Exclusive((immuts, muts)) => *self = Self::SharedMuts((*immuts, *muts)),
+        }
+    }
+}
+
 /// Represents a mutable lock on order of the full list
 /// This means that
 /// - No readable lock can be created on the entire list
@@ -140,15 +217,7 @@ impl<T> TableWriter<T> {
 
 impl<T> Drop for TableWriter<T> {
     fn drop(&mut self) {
-        match *self.state.write().unwrap() {
-            ref mut state @ TableState::Exclusive((0, 0)) => *state = TableState::Unshared,
-            ref mut state @ TableState::Exclusive((immuts, muts)) => {
-                *state = TableState::SharedMuts((immuts, muts));
-            }
-            TableState::SharedMuts(_) | TableState::Shared(_) | TableState::Unshared => {
-                unreachable!()
-            }
-        };
+        self.state.write().unwrap().drop_full_mut();
     }
 }
 
@@ -175,13 +244,7 @@ impl<T> TableReader<T> {
 
 impl<T> Drop for TableReader<T> {
     fn drop(&mut self) {
-        match *self.state.write().unwrap() {
-            ref mut state @ TableState::Shared((1, 0)) => *state = TableState::Unshared,
-            TableState::Shared((ref mut amount, _)) => *amount -= 1,
-            TableState::Exclusive(_) | TableState::Unshared | TableState::SharedMuts(_) => {
-                unreachable!()
-            }
-        };
+        self.state.write().unwrap().drop_full();
     }
 }
 
@@ -209,12 +272,7 @@ impl<T> TableLocker<T> {
     /// - The value you are trying to access is poisoned
     #[must_use]
     pub fn read(&self) -> TableLockReader<T> {
-        match *self.state.write().unwrap() {
-            ref mut state @ TableState::Unshared => *state = TableState::Shared((1, 0)),
-            TableState::Shared((_, ref mut refs))
-            | TableState::SharedMuts((ref mut refs, _))
-            | TableState::Exclusive((ref mut refs, _)) => *refs += 1,
-        };
+        self.state.write().unwrap().lock_single();
         TableLockReader {
             value: self.value.read().unwrap(),
             state: Arc::clone(&self.state),
@@ -230,15 +288,7 @@ impl<T> TableLocker<T> {
     /// - The state is poisoned
     /// - The value you are trying to access is poisoned
     pub fn write(&self) -> Result<TableLockWriter<T>, LockError> {
-        match *self.state.write().unwrap() {
-            ref mut state @ TableState::Unshared => *state = TableState::SharedMuts((0, 1)),
-            ref mut state @ TableState::Shared((0, refs)) => {
-                *state = TableState::SharedMuts((refs, 1));
-            }
-            TableState::Exclusive((_, ref mut refs))
-            | TableState::SharedMuts((_, ref mut refs)) => *refs += 1,
-            TableState::Shared((1.., _)) => return Err(LockError::FailedLock),
-        };
+        self.state.write().unwrap().lock_single_mut()?;
         Ok(TableLockWriter {
             value: self.value.write().unwrap(),
             state: Arc::clone(&self.state),
@@ -264,13 +314,7 @@ impl<T> Deref for TableLockReader<'_, T> {
 
 impl<T> Drop for TableLockReader<'_, T> {
     fn drop(&mut self) {
-        match *self.state.write().unwrap() {
-            ref mut state @ TableState::Shared((1, 0)) => *state = TableState::Unshared,
-            TableState::Shared((_, ref mut refs))
-            | TableState::SharedMuts((ref mut refs, _))
-            | TableState::Exclusive((ref mut refs, _)) => *refs -= 1,
-            TableState::Unshared => unreachable!(),
-        };
+        self.state.write().unwrap().drop_single();
     }
 }
 
@@ -300,12 +344,7 @@ impl<T> DerefMut for TableLockWriter<'_, T> {
 
 impl<T> Drop for TableLockWriter<'_, T> {
     fn drop(&mut self) {
-        match *self.state.write().unwrap() {
-            ref mut state @ TableState::SharedMuts((0, 1)) => *state = TableState::Unshared,
-            TableState::Exclusive((_, ref mut amount))
-            | TableState::SharedMuts((_, ref mut amount)) => *amount -= 1,
-            TableState::Unshared | TableState::Shared(_) => unreachable!(),
-        };
+        self.state.write().unwrap().drop_single_mut();
     }
 }
 
