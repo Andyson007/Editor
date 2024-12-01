@@ -38,7 +38,7 @@ impl Piece {
     pub fn new() -> Self {
         let original: AppendOnlyStr = "".into();
         Self {
-            piece_table: Table::from_iter(std::iter::once((None, original.str_slice(..)))),
+            piece_table: std::iter::once((None, original.str_slice(..))).collect(),
             buffers: Buffers {
                 original,
                 clients: vec![],
@@ -57,7 +57,7 @@ impl Piece {
         let original: AppendOnlyStr = string.into();
 
         Ok(Self {
-            piece_table: Table::from_iter(iter::once((None, original.str_slice(..)))),
+            piece_table: iter::once((None, original.str_slice(..))).collect(),
             buffers: Buffers {
                 original,
                 clients: vec![],
@@ -121,10 +121,22 @@ impl Piece {
         Some(cursor.current().unwrap().clone())
     }
 
+    /// Locks down the full list for reading. 
+    /// This means that
+    /// - No value within the list can be mutated
+    /// - The order of elements cannot be changed
+    /// # Errors
+    /// - The state value is poisoned
     pub fn read_full(&self) -> Result<table::TableReader<StrSlice>, LockError> {
         self.piece_table.read_full()
     }
 
+    /// Locks down the full list for reading. 
+    /// This means that
+    /// - This is the sole write lock on the full list
+    /// - No reading lock can be made
+    /// # Errors
+    /// - The state value is poisoned
     pub fn write_full(&self) -> Result<table::TableWriter<StrSlice>, LockError> {
         self.piece_table.write_full()
     }

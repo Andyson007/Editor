@@ -1,3 +1,5 @@
+//! Provides an implementation for `Table`.
+//! The `Table` is responsible for regulating the access to the values stored
 use std::{
     collections::LinkedList,
     fmt::Debug,
@@ -8,7 +10,7 @@ use std::{
 pub struct Table<T> {
     #[allow(clippy::linkedlist)]
     pub inner: Arc<RwLock<LinkedList<InnerTable<T>>>>,
-    pub state: Arc<RwLock<TableState>>,
+    state: Arc<RwLock<TableState>>,
 }
 
 impl<T> Debug for Table<T>
@@ -48,7 +50,7 @@ impl<T> Table<T> {
             ref mut state @ TableState::SharedMuts((amount, 0)) => {
                 *state = TableState::Shared((1, amount));
             }
-            TableState::Exclusive(_) | TableState::SharedMuts(_) => {
+            TableState::Exclusive(_) | TableState::SharedMuts((_, 1..)) => {
                 return Err(LockError::FailedLock)
             }
         };
@@ -200,6 +202,8 @@ impl<T> TableLocker<T> {
 
 impl<T> TableLocker<T> {
     /// Actually locks the item and returns a Reader
+    /// This means that:
+    /// - no one can mutate the value you are reading
     /// # Panics
     /// - The state is poisoned
     /// - The value you are trying to access is poisoned
@@ -217,7 +221,11 @@ impl<T> TableLocker<T> {
         }
     }
 
-    /// Actually locks the item and returns a Writer
+    /// Actually locks the item and returns a `TableLockWriter`
+    /// This means that:
+    /// - no one can read the value you are reading
+    /// # Errors
+    /// - There is already a reading lock on the list
     /// # Panics
     /// - The state is poisoned
     /// - The value you are trying to access is poisoned
@@ -293,8 +301,6 @@ impl<T> DerefMut for TableLockWriter<'_, T> {
 impl<T> Drop for TableLockWriter<'_, T> {
     fn drop(&mut self) {
         match *self.state.write().unwrap() {
-            // ref mut state @ TableState::Exclusive => *state = TableState::Unshared,
-            // TableState::Unshared | TableState::Shared(_) => unreachable!(),
             ref mut state @ TableState::SharedMuts((0, 1)) => *state = TableState::Unshared,
             TableState::Exclusive((_, ref mut amount))
             | TableState::SharedMuts((_, ref mut amount)) => *amount -= 1,
@@ -303,6 +309,7 @@ impl<T> Drop for TableLockWriter<'_, T> {
     }
 }
 
+/// The Inner values of the linked list. These are effectively wrappers around &strs.
 pub struct InnerTable<T> {
     inner: Arc<TableLocker<T>>,
     /// The client whichs buffer is being referred to a `None` value signifies that it is from the
@@ -329,19 +336,26 @@ where
         f.debug_struct("InnerTable")
             .field("inner", &self.inner.read().value)
             .field("state", &self.state)
+            .field("bufnr", &self.bufnr)
             .finish()
     }
 }
 
 impl<T> InnerTable<T> {
+    #[must_use]
     pub fn read(&self) -> (Option<usize>, TableLockReader<T>) {
         (self.bufnr, self.inner.read())
     }
 
+    /// attemps to lock down the value within this `InnerLock`.
+    /// # Errors
+    /// - There is already a lock on this value
+    /// - There is already a lock on the full list
     pub fn write(&self) -> Result<(Option<usize>, TableLockWriter<'_, T>), LockError> {
         Ok((self.bufnr, self.inner.write()?))
     }
 
+    #[must_use]
     pub fn new(value: T, state: Arc<RwLock<TableState>>, bufnr: Option<usize>) -> Self {
         Self {
             inner: Arc::new(TableLocker::new(value, Arc::clone(&state))),

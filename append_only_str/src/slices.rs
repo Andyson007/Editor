@@ -202,11 +202,6 @@ impl StrSlice {
             },
         })
     }
-
-    /// Creates a zero-sized subslice located at the end of this slice
-    pub fn end_slice(&self) -> Self {
-        self.subslice(self.len()..).unwrap()
-    }
 }
 
 impl FromStr for StrSlice {

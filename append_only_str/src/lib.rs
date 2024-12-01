@@ -218,6 +218,7 @@ impl AppendOnlyStr {
     }
 
     /// Creates a string slice pointing at the end of the buffer
+    #[must_use]
     pub fn str_slice_end(&self) -> StrSlice {
         self.str_slice(self.len..)
     }

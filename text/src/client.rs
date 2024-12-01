@@ -18,7 +18,7 @@ pub struct Client {
     /// Stores whether its safe to insert a chracter again
     /// # Necessity
     /// This is required because pressing backspace and writing the character again cannot be
-    /// represented (effeciently) in an append_only buffer.
+    /// represented (effeciently) in an append-only buffer.
     pub(crate) has_deleted: bool,
 }
 
@@ -43,9 +43,10 @@ impl Client {
         let binding = self.slice.as_ref().unwrap();
         let (_, slice) = binding.read();
         if slice.is_empty() {
-            let binding = &self.piece.write().unwrap().piece_table;
-            let mut binding2 = binding.inner.write().unwrap();
-            let mut cursor = binding2.cursor_front_mut();
+            let binding = &self.piece.write().unwrap().piece_table.read_full().unwrap();
+
+            let binding2 = binding.read();
+            let mut cursor = binding2.cursor_front();
             while *cursor.current().unwrap().read().1 != *slice {
                 cursor.move_next();
             }
@@ -95,8 +96,9 @@ impl Client {
             let slice = self.slice.as_mut().unwrap();
 
             let binding = &self.piece.write().unwrap().piece_table;
-            let mut binding2 = binding.inner.write().unwrap();
-            let mut cursor = binding2.cursor_front_mut();
+            let binding2 = binding.write_full().unwrap();
+            let mut binding3 = binding2.write();
+            let mut cursor = binding3.cursor_front_mut();
             while *cursor.current().unwrap().read().1 != *slice.read().1 {
                 cursor.move_next();
             }
