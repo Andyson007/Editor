@@ -3,7 +3,7 @@
 #[cfg(feature = "security")]
 mod security;
 use base64::{prelude::BASE64_STANDARD, Engine};
-use btep::Btep;
+use btep::prelude::S2C;
 #[cfg(feature = "security")]
 use sqlx::{sqlite::SqliteConnectOptions, SqlitePool};
 #[cfg(feature = "security")]
@@ -106,7 +106,7 @@ pub async fn run(
                     debug!("Connected {:?}", username);
                     let data = text.read().unwrap();
                     // dbg!(&data);
-                    websocket.send(Btep::Full(&*data).into_message()).unwrap();
+                    websocket.send(S2C::Full(&*data).into_message()).unwrap();
                 }
                 loop {
                     let msg = websocket.read().unwrap();

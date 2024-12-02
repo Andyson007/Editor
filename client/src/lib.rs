@@ -3,7 +3,7 @@ pub mod editor;
 pub mod errors;
 
 use base64::{prelude::BASE64_STANDARD, Engine};
-use btep::Btep;
+use btep::prelude::S2C;
 use crossterm::{
     cursor,
     event::{read, EnableBracketedPaste, Event},
@@ -46,7 +46,7 @@ pub fn run(
 
     let (mut socket, _response) = connect_with_auth(address, username, password);
 
-    let Btep::Full(initial_text) = Btep::<Text>::from_message(socket.read()?).unwrap() else {
+    let S2C::Full(initial_text) = S2C::<Text>::from_message(socket.read()?).unwrap() else {
         panic!("Initial message in wrong protocol")
     };
 
