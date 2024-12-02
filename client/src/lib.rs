@@ -31,8 +31,6 @@ use tungstenite::{
 };
 
 /// Runs a the client side of the editor
-#[allow(clippy::missing_panics_doc)]
-#[allow(clippy::missing_errors_doc)]
 pub fn run(
     address: SocketAddrV4,
     username: &str,
@@ -50,7 +48,7 @@ pub fn run(
         panic!("Initial message in wrong protocol")
     };
 
-    let mut app = State::new(initial_text);
+    let mut app = State::new(initial_text, socket);
 
     redraw(&mut out, 0, &app)?;
 
@@ -78,7 +76,7 @@ pub fn run(
     Ok(())
 }
 
-fn redraw<E>(out: &mut E, startline: usize, state: &State) -> io::Result<()>
+fn redraw<E, T>(out: &mut E, startline: usize, state: &State<T>) -> io::Result<()>
 where
     E: QueueableCommand + io::Write,
 {

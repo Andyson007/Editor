@@ -59,3 +59,12 @@ where
         }
     }
 }
+
+impl<T> From<S2C<T>> for Message
+where
+    T: Serialize,
+{
+    fn from(value: S2C<T>) -> Self {
+        Message::Binary(value.serialize().into())
+    }
+}

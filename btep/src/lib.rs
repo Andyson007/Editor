@@ -1,4 +1,5 @@
 #![feature(never_type)]
+#![feature(iter_next_chunk)]
 //! This crate implements a custom binary
 //! text transfer protocol.
 pub mod s2c;

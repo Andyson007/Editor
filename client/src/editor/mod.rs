@@ -2,16 +2,21 @@
 //! This includes handling keypressess and adding these
 //! to the queue for sending to the server, but *not*
 //! actually sending them
-use core::str;
-use std::cmp;
+use std::{
+    cmp,
+    io::{Read, Write},
+    str,
+};
 
+use btep::c2s::C2S;
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use text::Text;
+use tungstenite::WebSocket;
 
 #[derive(Debug)]
 /// The main state for the entire editor. The entireity of the
 /// view presented to the user can be rebuild from this
-pub struct State {
+pub struct State<T> {
     /// The rope stores the entire file being edited.
     pub text: Text,
     /// Our own id within the Text
@@ -21,6 +26,7 @@ pub struct State {
     mode: Mode,
     /// stores where the cursor is located
     cursorpos: CursorPos,
+    socket: WebSocket<T>,
 }
 
 /// `CursorPos` is effectively an (x, y) tuple.
@@ -32,16 +38,17 @@ pub struct CursorPos {
     pub col: usize,
 }
 
-impl State {
+impl<T> State<T> {
     /// Creates a new appstate
     #[must_use]
-    pub fn new(mut text: Text) -> Self {
+    pub fn new(mut text: Text, socket: WebSocket<T>) -> Self {
         let id = text.add_client();
         Self {
             text,
             id,
             mode: Mode::Normal,
             cursorpos: CursorPos::default(),
+            socket,
         }
     }
 
@@ -53,7 +60,10 @@ impl State {
     }
 
     /// Handles a keyevent. This method handles every `mode`
-    pub fn handle_keyevent(&mut self, input: &KeyEvent) -> bool {
+    pub fn handle_keyevent(&mut self, input: &KeyEvent) -> bool
+    where
+        T: Read + Write,
+    {
         match self.mode {
             Mode::Normal => self.handle_normal_keyevent(input),
             Mode::Insert => self.handle_insert_keyevent(input),
@@ -62,7 +72,10 @@ impl State {
     }
 
     /// handles a keypress as if were performed in `Insert` mode
-    fn handle_insert_keyevent(&mut self, input: &KeyEvent) -> bool {
+    fn handle_insert_keyevent(&mut self, input: &KeyEvent) -> bool
+    where
+        T: Read + Write,
+    {
         if matches!(
             input,
             KeyEvent {
@@ -87,15 +100,18 @@ impl State {
                     self.cursorpos.col -= 1;
                 }
                 self.text.client(self.id).backspace();
+                self.socket.write(C2S::Backspace.into()).unwrap();
             }
             KeyCode::Enter => {
                 self.text.client(self.id).push_char('\n');
                 self.cursorpos.col = 0;
                 self.cursorpos.row += 1;
+                self.socket.write(C2S::Enter.into()).unwrap();
             }
             KeyCode::Char(c) => {
                 self.text.client(self.id).push_char(c);
                 self.cursorpos.col += c.len_utf8();
+                self.socket.write(C2S::Char(c).into()).unwrap();
             }
             KeyCode::Esc => self.mode = Mode::Normal,
             KeyCode::Home => todo!(),
@@ -121,7 +137,10 @@ impl State {
     }
 
     /// handles a keypress as if were performed in `Normal` mode
-    fn handle_normal_keyevent(&mut self, input: &KeyEvent) -> bool {
+    fn handle_normal_keyevent(&mut self, input: &KeyEvent) -> bool
+    where
+        T: Read + Write,
+    {
         match input.code {
             KeyCode::Char('q') => return true,
             KeyCode::Char('i') => {
@@ -131,10 +150,7 @@ impl State {
                     .take(self.cursorpos.row)
                     .map(|x| x.len() + 1)
                     .sum();
-                self.text
-                    .client(self.id)
-                    .enter_insert(bytes_to_row + self.cursorpos.col);
-                self.mode = Mode::Insert;
+                self.enter_insert(bytes_to_row + self.cursorpos.col);
             }
             KeyCode::Char(':') => self.mode = Mode::Command(String::new()),
             KeyCode::Left | KeyCode::Char('h') => {
@@ -230,6 +246,15 @@ impl State {
 
     fn execute_commad(&self, cmd: &str) -> bool {
         cmd == "q"
+    }
+
+    fn enter_insert(&mut self, pos: usize)
+    where
+        T: Read + Write,
+    {
+        self.text.client(self.id).enter_insert(pos);
+        self.mode = Mode::Insert;
+        todo!("find the id of the buffer that got split")
     }
 }
 /// Stores the current mode of the editor.
