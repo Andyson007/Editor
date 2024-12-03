@@ -24,7 +24,7 @@ where
         f.debug_struct("Table")
             .field(
                 "inner",
-                &*self.inner.read().unwrap().front().unwrap().read(),
+                &*self.inner.read().unwrap(),
             )
             .field("state", &self.state)
             .finish()

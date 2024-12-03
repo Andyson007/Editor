@@ -44,6 +44,7 @@ pub fn run(
     let S2C::Full(initial_text) = S2C::<Text>::from_message(socket.read()?).unwrap() else {
         panic!("Initial message in wrong protocol")
     };
+
     execute!(out, EnterAlternateScreen, EnableBracketedPaste)?;
     enable_raw_mode().unwrap();
 

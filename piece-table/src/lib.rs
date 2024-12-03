@@ -159,6 +159,7 @@ impl Piece {
             ));
             let curr = self.buffers.clients[clientid].1.read().unwrap();
             cursor.current().unwrap().write().unwrap().text = curr.str_slice(curr.len()..);
+            cursor.current().unwrap().write().unwrap().bufnr = Some(clientid);
             Some(offset)
         };
         Some((offset, cursor.current().unwrap().clone()))

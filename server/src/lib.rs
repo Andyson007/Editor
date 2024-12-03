@@ -110,6 +110,7 @@ pub async fn run(
                     let data = text.read().unwrap();
                     // dbg!(&data);
                     websocket.send(S2C::Full(&*data).into_message()).unwrap();
+                    println!("{data:#?}");
                 }
                 sockets.write().unwrap().push(websocket);
                 text.write().unwrap().add_client();
@@ -126,7 +127,9 @@ pub async fn run(
                             C2S::EnterInsert(enter_insert) => drop(lock.enter_insert(enter_insert)),
                         }
                         for client in sockets.write().unwrap().iter_mut().take(client_id).skip(1) {
-                            client.write(S2C::Update::<&Text>((client_id, action)).into_message()).unwrap();
+                            client
+                                .write(S2C::Update::<&Text>((client_id, action)).into_message())
+                                .unwrap();
                         }
                     } else {
                         warn!("A non-binary message was sent")
