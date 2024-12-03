@@ -23,11 +23,9 @@ pub use security::add_user;
 use security::{auth_check, create_tables};
 
 use text::Text;
-// I want to keep the tracing tools in scope
 use tokio_tungstenite::tungstenite::{
     accept_hdr,
     handshake::server::{Request, Response},
-    Message,
 };
 #[allow(unused_imports)]
 use tracing::{debug, error, info, trace, warn};
@@ -122,7 +120,7 @@ pub async fn run(
                             C2S::EnterInsert(enter_insert) => drop(lock.enter_insert(enter_insert)),
                         }
                     } else {
-                        trace!("A non-binary message was sent")
+                        warn!("A non-binary message was sent")
                     }
                     trace!("{:?}", text.read().unwrap().lines().collect::<Vec<_>>());
                 }

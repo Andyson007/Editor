@@ -205,7 +205,6 @@ impl Serialize for &Piece {
         }
         // Might be useless, but it's a single byte
         ret.push_back(0xff);
-
         ret.extend((self.piece_table.read_full().unwrap().read().len() as u64).to_be_bytes());
 
         for piece in self.piece_table.read_full().unwrap().read().iter() {
@@ -214,7 +213,7 @@ impl Serialize for &Piece {
             ret.extend((piece.bufnr.map_or(u64::MAX, |x| x as u64)).to_be_bytes());
             ret.extend((piece.id as u64).to_be_bytes());
             ret.extend((piece.text.start() as u64).to_be_bytes());
-            ret.extend((piece.text.end()).to_be_bytes());
+            ret.extend((piece.text.end() as u64).to_be_bytes());
         }
         ret
     }
@@ -246,13 +245,12 @@ impl Deserialize for Piece {
                     .unwrap(),
             ) as usize;
 
+            let buf_content = iter
+                .take_while_ref(|x| !(*x == 254 || *x == 255))
+                .collect::<AppendOnlyStr>();
             client_buffers.push((
                 Arc::new(RwLock::new(AutoIncrementing::new_with_start(counter_start))),
-                Arc::new(RwLock::new(
-                    iter.by_ref()
-                        .take_while(|x| !(*x == 254 || *x == 255))
-                        .collect::<AppendOnlyStr>(),
-                )),
+                Arc::new(RwLock::new(buf_content)),
             ));
         }
 
@@ -262,7 +260,6 @@ impl Deserialize for Piece {
             .collect::<Vec<_>>()
             .try_into()
             .unwrap();
-
         let piece_count = usize::try_from(u64::from_be_bytes(pieces)).unwrap();
         let table = iter
             .by_ref()
@@ -273,10 +270,11 @@ impl Deserialize for Piece {
                     .into_iter()
                     .chunks::<{ mem::size_of::<u64>() }>()
                     .collect::<Vec<_>>();
+                let bufnr = u64::from_be_bytes(slices[0]);
                 let id = usize::try_from(u64::from_be_bytes(slices[1])).unwrap();
                 let start = usize::try_from(u64::from_be_bytes(slices[2])).unwrap();
                 let end = usize::try_from(u64::from_be_bytes(slices[3])).unwrap();
-                match u64::from_be_bytes(slices[0]) {
+                match bufnr {
                     u64::MAX => TableElem {
                         bufnr: None,
                         text: original_buffer.str_slice(start..end),

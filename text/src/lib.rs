@@ -28,9 +28,10 @@ impl Serialize for &Text {
     fn serialize(&self) -> std::collections::VecDeque<u8> {
         let mut ret = VecDeque::new();
         let to_extend = (&*self.table.read().unwrap()).serialize();
+
         ret.extend((to_extend.len() as u64).to_be_bytes());
-        println!("{}", ret.len());
         ret.extend(to_extend);
+
         ret.extend(self.clients.iter().flat_map(|x| {
             let mut ret = VecDeque::new();
             if let Some(x) = &x.slice {
@@ -56,7 +57,7 @@ impl Deserialize for Text {
                 .next()
                 .unwrap(),
         ) as usize;
-        let piece: Piece = Deserialize::deserialize(
+        let piece = Piece::deserialize(
             iter.by_ref()
                 .copied()
                 .take(len)
@@ -70,7 +71,7 @@ impl Deserialize for Text {
         let mut clients = Vec::new();
 
         while let Some(x) = iter.next() {
-            if *x == 0 {
+            if *x == 1 {
                 let start = u64::from_be_bytes(
                     iter.by_ref()
                         .copied()

@@ -43,7 +43,7 @@ impl<T> S2C<T> {
             panic!("wrong message type")
         };
         match data.first()? {
-            0 => Some(Self::Full(Deserialize::deserialize(&data[1..]))),
+            0 => Some(Self::Full(T::deserialize(&data[1..]))),
             _ => panic!("An invalid specifier was found"),
         }
     }

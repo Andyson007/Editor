@@ -39,14 +39,14 @@ pub fn run(
     let mut out = io::stdout();
     errors::install_hooks()?;
 
-    execute!(out, EnterAlternateScreen, EnableBracketedPaste)?;
-    enable_raw_mode().unwrap();
-
     let (mut socket, _response) = connect_with_auth(address, username, password);
 
     let S2C::Full(initial_text) = S2C::<Text>::from_message(socket.read()?).unwrap() else {
         panic!("Initial message in wrong protocol")
     };
+    execute!(out, EnterAlternateScreen, EnableBracketedPaste)?;
+    enable_raw_mode().unwrap();
+
 
     let mut app = State::new(initial_text, socket);
 
