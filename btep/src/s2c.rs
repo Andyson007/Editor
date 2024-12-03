@@ -1,3 +1,4 @@
+use crate::c2s::C2S;
 use crate::Deserialize;
 use crate::Serialize;
 
@@ -10,6 +11,7 @@ pub enum S2C<T> {
     /// The initial message over the websocket.
     /// This should usually be the entireity of the file
     Full(T),
+    Update((usize, C2S)),
 }
 
 impl<T> S2C<T> {
@@ -23,9 +25,12 @@ impl<T> S2C<T> {
         match self {
             Self::Full(_) => {
                 serialized.push_front(0);
-                Message::Binary(serialized.into())
+            }
+            Self::Update(_) => {
+                serialized.push_front(1);
             }
         }
+        Message::Binary(serialized.into())
     }
 }
 
@@ -56,6 +61,11 @@ where
     fn serialize(&self) -> VecDeque<u8> {
         match self {
             Self::Full(x) => x.serialize(),
+            Self::Update((id, action)) => {
+                let mut ret: VecDeque<u8> = (*id as u64).to_be_bytes().into();
+                ret.extend(action.serialize());
+                ret
+            }
         }
     }
 }

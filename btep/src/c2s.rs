@@ -8,6 +8,7 @@ use crate::{Deserialize, Serialize};
 
 /// S2C or Server to Client
 /// Encodes information that originates from the client and sendt to the server
+#[derive(Clone, Copy, Debug)]
 pub enum C2S {
     Char(char),
     Backspace,
@@ -15,6 +16,7 @@ pub enum C2S {
     EnterInsert(usize),
 }
 
+#[derive(Clone, Copy, Debug)]
 pub struct EnterInsert {
     /// The id of the buffer that was split
     pub id: usize,
