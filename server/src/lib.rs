@@ -3,7 +3,7 @@
 #[cfg(feature = "security")]
 mod security;
 use base64::{prelude::BASE64_STANDARD, Engine};
-use btep::prelude::S2C;
+use btep::{c2s::C2S, prelude::S2C, Deserialize};
 #[cfg(feature = "security")]
 use sqlx::{sqlite::SqliteConnectOptions, SqlitePool};
 #[cfg(feature = "security")]
@@ -27,6 +27,7 @@ use text::Text;
 use tokio_tungstenite::tungstenite::{
     accept_hdr,
     handshake::server::{Request, Response},
+    Message,
 };
 #[allow(unused_imports)]
 use tracing::{debug, error, info, trace, warn};
@@ -49,7 +50,7 @@ pub async fn run(
     let text = Arc::new(RwLock::new(
         Text::original_from_reader(BufReader::new(file)).unwrap(),
     ));
-    for stream in server.incoming() {
+    for (client_id, stream) in server.incoming().enumerate() {
         let text = text.clone();
         #[cfg(feature = "security")]
         let pool = Arc::clone(&pool);
@@ -108,11 +109,22 @@ pub async fn run(
                     // dbg!(&data);
                     websocket.send(S2C::Full(&*data).into_message()).unwrap();
                 }
+                text.write().unwrap().add_client();
                 loop {
                     let msg = websocket.read().unwrap();
-                    if msg.is_binary() || msg.is_text() {
-                        debug!("{msg:?}");
+                    if msg.is_binary() {
+                        let mut binding = text.write().unwrap();
+                        let lock = binding.client(client_id);
+                        match C2S::deserialize(&msg.into_data()) {
+                            C2S::Char(c) => lock.push_char(c),
+                            C2S::Backspace => lock.backspace(),
+                            C2S::Enter => lock.push_char('\n'),
+                            C2S::EnterInsert(enter_insert) => drop(lock.enter_insert(enter_insert)),
+                        }
+                    } else {
+                        trace!("A non-binary message was sent")
                     }
+                    trace!("{:?}", text.read().unwrap().lines().collect::<Vec<_>>());
                 }
             }
         });

@@ -101,17 +101,20 @@ impl<T> State<T> {
                 }
                 self.text.client(self.id).backspace();
                 self.socket.write(C2S::Backspace.into()).unwrap();
+                self.socket.flush().unwrap();
             }
             KeyCode::Enter => {
                 self.text.client(self.id).push_char('\n');
                 self.cursorpos.col = 0;
                 self.cursorpos.row += 1;
                 self.socket.write(C2S::Enter.into()).unwrap();
+                self.socket.flush().unwrap();
             }
             KeyCode::Char(c) => {
                 self.text.client(self.id).push_char(c);
                 self.cursorpos.col += c.len_utf8();
                 self.socket.write(C2S::Char(c).into()).unwrap();
+                self.socket.flush().unwrap();
             }
             KeyCode::Esc => self.mode = Mode::Normal,
             KeyCode::Home => todo!(),
@@ -253,9 +256,8 @@ impl<T> State<T> {
         T: Read + Write,
     {
         let (offset, id) = self.text.client(self.id).enter_insert(pos);
-        self.socket
-            .write(C2S::EnterInsert(EnterInsert { id, offset }).into())
-            .unwrap();
+        self.socket.write(C2S::EnterInsert(pos).into()).unwrap();
+        self.socket.flush().unwrap();
         self.mode = Mode::Insert;
     }
 }
