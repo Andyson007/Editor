@@ -12,7 +12,27 @@ pub enum C2S {
     Char(char),
     Backspace,
     Enter,
-    Infallible(!),
+    EnterInsert(EnterInsert),
+}
+
+pub struct EnterInsert {
+    /// The id of the buffer that was split
+    pub id: usize,
+    /// The offset in that buffer
+    /// Option because appending a character has special behaviour
+    pub offset: Option<usize>,
+}
+
+impl Serialize for EnterInsert {
+    fn serialize(&self) -> VecDeque<u8> {
+        todo!()
+    }
+}
+
+impl Deserialize for EnterInsert {
+    fn deserialize(data: &[u8]) -> Self {
+        todo!()
+    }
 }
 
 impl Serialize for C2S {
@@ -23,7 +43,7 @@ impl Serialize for C2S {
                 .collect(),
             C2S::Enter => [10].into(),
             C2S::Backspace => [8].into(),
-            C2S::Infallible(_) => todo!(),
+            C2S::EnterInsert(a) => a.serialize(),
         }
     }
 }

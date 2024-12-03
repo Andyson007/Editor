@@ -3,8 +3,7 @@
 
 use std::{
     collections::VecDeque,
-    io,
-    io::Read,
+    io::{self, Read},
     mem,
     sync::{Arc, RwLock},
 };
@@ -13,10 +12,10 @@ use append_only_str::AppendOnlyStr;
 use btep::{Deserialize, Serialize};
 use client::Client;
 use piece_table::Piece;
-use utils::iters::IteratorExt;
+use utils::{iters::IteratorExt, other::AutoIncrementing};
 pub mod client;
 
-/// A wrapper around a piece table. 
+/// A wrapper around a piece table.
 /// It creates wrapper methods and adds support for multiple clients to interface more easily with
 /// the piece table
 #[derive(Debug)]
@@ -36,8 +35,8 @@ impl Serialize for &Text {
             let mut ret = VecDeque::new();
             if let Some(x) = &x.slice {
                 ret.push_back(1);
-                ret.extend((x.read().1.start() as u64).to_be_bytes());
-                ret.extend((x.read().1.end() as u64).to_be_bytes());
+                ret.extend((x.read().text.start() as u64).to_be_bytes());
+                ret.extend((x.read().text.end() as u64).to_be_bytes());
             } else {
                 ret.push_back(0);
             }
@@ -89,7 +88,8 @@ impl Deserialize for Text {
 
                 clients.push(Client {
                     piece: Arc::clone(&arced),
-                    buffer: Arc::clone(&arced.read().unwrap().buffers.clients[counter]),
+                    buffer: Arc::clone(&arced.read().unwrap().buffers.clients[counter].1),
+                    id_counter: Arc::clone(&arced.read().unwrap().buffers.clients[counter].0),
                     slice: arced
                         .read()
                         .unwrap()
@@ -100,10 +100,10 @@ impl Deserialize for Text {
                         .iter()
                         .find(|x| {
                             let inner = x.read();
-                            if inner.0 != Some(counter) {
+                            if inner.bufnr != Some(counter) {
                                 return false;
                             };
-                            inner.1.start() == start && inner.1.end() == end
+                            inner.text.start() == start && inner.text.end() == end
                         })
                         .cloned(),
                     bufnr: counter,
@@ -112,7 +112,8 @@ impl Deserialize for Text {
             } else {
                 clients.push(Client {
                     piece: Arc::clone(&arced),
-                    buffer: Arc::clone(&arced.read().unwrap().buffers.clients[counter]),
+                    buffer: Arc::clone(&arced.read().unwrap().buffers.clients[counter].1),
+                    id_counter: Arc::clone(&arced.read().unwrap().buffers.clients[counter].0),
                     slice: None,
                     bufnr: counter,
                     has_deleted: false,
@@ -128,7 +129,7 @@ impl Deserialize for Text {
 }
 
 impl Text {
-    /// Creates a new piece table with the orginal buffer filled in from the reader. 
+    /// Creates a new piece table with the orginal buffer filled in from the reader.
     /// # Errors
     /// - The reader failed to read
     pub fn original_from_reader<T: Read>(read: T) -> io::Result<Self> {
@@ -159,16 +160,18 @@ impl Text {
     /// probably only when failing to lock the buffers
     pub fn add_client(&mut self) -> usize {
         let buf = Arc::new(RwLock::new(AppendOnlyStr::new()));
+        let counter = Arc::new(RwLock::new(AutoIncrementing::new()));
         self.table
             .write()
             .unwrap()
             .buffers
             .clients
-            .push(Arc::clone(&buf));
+            .push((Arc::clone(&counter), Arc::clone(&buf)));
         self.clients.push(Client::new(
             Arc::clone(&self.table),
             buf,
             self.clients.len(),
+            counter,
         ));
         self.clients.len() - 1
     }
@@ -299,7 +302,7 @@ mod test {
                 .unwrap()
                 .read()
                 .iter()
-                .map(|x| x.read().1.as_str().to_string())
+                .map(|x| x.read().text.as_str().to_string())
                 .collect::<Vec<_>>()
         );
         text.client(0).enter_insert(2);
@@ -312,7 +315,7 @@ mod test {
                 .unwrap()
                 .read()
                 .iter()
-                .map(|x| x.read().1.as_str().to_string())
+                .map(|x| x.read().text.as_str().to_string())
                 .collect::<Vec<_>>()
         );
 
@@ -327,7 +330,7 @@ mod test {
                 .unwrap()
                 .read()
                 .iter()
-                .map(|x| x.read().1.as_str().to_string())
+                .map(|x| x.read().text.as_str().to_string())
                 .collect::<Vec<_>>()
         );
 

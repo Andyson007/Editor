@@ -8,7 +8,7 @@ use std::{
     str,
 };
 
-use btep::c2s::C2S;
+use btep::c2s::{EnterInsert, C2S};
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use text::Text;
 use tungstenite::WebSocket;
@@ -252,9 +252,11 @@ impl<T> State<T> {
     where
         T: Read + Write,
     {
-        self.text.client(self.id).enter_insert(pos);
+        let (offset, id) = self.text.client(self.id).enter_insert(pos);
+        self.socket
+            .write(C2S::EnterInsert(EnterInsert { id, offset }).into())
+            .unwrap();
         self.mode = Mode::Insert;
-        todo!("find the id of the buffer that got split")
     }
 }
 /// Stores the current mode of the editor.
