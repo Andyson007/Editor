@@ -89,6 +89,16 @@ impl Piece {
             chars: self.chars(),
         }
     }
+
+    pub fn bufs(&self) -> impl Iterator<Item = StrSlice> {
+        self.piece_table
+            .read_full()
+            .unwrap()
+            .read()
+            .clone()
+            .into_iter()
+            .map(|x| x.read().text.clone())
+    }
 }
 
 #[cfg(test)]

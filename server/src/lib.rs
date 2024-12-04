@@ -9,13 +9,15 @@ use sqlx::{sqlite::SqliteConnectOptions, SqlitePool};
 #[cfg(feature = "security")]
 use std::str::FromStr;
 use std::{
-    fs::File,
-    io::BufReader,
+    fs::{self, File, OpenOptions},
+    io::{BufReader, BufWriter, Write},
     net::{SocketAddrV4, TcpListener},
     path::Path,
     str,
     sync::{Arc, RwLock},
+    time::Duration,
 };
+use tokio::time::sleep;
 
 #[cfg(feature = "security")]
 pub use security::add_user;
@@ -50,7 +52,20 @@ pub async fn run(
     ));
 
     let sockets = Arc::new(RwLock::new(Vec::new()));
-
+    let owned_path = path.to_owned();
+    let writer_text = Arc::clone(&text);
+    tokio::spawn(async move {
+        let text = writer_text;
+        loop {
+            sleep(Duration::from_secs(10)).await;
+            let file = OpenOptions::new().write(true).open(&owned_path).unwrap();
+            let mut writer = BufWriter::new(file);
+            for elem in text.read().unwrap().bufs() {
+                writer.write_all(elem.as_bytes()).unwrap();
+            }
+            info!("Wrote to file")
+        }
+    });
     for (client_id, stream) in server.incoming().enumerate() {
         debug!("new Client {client_id}");
         let stream = stream.unwrap();

@@ -8,7 +8,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use append_only_str::AppendOnlyStr;
+use append_only_str::{slices::StrSlice, AppendOnlyStr};
 use btep::{Deserialize, Serialize};
 use client::Client;
 use piece_table::Piece;
@@ -189,6 +189,10 @@ impl Text {
     /// A failed lock on reading the entire list
     pub fn chars(&self) -> impl Iterator<Item = char> {
         self.table.read().unwrap().chars()
+    }
+
+    pub fn bufs(&self) -> impl Iterator<Item = StrSlice> {
+        self.table.read().unwrap().bufs()
     }
 
     /// returns a mutable reference to a given client
