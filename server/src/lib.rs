@@ -9,6 +9,7 @@ use sqlx::{sqlite::SqliteConnectOptions, SqlitePool};
 #[cfg(feature = "security")]
 use std::str::FromStr;
 use std::{
+    collections::HashMap,
     fs::{File, OpenOptions},
     io::{BufReader, BufWriter, Write},
     net::{SocketAddrV4, TcpListener},
@@ -51,7 +52,7 @@ pub async fn run(
         Text::original_from_reader(BufReader::new(file)).unwrap(),
     ));
 
-    let sockets = Arc::new(RwLock::new(Vec::new()));
+    let sockets = Arc::new(RwLock::new(HashMap::new()));
     let owned_path = path.to_owned();
     let writer_text = Arc::clone(&text);
     tokio::spawn(async move {
@@ -125,27 +126,37 @@ pub async fn run(
             };
             if let Ok(mut websocket) = accept_hdr(stream, callback) {
                 {
-                    debug!("Connected {:?}", username);
+                    debug!("{client_id} Connected {:?}", username);
                     let data = text.read().unwrap();
                     // dbg!(&data);
                     websocket.send(S2C::Full(&*data).into_message()).unwrap();
                     // println!("{data:#?}");
                 }
-                sockets.write().unwrap().push(websocket);
+                sockets.write().unwrap().insert(client_id, websocket);
                 text.write().unwrap().add_client();
                 for (clientnr, client) in sockets.write().as_mut().unwrap().iter_mut().enumerate() {
                     if clientnr == client_id {
                         continue;
                     }
-                    client
+                    if client
+                        .1
                         .write(S2C::<&Text>::NewClient.into_message())
-                        .unwrap();
-                    client.flush().unwrap();
+                        .is_ok()
+                    {
+                        client.1.flush().unwrap();
+                    }
                 }
                 loop {
+                    let mut to_remove = Vec::with_capacity(1);
                     {
                         let mut socket_lock = sockets.write();
-                        let mut_socket = &mut socket_lock.as_mut().unwrap()[client_id];
+                        let mut_socket =
+                            if let Some(x) = socket_lock.as_mut().unwrap().get_mut(&client_id) {
+                                x
+                            } else {
+                                socket_lock.unwrap().remove(&client_id);
+                                break;
+                            };
                         if let Ok(msg) = mut_socket.read() {
                             if msg.is_binary() {
                                 let mut binding = text.write().unwrap();
@@ -159,23 +170,29 @@ pub async fn run(
                                         lock.enter_insert(enter_insert);
                                     }
                                 }
-                                for (clientnr, client) in
-                                    socket_lock.as_mut().unwrap().iter_mut().enumerate()
-                                {
-                                    if clientnr == client_id {
+                                for (clientnr, client) in socket_lock.as_mut().unwrap().iter_mut() {
+                                    if *clientnr == client_id {
                                         continue;
                                     }
-                                    client
-                                        .write(
-                                            S2C::Update::<&Text>((client_id, action))
-                                                .into_message(),
-                                        )
-                                        .unwrap();
-                                    client.flush().unwrap();
+                                    match client.write(
+                                        S2C::Update::<&Text>((client_id, action)).into_message(),
+                                    ) {
+                                        Ok(_) => client.flush().unwrap(),
+                                        Err(e) => {
+                                            to_remove.push(*clientnr);
+                                            warn!("{client_id} {e}")
+                                        }
+                                    };
                                 }
                             } else {
                                 warn!("A non-binary message was sent");
                             }
+                        }
+                    }
+                    {
+                        let mut lock = sockets.write().unwrap();
+                        for x in to_remove {
+                            lock.remove(&x);
                         }
                     }
                     trace!(
