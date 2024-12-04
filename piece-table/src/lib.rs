@@ -38,9 +38,13 @@ pub struct Piece {
 }
 
 #[derive(Debug)]
+/// An element of the piece table
 pub struct TableElem {
+    /// The buffer that the `text` is pointing to
     pub bufnr: Option<usize>,
+    /// The id of this buffer
     pub id: usize,
+    /// A slice to the text
     pub text: StrSlice,
 }
 

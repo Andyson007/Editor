@@ -9,7 +9,7 @@ use sqlx::{sqlite::SqliteConnectOptions, SqlitePool};
 #[cfg(feature = "security")]
 use std::str::FromStr;
 use std::{
-    fs::{self, File, OpenOptions},
+    fs::{File, OpenOptions},
     io::{BufReader, BufWriter, Write},
     net::{SocketAddrV4, TcpListener},
     path::Path,
@@ -60,10 +60,11 @@ pub async fn run(
             sleep(Duration::from_secs(10)).await;
             let file = OpenOptions::new().write(true).open(&owned_path).unwrap();
             let mut writer = BufWriter::new(file);
-            for elem in text.read().unwrap().bufs() {
+            let buf_iter = text.read().unwrap().bufs();
+            for elem in buf_iter {
                 writer.write_all(elem.as_bytes()).unwrap();
             }
-            info!("Wrote to file")
+            info!("Wrote to file");
         }
     });
     for (client_id, stream) in server.incoming().enumerate() {
@@ -173,7 +174,7 @@ pub async fn run(
                                     client.flush().unwrap();
                                 }
                             } else {
-                                warn!("A non-binary message was sent")
+                                warn!("A non-binary message was sent");
                             }
                         }
                     }

@@ -32,6 +32,8 @@ use tungstenite::{
 };
 
 /// Runs a the client side of the editor
+#[allow(clippy::missing_panics_doc)]
+#[allow(clippy::missing_errors_doc)]
 pub fn run(
     address: SocketAddrV4,
     username: &str,
@@ -133,7 +135,7 @@ fn connect_with_auth(
 
     assert!(!host.is_empty());
 
-    let req = Request::builder()
+    let request = Request::builder()
         .method("GET")
         .header("Host", host)
         .header("Connection", "Upgrade")
@@ -150,7 +152,7 @@ fn connect_with_auth(
         .uri(uri)
         .body(())
         .unwrap();
-    let mut ret = connect(req).unwrap();
+    let mut ret = connect(request).unwrap();
     match ret.0.get_mut() {
         MaybeTlsStream::Plain(x) => x.set_nonblocking(true).unwrap(),
         _ => unreachable!(),

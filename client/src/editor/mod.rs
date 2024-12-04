@@ -9,13 +9,10 @@ use std::{
     str,
 };
 
-use btep::{
-    c2s::{EnterInsert, C2S},
-    s2c::S2C,
-};
+use btep::{c2s::C2S, s2c::S2C};
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use text::Text;
-use tungstenite::{handshake::client, WebSocket};
+use tungstenite::WebSocket;
 
 #[derive(Debug)]
 /// The main state for the entire editor. The entireity of the
@@ -259,12 +256,15 @@ impl<T> State<T> {
     where
         T: Read + Write,
     {
-        let (offset, id) = self.text.client(self.id).enter_insert(pos);
+        let (_offset, _id) = self.text.client(self.id).enter_insert(pos);
         self.socket.write(C2S::EnterInsert(pos).into()).unwrap();
         self.socket.flush().unwrap();
         self.mode = Mode::Insert;
     }
 
+    /// Fetches the network for any updates and updates the internal buffer accordingly
+    /// # Panics
+    /// the message received wasn't formatted properly
     pub fn update(&mut self)
     where
         T: Read + Write,
@@ -283,7 +283,7 @@ impl<T> State<T> {
                 }
                 S2C::NewClient => {
                     self.text.add_client();
-                },
+                }
             }
         }
     }

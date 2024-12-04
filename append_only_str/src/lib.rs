@@ -156,7 +156,7 @@ impl AppendOnlyStr {
     /// This assumes that the bytes are utf-8 compliant
     unsafe fn push_bytes(&mut self, bytes: &[u8]) {
         self.reserve(bytes.len());
-        // # Safety
+        // Safety:
         // We just reserved enough bytes
         unsafe {
             self.write_unchecked(bytes);
@@ -165,6 +165,9 @@ impl AppendOnlyStr {
 
     /// Pushes a string onto the `AppendOnlyStr`
     pub fn push_str(&mut self, str: &str) {
+        // SAFETY:
+        // We know that the string we have been given and extending self with those bytes is fine
+        // because the slice remains utf-8 compliant
         unsafe { self.push_bytes(str.as_bytes()) }
     }
 
@@ -243,6 +246,8 @@ where
 /// SAFETY: `AppendOnlyStr` does not allow for interior mutability
 /// without exclusive access and is therefore `Sync` & `Send`
 unsafe impl Sync for AppendOnlyStr {}
+/// SAFETY: `AppendOnlyStr` does not allow for interior mutability
+/// without exclusive access and is therefore `Sync` & `Send`
 unsafe impl Send for AppendOnlyStr {}
 
 #[cfg(test)]

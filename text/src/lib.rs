@@ -191,6 +191,9 @@ impl Text {
         self.table.read().unwrap().chars()
     }
 
+    /// Creates an iterator over the buffers of the table
+    /// # Panics
+    /// - Stuff got poisoned
     pub fn bufs(&self) -> impl Iterator<Item = StrSlice> {
         self.table.read().unwrap().bufs()
     }

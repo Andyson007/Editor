@@ -87,10 +87,12 @@ where
         for _ in 0..N {
             ret_iter.next()?.write(self.iter.next()?);
         }
-        //// # Safety
-        //// We have iterated over the entirity of ret meaning that every item has been written to.
-        //// we can therefore conclude that veery location has been visited
-        Some(unsafe { MaybeUninit::array_assume_init(ret) })
+        Some(
+            // Safety:
+            // We have iterated over the entirity of ret meaning that every item has been written to.
+            // we can therefore conclude that veery location has been visited
+            unsafe { MaybeUninit::array_assume_init(ret) },
+        )
     }
 }
 
