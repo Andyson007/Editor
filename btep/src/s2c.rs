@@ -1,11 +1,8 @@
-use crate::c2s::C2S;
-use crate::Deserialize;
-use crate::Serialize;
-
-use std::collections::VecDeque;
-use std::mem;
+//! Communication from the server to the client
+use std::{collections::VecDeque, mem};
 use tungstenite::Message;
 use utils::iters::IteratorExt;
+use {crate::c2s::C2S, crate::Deserialize, crate::Serialize};
 
 /// S2C or Server to Client
 /// Encodes information that originates from the server and sendt to the client
@@ -13,7 +10,9 @@ pub enum S2C<T> {
     /// The initial message over the websocket.
     /// This should usually be the entireity of the file
     Full(T),
+    /// A client has made an update to their buffer
     Update((usize, C2S)),
+    /// A client has connected
     NewClient,
 }
 
@@ -32,7 +31,7 @@ impl<T> S2C<T> {
             Self::Update(_) => {
                 serialized.push_front(1);
             }
-            S2C::NewClient => serialized.push_front(2),
+            Self::NewClient => serialized.push_front(2),
         }
         Message::Binary(serialized.into())
     }
@@ -96,6 +95,6 @@ where
     T: Serialize,
 {
     fn from(value: S2C<T>) -> Self {
-        Message::Binary(value.serialize().into())
+        Self::Binary(value.serialize().into())
     }
 }

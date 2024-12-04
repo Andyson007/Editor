@@ -51,11 +51,11 @@ impl ByteSlice {
         if self.raw.ptr().is_null() {
             return &[];
         }
-        //// # SAFETY
-        //// We never make the capacity greater than the amount of
-        //// space allocated. and therefore a slice won't read
-        //// uninitialized memory.
-        //// We also know that self.raw isn't a nullptr
+        // SAFETY:
+        // We never make the capacity greater than the amount of
+        // space allocated. and therefore a slice won't read
+        // uninitialized memory.
+        // We also know that self.raw isn't a nullptr
         unsafe {
             std::ptr::slice_from_raw_parts(
                 self.raw.ptr().cast_const().add(self.start),
@@ -90,7 +90,16 @@ impl Deref for ByteSlice {
     type Target = [u8];
 
     fn deref(&self) -> &Self::Target {
-        unsafe { std::slice::from_raw_parts(self.raw.ptr().add(self.start), self.end - self.start) }
+        if self.raw.ptr().is_null() {
+            &[]
+        } else {
+            // SAFETY:
+            // - We know that we are storing and the slice is therefore not zero sized.
+            // - We know that we aren't dereferencing a nullptr
+            unsafe {
+                std::slice::from_raw_parts(self.raw.ptr().add(self.start), self.end - self.start)
+            }
+        }
     }
 }
 
@@ -181,7 +190,7 @@ impl StrSlice {
     /// Converts a `StrSlice` to a string slice
     #[must_use]
     pub fn as_str(&self) -> &str {
-        // # Safety
+        // Safety:
         // We know that the byteslice is utf at all times
         unsafe { str::from_utf8_unchecked(self.byteslice.as_bytes()) }
     }
@@ -223,7 +232,7 @@ impl Deref for StrSlice {
     type Target = str;
 
     fn deref(&self) -> &Self::Target {
-        // # Safety
+        // SAFETY:
         // This is safe because we checked for utf-8 compilance when creating the struct
         unsafe { str::from_utf8_unchecked(&self.byteslice) }
     }

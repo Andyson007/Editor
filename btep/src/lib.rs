@@ -5,6 +5,7 @@
 pub mod s2c;
 pub mod c2s;
 
+/// Reexports stuff for easier access
 pub mod prelude {
     pub use crate::s2c::*;
     pub use crate::c2s::*;

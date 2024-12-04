@@ -1,6 +1,0 @@
-This is a file
-just writ ng to the file as you often do
-
-this is the second line of that file
-this is a really long which should check how this client handles things such as wrapping text or whether it does other stupid stuff
-more testing

@@ -90,6 +90,9 @@ impl Piece {
         }
     }
 
+    /// Creates an iterator over the internal buffers of the piece table.
+    /// # Panics
+    /// the piece tables state got poisoned
     pub fn bufs(&self) -> impl Iterator<Item = StrSlice> {
         self.piece_table
             .read_full()
