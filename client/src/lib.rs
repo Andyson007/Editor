@@ -6,7 +6,7 @@ use base64::{prelude::BASE64_STANDARD, Engine};
 use btep::prelude::S2C;
 use crossterm::{
     cursor,
-    event::{read, EnableBracketedPaste, Event},
+    event::{self, EnableBracketedPaste, Event},
     execute,
     style::Print,
     terminal::{
@@ -20,6 +20,7 @@ use std::{
     io::{self, Write},
     net::{SocketAddrV4, TcpStream},
     str,
+    time::Duration,
 };
 use text::Text;
 use tungstenite::{
@@ -41,13 +42,18 @@ pub fn run(
 
     let (mut socket, _response) = connect_with_auth(address, username, password);
 
-    let S2C::Full(initial_text) = S2C::<Text>::from_message(socket.read()?).unwrap() else {
+    let message = loop {
+        if let Ok(x) = socket.read() {
+            break x;
+        }
+    };
+
+    let S2C::Full(initial_text) = S2C::<Text>::from_message(message).unwrap() else {
         panic!("Initial message in wrong protocol")
     };
 
     execute!(out, EnterAlternateScreen, EnableBracketedPaste)?;
     enable_raw_mode().unwrap();
-
 
     let mut app = State::new(initial_text, socket);
 
@@ -57,17 +63,21 @@ pub fn run(
 
     loop {
         // `read()` blocks until an `Event` is available
-        match read()? {
-            Event::Key(event) => {
-                if app.handle_keyevent(&event) {
-                    break;
-                };
-            }
-            Event::Mouse(_event) => todo!("No mouse support sorry"),
-            Event::Paste(_data) => todo!("No paste support sorry"),
-            Event::Resize(_width, _height) => (),
-            Event::FocusGained | Event::FocusLost => (),
-        };
+        if event::poll(Duration::from_secs(0)).unwrap() {
+            match event::read()? {
+                Event::Key(event) => {
+                    if app.handle_keyevent(&event) {
+                        break;
+                    };
+                }
+                Event::Mouse(_event) => todo!("No mouse support sorry"),
+                Event::Paste(_data) => todo!("No paste support sorry"),
+                Event::Resize(_width, _height) => (),
+                Event::FocusGained | Event::FocusLost => (),
+            };
+        } else {
+            app.update();
+        }
         redraw(&mut out, 0, &app)?;
         out.flush()?;
     }
@@ -140,5 +150,10 @@ fn connect_with_auth(
         .uri(uri)
         .body(())
         .unwrap();
-    connect(req).unwrap()
+    let mut ret = connect(req).unwrap();
+    match ret.0.get_mut() {
+        MaybeTlsStream::Plain(x) => x.set_nonblocking(true).unwrap(),
+        _ => unreachable!(),
+    };
+    ret
 }

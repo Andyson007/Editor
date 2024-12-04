@@ -3,7 +3,9 @@ use crate::Deserialize;
 use crate::Serialize;
 
 use std::collections::VecDeque;
+use std::mem;
 use tungstenite::Message;
+use utils::iters::IteratorExt;
 
 /// S2C or Server to Client
 /// Encodes information that originates from the server and sendt to the client
@@ -12,6 +14,7 @@ pub enum S2C<T> {
     /// This should usually be the entireity of the file
     Full(T),
     Update((usize, C2S)),
+    NewClient,
 }
 
 impl<T> S2C<T> {
@@ -29,6 +32,7 @@ impl<T> S2C<T> {
             Self::Update(_) => {
                 serialized.push_front(1);
             }
+            S2C::NewClient => serialized.push_front(2),
         }
         Message::Binary(serialized.into())
     }
@@ -36,7 +40,8 @@ impl<T> S2C<T> {
 
 impl<T> S2C<T> {
     /// Converts a message into a byte array
-    ///
+    /// # Errors
+    /// there is no data in the stream
     /// # Panics
     /// The first byte didn't specify a valid format
     #[must_use]
@@ -47,10 +52,22 @@ impl<T> S2C<T> {
         let Message::Binary(data) = msg else {
             panic!("wrong message type")
         };
-        match data.first()? {
-            0 => Some(Self::Full(T::deserialize(&data[1..]))),
+        let mut iter = data.iter();
+        Some(match iter.next()? {
+            0 => Self::Full(T::deserialize(&data[1..])),
+            1 => {
+                let id = u64::from_be_bytes(
+                    iter.by_ref()
+                        .copied()
+                        .chunks::<{ mem::size_of::<u64>() }>()
+                        .next()?,
+                ) as usize;
+                let action = C2S::deserialize(&iter.copied().collect::<Vec<_>>());
+                Self::Update((id, action))
+            }
+            2 => Self::NewClient,
             _ => panic!("An invalid specifier was found"),
-        }
+        })
     }
 }
 
@@ -59,14 +76,18 @@ where
     T: Serialize,
 {
     fn serialize(&self) -> VecDeque<u8> {
+        let mut ret = VecDeque::new();
         match self {
-            Self::Full(x) => x.serialize(),
-            Self::Update((id, action)) => {
-                let mut ret: VecDeque<u8> = (*id as u64).to_be_bytes().into();
-                ret.extend(action.serialize());
-                ret
+            Self::Full(x) => {
+                ret.extend(x.serialize());
             }
-        }
+            Self::Update((id, action)) => {
+                ret.extend((*id as u64).to_be_bytes());
+                ret.extend(action.serialize());
+            }
+            Self::NewClient => (),
+        };
+        ret
     }
 }
 

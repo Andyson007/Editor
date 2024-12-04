@@ -2,16 +2,20 @@
 //! This includes handling keypressess and adding these
 //! to the queue for sending to the server, but *not*
 //! actually sending them
+use core::panic;
 use std::{
     cmp,
     io::{Read, Write},
     str,
 };
 
-use btep::c2s::{EnterInsert, C2S};
+use btep::{
+    c2s::{EnterInsert, C2S},
+    s2c::S2C,
+};
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use text::Text;
-use tungstenite::WebSocket;
+use tungstenite::{handshake::client, WebSocket};
 
 #[derive(Debug)]
 /// The main state for the entire editor. The entireity of the
@@ -259,6 +263,29 @@ impl<T> State<T> {
         self.socket.write(C2S::EnterInsert(pos).into()).unwrap();
         self.socket.flush().unwrap();
         self.mode = Mode::Insert;
+    }
+
+    pub fn update(&mut self)
+    where
+        T: Read + Write,
+    {
+        if let Ok(msg) = self.socket.read() {
+            match S2C::<Text>::from_message(msg).unwrap() {
+                S2C::Full(_) => unreachable!("A full buffer shouldn't be sent"),
+                S2C::Update((client_id, action)) => {
+                    let client = self.text.client(client_id);
+                    match action {
+                        C2S::Char(c) => client.push_char(c),
+                        C2S::Backspace => client.backspace(),
+                        C2S::Enter => client.push_char('\n'),
+                        C2S::EnterInsert(pos) => drop(client.enter_insert(pos)),
+                    }
+                }
+                S2C::NewClient => {
+                    self.text.add_client();
+                },
+            }
+        }
     }
 }
 /// Stores the current mode of the editor.
