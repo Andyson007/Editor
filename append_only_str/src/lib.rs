@@ -40,7 +40,7 @@ pub struct AppendOnlyStr {
 impl std::fmt::Debug for AppendOnlyStr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("AppendOnlyStr")
-            .field("data", &&*self.slice(..))
+            .field("data", &&*self.str_slice(..))
             .field("len", &self.len)
             .finish()
     }

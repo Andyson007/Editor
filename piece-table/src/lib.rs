@@ -13,7 +13,10 @@ pub mod table;
 use append_only_str::{slices::StrSlice, AppendOnlyStr};
 use btep::{Deserialize, Serialize};
 use table::{InnerTable, LockError, Table};
-use utils::iters::{InnerIteratorExt, IteratorExt};
+use utils::{
+    iters::{InnerIteratorExt, IteratorExt},
+    other::AutoIncrementing,
+};
 
 /// A wrapper around all the buffers
 /// This includes the append buffers for each of the clients, and the original buffer
@@ -22,7 +25,7 @@ pub struct Buffers {
     /// The original file content
     pub original: AppendOnlyStr,
     /// The appendbuffers for each of the clients
-    pub clients: Vec<Arc<RwLock<AppendOnlyStr>>>,
+    pub clients: Vec<(Arc<RwLock<AutoIncrementing>>, Arc<RwLock<AppendOnlyStr>>)>,
 }
 
 /// A complete Piece table. It has support for handling multiple clients at the same time
@@ -31,7 +34,14 @@ pub struct Piece {
     /// Holds the buffers that get modified when anyone inserts
     pub buffers: Buffers,
     /// stores the pieces to reconstruct the whole file
-    pub piece_table: Table<(Option<usize>, StrSlice)>,
+    pub piece_table: Table<TableElem>,
+}
+
+#[derive(Debug)]
+pub struct TableElem {
+    pub bufnr: Option<usize>,
+    pub id: usize,
+    pub text: StrSlice,
 }
 
 impl Piece {
@@ -40,7 +50,12 @@ impl Piece {
     pub fn new() -> Self {
         let original: AppendOnlyStr = "".into();
         Self {
-            piece_table: std::iter::once((None, original.str_slice(..))).collect(),
+            piece_table: std::iter::once(TableElem {
+                id: 0,
+                bufnr: None,
+                text: original.str_slice(..),
+            })
+            .collect(),
             buffers: Buffers {
                 original,
                 clients: vec![],
@@ -59,7 +74,12 @@ impl Piece {
         let original: AppendOnlyStr = string.into();
 
         Ok(Self {
-            piece_table: iter::once((None, original.str_slice(..))).collect(),
+            piece_table: iter::once(TableElem {
+                bufnr: None,
+                id: 0,
+                text: original.str_slice(..),
+            })
+            .collect(),
             buffers: Buffers {
                 original,
                 clients: vec![],
@@ -74,53 +94,75 @@ impl Piece {
     pub fn insert_at(
         &mut self,
         pos: usize,
-        bufnr: usize,
-    ) -> Option<InnerTable<(Option<usize>, StrSlice)>> {
+        clientid: usize,
+    ) -> Option<(Option<usize>, InnerTable<TableElem>)> {
         let binding = self.piece_table.write_full().unwrap();
         let mut to_split = binding.write();
         let mut cursor = to_split.cursor_front_mut();
-        let mut curr_pos = cursor.current().unwrap().read().1.len();
+        let mut curr_pos = cursor.current().unwrap().read().text.len();
         let is_end = loop {
             if curr_pos > pos {
                 break false;
             }
             cursor.move_next();
             if let Some(x) = cursor.current() {
-                curr_pos += x.read().1.len();
+                curr_pos += x.read().text.len();
             } else {
                 break true;
             }
         };
 
-        if is_end {
+        let offset = if is_end {
+            // NOTE: We rely on the cursors position later
             cursor.move_prev();
-            let curr = self.buffers.clients[bufnr].read().unwrap();
+            let curr = self.buffers.clients[clientid].1.read().unwrap();
             cursor.insert_after(InnerTable::new(
-                (Some(bufnr), curr.str_slice(curr.len()..)),
+                TableElem {
+                    bufnr: Some(clientid),
+                    text: curr.str_slice(curr.len()..),
+                    id: self.buffers.clients[clientid].0.write().unwrap().get()
+                        * self.buffers.clients.len()
+                        + clientid,
+                },
                 self.piece_table.state(),
             ));
+            None
         } else {
             let (buf_of_split, current) = {
                 let current = cursor.current().unwrap().read();
-                (current.0, current.1.clone())
+                (current.bufnr, current.text.clone())
             };
             let offset = pos - (curr_pos - current.len());
 
             if offset != 0 {
                 cursor.insert_before(InnerTable::new(
-                    (buf_of_split, current.subslice(..offset)?),
+                    TableElem {
+                        bufnr: buf_of_split,
+                        text: current.subslice(..offset)?,
+                        id: self.buffers.clients[clientid].0.write().unwrap().get()
+                            * self.buffers.clients.len()
+                            + clientid,
+                    },
                     self.piece_table.state(),
                 ));
             }
 
             cursor.insert_after(InnerTable::new(
-                (buf_of_split, current.subslice(offset..)?),
+                TableElem {
+                    bufnr: buf_of_split,
+                    text: current.subslice(offset..)?,
+                    id: self.buffers.clients[clientid].0.write().unwrap().get()
+                        * self.buffers.clients.len()
+                        + clientid,
+                },
                 self.piece_table.state(),
             ));
-            let curr = self.buffers.clients[bufnr].read().unwrap();
-            cursor.current().unwrap().write().unwrap().1 = curr.str_slice(curr.len()..);
-        }
-        Some(cursor.current().unwrap().clone())
+            let curr = self.buffers.clients[clientid].1.read().unwrap();
+            cursor.current().unwrap().write().unwrap().text = curr.str_slice(curr.len()..);
+            cursor.current().unwrap().write().unwrap().bufnr = Some(clientid);
+            Some(offset)
+        };
+        Some((offset, cursor.current().unwrap().clone()))
     }
 
     /// Locks down the full list for reading.
@@ -129,7 +171,7 @@ impl Piece {
     /// - The order of elements cannot be changed
     /// # Errors
     /// - The state value is poisoned
-    pub fn read_full(&self) -> Result<table::TableReader<(Option<usize>, StrSlice)>, LockError> {
+    pub fn read_full(&self) -> Result<table::TableReader<TableElem>, LockError> {
         self.piece_table.read_full()
     }
 
@@ -139,7 +181,7 @@ impl Piece {
     /// - No reading lock can be made
     /// # Errors
     /// - The state value is poisoned
-    pub fn write_full(&self) -> Result<table::TableWriter<(Option<usize>, StrSlice)>, LockError> {
+    pub fn write_full(&self) -> Result<table::TableWriter<TableElem>, LockError> {
         self.piece_table.write_full()
     }
 }
@@ -159,19 +201,20 @@ impl Serialize for &Piece {
             // parse. This is useful because the alternative is the specify the strings length,
             // which would take up at least as many bytes
             ret.push_back(0xfe);
-            ret.extend(client.read().unwrap().str_slice(..).as_str().bytes());
+            ret.extend((client.0.read().unwrap().peek() as u64).to_be_bytes());
+            ret.extend(client.1.read().unwrap().str_slice(..).as_str().bytes());
         }
         // Might be useless, but it's a single byte
         ret.push_back(0xff);
-
         ret.extend((self.piece_table.read_full().unwrap().read().len() as u64).to_be_bytes());
 
         for piece in self.piece_table.read_full().unwrap().read().iter() {
             let piece = piece.read();
             // NOTE: This probably shouldn't use u64::MAX, but idk about a better way
-            ret.extend((piece.0.map_or(u64::MAX, |x| x as u64)).to_be_bytes());
-            ret.extend((piece.1.start() as u64).to_be_bytes());
-            ret.extend((piece.1.end()).to_be_bytes());
+            ret.extend((piece.bufnr.map_or(u64::MAX, |x| x as u64)).to_be_bytes());
+            ret.extend((piece.id as u64).to_be_bytes());
+            ret.extend((piece.text.start() as u64).to_be_bytes());
+            ret.extend((piece.text.end() as u64).to_be_bytes());
         }
         ret
     }
@@ -195,11 +238,21 @@ impl Deserialize for Piece {
             if iter.next() == Some(255) {
                 break;
             }
-            client_buffers.push(Arc::new(RwLock::new(
+            let counter_start = u64::from_be_bytes(
                 iter.by_ref()
-                    .take_while(|x| !(*x == 254 || *x == 255))
-                    .collect::<AppendOnlyStr>(),
-            )));
+                    .take(mem::size_of::<u64>())
+                    .collect::<Vec<_>>()
+                    .try_into()
+                    .unwrap(),
+            ) as usize;
+
+            let buf_content = iter
+                .take_while_ref(|x| !(*x == 254 || *x == 255))
+                .collect::<AppendOnlyStr>();
+            client_buffers.push((
+                Arc::new(RwLock::new(AutoIncrementing::new_with_start(counter_start))),
+                Arc::new(RwLock::new(buf_content)),
+            ));
         }
 
         let pieces: [u8; 8] = iter
@@ -208,27 +261,33 @@ impl Deserialize for Piece {
             .collect::<Vec<_>>()
             .try_into()
             .unwrap();
-
         let piece_count = usize::try_from(u64::from_be_bytes(pieces)).unwrap();
         let table = iter
             .by_ref()
-            .chunks::<{ 3 * mem::size_of::<u64>() }>()
+            .chunks::<{ 4 * mem::size_of::<u64>() }>()
             .take(piece_count)
             .map(|x| {
                 let slices = x
                     .into_iter()
                     .chunks::<{ mem::size_of::<u64>() }>()
                     .collect::<Vec<_>>();
-                let start = usize::try_from(u64::from_be_bytes(slices[1])).unwrap();
-                let end = usize::try_from(u64::from_be_bytes(slices[2])).unwrap();
-                match u64::from_be_bytes(slices[0]) {
-                    u64::MAX => (None, original_buffer.str_slice(start..end)),
+                let bufnr = u64::from_be_bytes(slices[0]);
+                let id = usize::try_from(u64::from_be_bytes(slices[1])).unwrap();
+                let start = usize::try_from(u64::from_be_bytes(slices[2])).unwrap();
+                let end = usize::try_from(u64::from_be_bytes(slices[3])).unwrap();
+                match bufnr {
+                    u64::MAX => TableElem {
+                        bufnr: None,
+                        text: original_buffer.str_slice(start..end),
+                        id,
+                    },
                     bufnr => {
                         let buf = usize::try_from(bufnr).unwrap();
-                        (
-                            Some(buf),
-                            client_buffers[buf].read().unwrap().str_slice(start..end),
-                        )
+                        TableElem {
+                            bufnr: Some(buf),
+                            text: client_buffers[buf].1.read().unwrap().str_slice(start..end),
+                            id,
+                        }
                     }
                 }
             })
@@ -259,8 +318,8 @@ mod test {
         let binding = binding.read();
         let mut iter = binding.iter();
         let next = iter.next().unwrap().read();
-        assert_eq!(&*next.1, "test");
-        assert_eq!(next.0, None);
+        assert_eq!(&*next.text, "test");
+        assert_eq!(next.bufnr, None);
         assert!(iter.next().is_none());
     }
 }

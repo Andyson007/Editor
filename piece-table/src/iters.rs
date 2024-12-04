@@ -76,7 +76,7 @@ impl Piece {
                 .read()
                 .clone()
                 .into_iter()
-                .map(|x| x.read().1.clone()),
+                .map(|x| x.read().text.clone()),
             current_iter: None,
         }
     }
@@ -99,15 +99,21 @@ mod test {
     };
 
     use append_only_str::AppendOnlyStr;
+    use utils::other::AutoIncrementing;
 
-    use crate::{table::Table, Buffers, Piece};
+    use crate::{table::Table, Buffers, Piece, TableElem};
 
     #[test]
     fn test_chars_no_clients() {
         let text = "test\nmore tests\n";
         let original: AppendOnlyStr = text.into();
         let piece = Piece {
-            piece_table: iter::once((None, original.str_slice(..))).collect(),
+            piece_table: iter::once(TableElem {
+                bufnr: None,
+                text: original.str_slice(..),
+                id: 0,
+            })
+            .collect(),
             buffers: Buffers {
                 original,
                 clients: vec![],
@@ -123,7 +129,12 @@ mod test {
         let text = "test\nmore tests\n";
         let original: AppendOnlyStr = text.into();
         let piece = Piece {
-            piece_table: iter::once((None, original.str_slice(..))).collect(),
+            piece_table: iter::once(TableElem {
+                bufnr: None,
+                id: 0,
+                text: original.str_slice(..),
+            })
+            .collect(),
             buffers: Buffers {
                 original,
                 clients: vec![],
@@ -141,7 +152,11 @@ mod test {
         let text = "test\nmore tests\na";
         let original: AppendOnlyStr = text.into();
         let piece = Piece {
-            piece_table: Table::from_iter(std::iter::once((None, original.str_slice(..)))),
+            piece_table: Table::from_iter(std::iter::once(TableElem {
+                bufnr: None,
+                id: 0,
+                text: original.str_slice(..),
+            })),
             buffers: Buffers {
                 original,
                 clients: vec![],
@@ -161,15 +176,23 @@ mod test {
         let client1: Arc<RwLock<AppendOnlyStr>> = Arc::new(RwLock::new("def".into()));
         let piece = Piece {
             piece_table: [
-                (None, original.str_slice(..)),
-                (Some(0), Arc::clone(&client1).read().unwrap().str_slice(..)),
+                TableElem {
+                    bufnr: None,
+                    text: original.str_slice(..),
+                    id: 0,
+                },
+                TableElem {
+                    bufnr: Some(0),
+                    text: Arc::clone(&client1).read().unwrap().str_slice(..),
+                    id: 1,
+                },
             ]
             .into_iter()
             .collect(),
 
             buffers: Buffers {
                 original,
-                clients: vec![client1],
+                clients: vec![(Arc::new(RwLock::new(AutoIncrementing::new())), client1)],
             },
         };
 
@@ -188,24 +211,31 @@ mod test {
         let original: AppendOnlyStr = "acd".into();
         let client1: Arc<RwLock<AppendOnlyStr>> = Arc::new(RwLock::new("bef".into()));
         let piece = Piece {
-            piece_table: Table::from_iter(
-                [
-                    (None, original.str_slice(0..1)),
-                    (
-                        Some(0),
-                        Arc::clone(&client1).read().unwrap().str_slice(0..1),
-                    ),
-                    (None, original.str_slice(1..3)),
-                    (
-                        Some(0),
-                        Arc::clone(&client1).read().unwrap().str_slice(1..3),
-                    ),
-                ]
-                .into_iter(),
-            ),
+            piece_table: Table::from_iter([
+                TableElem {
+                    bufnr: None,
+                    id: 0,
+                    text: original.str_slice(0..1),
+                },
+                TableElem {
+                    bufnr: Some(0),
+                    text: Arc::clone(&client1).read().unwrap().str_slice(0..1),
+                    id: 1,
+                },
+                TableElem {
+                    bufnr: None,
+                    id: 2,
+                    text: original.str_slice(1..3),
+                },
+                TableElem {
+                    bufnr: Some(0),
+                    text: Arc::clone(&client1).read().unwrap().str_slice(1..3),
+                    id: 3,
+                },
+            ]),
             buffers: Buffers {
                 original,
-                clients: vec![client1],
+                clients: vec![(Arc::new(RwLock::new(AutoIncrementing::new())), client1)],
             },
         };
 

@@ -4,16 +4,18 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use append_only_str::{slices::StrSlice, AppendOnlyStr};
+use append_only_str::AppendOnlyStr;
 
-use piece_table::{table::InnerTable, Piece};
+use piece_table::{table::InnerTable, Piece, TableElem};
+use utils::other::AutoIncrementing;
 
 /// A client which can input text into a `Piece`
 #[derive(Debug)]
 pub struct Client {
     pub(crate) piece: Arc<RwLock<Piece>>,
     pub(crate) buffer: Arc<RwLock<AppendOnlyStr>>,
-    pub(crate) slice: Option<InnerTable<(Option<usize>, StrSlice)>>,
+    pub(crate) slice: Option<InnerTable<TableElem>>,
+    pub(crate) id_counter: Arc<RwLock<AutoIncrementing>>,
     pub(crate) bufnr: usize,
     /// Stores whether its safe to insert a chracter again
     /// # Necessity
@@ -29,6 +31,7 @@ impl Client {
         piece: Arc<RwLock<Piece>>,
         buffer: Arc<RwLock<AppendOnlyStr>>,
         bufnr: usize,
+        id_counter: Arc<RwLock<AutoIncrementing>>,
     ) -> Self {
         Self {
             piece,
@@ -36,6 +39,7 @@ impl Client {
             slice: None,
             bufnr,
             has_deleted: false,
+            id_counter,
         }
     }
 
@@ -47,7 +51,7 @@ impl Client {
     pub fn backspace(&mut self) {
         let binding = self.slice.as_ref().unwrap();
         let slice = binding.read();
-        if slice.1.is_empty() {
+        if slice.text.is_empty() {
             let binding = self
                 .piece
                 .write()
@@ -58,10 +62,10 @@ impl Client {
 
             let binding2 = binding.write();
             let mut cursor = binding2.cursor_front();
-            while cursor.current().unwrap().read().1 != slice.1 {
+            while cursor.current().unwrap().read().text != slice.text {
                 cursor.move_next();
             }
-            while cursor.current().unwrap().read().1.is_empty() {
+            while cursor.current().unwrap().read().text.is_empty() {
                 cursor.move_prev();
             }
             let Some(prev) = cursor.current() else {
@@ -69,16 +73,16 @@ impl Client {
             };
             drop(slice);
             let slice = &mut prev.write().unwrap();
-            slice.1 = slice
-                .1
-                .subslice(0..slice.1.len() - slice.1.chars().last().unwrap().len_utf8())
+            slice.text = slice
+                .text
+                .subslice(0..slice.text.len() - slice.text.chars().last().unwrap().len_utf8())
                 .unwrap();
         } else {
             drop(slice);
             let slice = &mut binding.write().unwrap();
-            slice.1 = slice
-                .1
-                .subslice(0..slice.1.len() - slice.1.chars().last().unwrap().len_utf8())
+            slice.text = slice
+                .text
+                .subslice(0..slice.text.len() - slice.text.chars().last().unwrap().len_utf8())
                 .unwrap();
         }
         self.has_deleted = true;
@@ -108,19 +112,22 @@ impl Client {
         if self.has_deleted {
             let slice = self.slice.as_mut().unwrap();
 
+            let client_count = self.piece.read().unwrap().buffers.clients.len();
             let binding = &self.piece.write().unwrap().piece_table;
             let binding2 = binding.write_full().unwrap();
             let mut binding3 = binding2.write();
             let mut cursor = binding3.cursor_front_mut();
-            while cursor.current().unwrap().read().1 != slice.read().1 {
+            while cursor.current().unwrap().read().text != slice.read().text {
                 cursor.move_next();
             }
             cursor.insert_after(InnerTable::new(
-                (
-                    Some(self.bufnr),
-                    self.buffer.read().unwrap().str_slice_end(),
-                ),
+                TableElem {
+                    bufnr: Some(self.bufnr),
+                    text: self.buffer.read().unwrap().str_slice_end(),
+                    id: self.id_counter.write().unwrap().get() * client_count + self.bufnr,
+                },
                 binding.state(),
+                // self.id_counter.write().unwrap().get() * client_count + self.bufnr,
             ));
             self.slice = Some(cursor.peek_next().unwrap().clone());
             self.has_deleted = false;
@@ -129,32 +136,36 @@ impl Client {
         let slice = self.slice.as_mut().unwrap();
 
         self.buffer.write().unwrap().push_str(to_push);
-        let a = &mut slice.write().unwrap().1;
+        let a = &mut slice.write().unwrap().text;
         *a = self.buffer.read().unwrap().str_slice(a.start()..);
     }
 
     /// Allows for insertion.
     /// Takes an `InnerTable` as an argument as to where the text should be inserted
+    /// # Return
+    /// It returns the id of the buffer that got split
     /// # Panics
     /// probably only failed locks
-    pub fn enter_insert(&mut self, index: usize) {
-        let inner_table = self
+    pub fn enter_insert(&mut self, index: usize) -> (Option<usize>, usize) {
+        let (offset, inner_table) = self
             .piece
             .write()
             .unwrap()
             .insert_at(index, self.bufnr)
             .unwrap();
+        let idx = inner_table.read().id;
         // FIXME: The reason this is here is to fix a stupid bug. I should use std::pin::Pin to fix
         // this.
         // The issue is that entering insert mode and immediately exiting insert mode results in
         // two identical slices. They will have the same start, end **and** pointers. We push an
         // arbitrary string here to offset this pointer.
         self.buffer.write().unwrap().push_str("\0");
-        inner_table.write().unwrap().1 = self
+        inner_table.write().unwrap().text = self
             .buffer
             .read()
             .unwrap()
             .str_slice(self.buffer.read().unwrap().len()..);
         self.slice = Some(inner_table);
+        (offset, idx)
     }
 }

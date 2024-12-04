@@ -3,7 +3,7 @@
 #[cfg(feature = "security")]
 mod security;
 use base64::{prelude::BASE64_STANDARD, Engine};
-use btep::Btep;
+use btep::{c2s::C2S, prelude::S2C, Deserialize};
 #[cfg(feature = "security")]
 use sqlx::{sqlite::SqliteConnectOptions, SqlitePool};
 #[cfg(feature = "security")]
@@ -23,7 +23,6 @@ pub use security::add_user;
 use security::{auth_check, create_tables};
 
 use text::Text;
-// I want to keep the tracing tools in scope
 use tokio_tungstenite::tungstenite::{
     accept_hdr,
     handshake::server::{Request, Response},
@@ -49,7 +48,14 @@ pub async fn run(
     let text = Arc::new(RwLock::new(
         Text::original_from_reader(BufReader::new(file)).unwrap(),
     ));
-    for stream in server.incoming() {
+
+    let sockets = Arc::new(RwLock::new(Vec::new()));
+
+    for (client_id, stream) in server.incoming().enumerate() {
+        debug!("new Client {client_id}");
+        let stream = stream.unwrap();
+        stream.set_nonblocking(true).unwrap();
+        let sockets = Arc::clone(&sockets);
         let text = text.clone();
         #[cfg(feature = "security")]
         let pool = Arc::clone(&pool);
@@ -101,18 +107,67 @@ pub async fn run(
                     Ok(response)
                 }
             };
-            if let Ok(mut websocket) = accept_hdr(stream.unwrap(), callback) {
+            if let Ok(mut websocket) = accept_hdr(stream, callback) {
                 {
                     debug!("Connected {:?}", username);
                     let data = text.read().unwrap();
                     // dbg!(&data);
-                    websocket.send(Btep::Full(&*data).into_message()).unwrap();
+                    websocket.send(S2C::Full(&*data).into_message()).unwrap();
+                    // println!("{data:#?}");
+                }
+                sockets.write().unwrap().push(websocket);
+                text.write().unwrap().add_client();
+                for (clientnr, client) in sockets.write().as_mut().unwrap().iter_mut().enumerate() {
+                    if clientnr == client_id {
+                        continue;
+                    }
+                    client
+                        .write(S2C::<&Text>::NewClient.into_message())
+                        .unwrap();
+                    client.flush().unwrap();
                 }
                 loop {
-                    let msg = websocket.read().unwrap();
-                    if msg.is_binary() || msg.is_text() {
-                        debug!("{msg:?}");
+                    {
+                        let mut socket_lock = sockets.write();
+                        let mut_socket = &mut socket_lock.as_mut().unwrap()[client_id];
+                        if let Ok(msg) = mut_socket.read() {
+                            if msg.is_binary() {
+                                let mut binding = text.write().unwrap();
+                                let lock = binding.client(client_id);
+                                let action = C2S::deserialize(&msg.into_data());
+                                match action {
+                                    C2S::Char(c) => lock.push_char(c),
+                                    C2S::Backspace => lock.backspace(),
+                                    C2S::Enter => lock.push_char('\n'),
+                                    C2S::EnterInsert(enter_insert) => {
+                                        lock.enter_insert(enter_insert);
+                                    }
+                                }
+                                for (clientnr, client) in
+                                    socket_lock.as_mut().unwrap().iter_mut().enumerate()
+                                {
+                                    if clientnr == client_id {
+                                        continue;
+                                    }
+                                    client
+                                        .write(
+                                            S2C::Update::<&Text>((client_id, action))
+                                                .into_message(),
+                                        )
+                                        .unwrap();
+                                    client.flush().unwrap();
+                                }
+                            } else {
+                                warn!("A non-binary message was sent")
+                            }
+                        }
                     }
+                    trace!(
+                        "{client_id} {:?}",
+                        text.read().unwrap().lines().collect::<Vec<_>>()
+                    );
+                    // trace!("{client_id} yielded");
+                    tokio::task::yield_now().await;
                 }
             }
         });

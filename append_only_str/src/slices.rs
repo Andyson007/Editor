@@ -244,7 +244,7 @@ pub(crate) fn get_range(
         Bound::Excluded(&v) => v,
         Bound::Unbounded => max_len,
     };
-    assert!(start <= end);
-    assert!(end <= max_len);
+    assert!(start <= end, "{start}, {end}");
+    assert!(end <= max_len, "{end}, {max_len}");
     (start, end)
 }

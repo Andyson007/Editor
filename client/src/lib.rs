@@ -3,10 +3,10 @@ pub mod editor;
 pub mod errors;
 
 use base64::{prelude::BASE64_STANDARD, Engine};
-use btep::Btep;
+use btep::prelude::S2C;
 use crossterm::{
     cursor,
-    event::{read, EnableBracketedPaste, Event},
+    event::{self, EnableBracketedPaste, Event},
     execute,
     style::Print,
     terminal::{
@@ -20,6 +20,7 @@ use std::{
     io::{self, Write},
     net::{SocketAddrV4, TcpStream},
     str,
+    time::Duration,
 };
 use text::Text;
 use tungstenite::{
@@ -31,8 +32,6 @@ use tungstenite::{
 };
 
 /// Runs a the client side of the editor
-#[allow(clippy::missing_panics_doc)]
-#[allow(clippy::missing_errors_doc)]
 pub fn run(
     address: SocketAddrV4,
     username: &str,
@@ -41,16 +40,22 @@ pub fn run(
     let mut out = io::stdout();
     errors::install_hooks()?;
 
-    execute!(out, EnterAlternateScreen, EnableBracketedPaste)?;
-    enable_raw_mode().unwrap();
-
     let (mut socket, _response) = connect_with_auth(address, username, password);
 
-    let Btep::Full(initial_text) = Btep::<Text>::from_message(socket.read()?).unwrap() else {
+    let message = loop {
+        if let Ok(x) = socket.read() {
+            break x;
+        }
+    };
+
+    let S2C::Full(initial_text) = S2C::<Text>::from_message(message).unwrap() else {
         panic!("Initial message in wrong protocol")
     };
 
-    let mut app = State::new(initial_text);
+    execute!(out, EnterAlternateScreen, EnableBracketedPaste)?;
+    enable_raw_mode().unwrap();
+
+    let mut app = State::new(initial_text, socket);
 
     redraw(&mut out, 0, &app)?;
 
@@ -58,17 +63,21 @@ pub fn run(
 
     loop {
         // `read()` blocks until an `Event` is available
-        match read()? {
-            Event::Key(event) => {
-                if app.handle_keyevent(&event) {
-                    break;
-                };
-            }
-            Event::Mouse(_event) => todo!("No mouse support sorry"),
-            Event::Paste(_data) => todo!("No paste support sorry"),
-            Event::Resize(_width, _height) => (),
-            Event::FocusGained | Event::FocusLost => (),
-        };
+        if event::poll(Duration::from_secs(0)).unwrap() {
+            match event::read()? {
+                Event::Key(event) => {
+                    if app.handle_keyevent(&event) {
+                        break;
+                    };
+                }
+                Event::Mouse(_event) => todo!("No mouse support sorry"),
+                Event::Paste(_data) => todo!("No paste support sorry"),
+                Event::Resize(_width, _height) => (),
+                Event::FocusGained | Event::FocusLost => (),
+            };
+        } else {
+            app.update();
+        }
         redraw(&mut out, 0, &app)?;
         out.flush()?;
     }
@@ -78,7 +87,7 @@ pub fn run(
     Ok(())
 }
 
-fn redraw<E>(out: &mut E, startline: usize, state: &State) -> io::Result<()>
+fn redraw<E, T>(out: &mut E, startline: usize, state: &State<T>) -> io::Result<()>
 where
     E: QueueableCommand + io::Write,
 {
@@ -141,5 +150,10 @@ fn connect_with_auth(
         .uri(uri)
         .body(())
         .unwrap();
-    connect(req).unwrap()
+    let mut ret = connect(req).unwrap();
+    match ret.0.get_mut() {
+        MaybeTlsStream::Plain(x) => x.set_nonblocking(true).unwrap(),
+        _ => unreachable!(),
+    };
+    ret
 }
