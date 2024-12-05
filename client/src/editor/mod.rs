@@ -276,7 +276,9 @@ impl<T> State<T> {
                                 {
                                     self.cursorpos.col -= 1;
                                 }
-                                if del_char == '\n' {
+                                if del_char == '\n'
+                                    && client.data.as_ref().unwrap().pos.row < self.cursorpos.row
+                                {
                                     self.cursorpos.row -= 1;
                                 }
                             }

@@ -135,7 +135,7 @@ pub async fn run(
                     // println!("{data:#?}");
                 }
                 sockets.write().unwrap().insert(client_id, websocket);
-                text.write().unwrap().add_client();
+                debug_assert_eq!(text.write().unwrap().add_client(), client_id);
                 for (clientnr, client) in sockets.write().as_mut().unwrap().iter_mut().enumerate() {
                     if clientnr == client_id {
                         continue;

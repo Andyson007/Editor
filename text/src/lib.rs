@@ -92,11 +92,11 @@ impl Deserialize for Text {
                 ) as usize;
 
                 let pos = CursorPos::deserialize(
-                    dbg!(iter.by_ref()
+                    iter.by_ref()
                         .take(mem::size_of::<u64>() * 2)
                         .copied()
                         .collect::<Vec<_>>()
-                        .as_slice()),
+                        .as_slice(),
                 );
 
                 clients.push(Client {
