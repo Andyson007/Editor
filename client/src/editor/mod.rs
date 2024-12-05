@@ -25,7 +25,7 @@ pub struct State<T> {
     id: usize,
     /// Stores the current editing mode. This is
     /// effectively the same as Vims insert/Normal mode
-    mode: Mode,
+    pub(crate) mode: Mode,
     /// stores where the cursor is located
     cursorpos: CursorPos,
     socket: WebSocket<T>,
@@ -205,6 +205,8 @@ impl<T> State<T> {
                 };
                 self.mode = Mode::Normal;
             }
+            KeyCode::Char(c) => cmd.push(c),
+            KeyCode::Esc => self.mode = Mode::Normal,
             KeyCode::Left
             | KeyCode::Right
             | KeyCode::Up
@@ -218,9 +220,7 @@ impl<T> State<T> {
             | KeyCode::Delete
             | KeyCode::Insert
             | KeyCode::F(_)
-            | KeyCode::Char(_)
             | KeyCode::Null
-            | KeyCode::Esc
             | KeyCode::CapsLock
             | KeyCode::ScrollLock
             | KeyCode::NumLock
@@ -318,7 +318,7 @@ impl<T> State<T> {
 /// Stores the current mode of the editor.
 /// These work in the same way as vims modes
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum Mode {
+pub enum Mode {
     Normal,
     Insert,
     Command(String),

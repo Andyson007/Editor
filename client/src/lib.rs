@@ -15,7 +15,7 @@ use crossterm::{
     },
     ExecutableCommand, QueueableCommand,
 };
-use editor::State;
+use editor::{Mode, State};
 use std::{
     io::{self, Write},
     net::{SocketAddrV4, TcpStream},
@@ -104,6 +104,15 @@ where
         out.queue(cursor::MoveTo(0, u16::try_from(linenr).unwrap()))?
             .queue(Print(
                 line.chars().take(size()?.0.into()).collect::<String>(),
+            ))?;
+    }
+    let size = crossterm::terminal::size()?;
+    if let Mode::Command(ref cmd) = state.mode {
+        out.queue(cursor::MoveTo(0, size.1))?
+            .queue(Print(":"))?
+            .queue(Print(cmd))?
+            .queue(Print(
+                std::iter::repeat_n(' ', usize::from(size.0) - 1 - cmd.len()).collect::<String>(),
             ))?;
     }
     out.queue(cursor::MoveTo(
