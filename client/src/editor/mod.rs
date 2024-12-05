@@ -13,6 +13,7 @@ use btep::{c2s::C2S, s2c::S2C};
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use text::Text;
 use tungstenite::WebSocket;
+use utils::other::CursorPos;
 
 #[derive(Debug)]
 /// The main state for the entire editor. The entireity of the
@@ -28,15 +29,6 @@ pub struct State<T> {
     /// stores where the cursor is located
     cursorpos: CursorPos,
     socket: WebSocket<T>,
-}
-
-/// `CursorPos` is effectively an (x, y) tuple.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct CursorPos {
-    /// The row the cursor is on. This is effectively the line number
-    pub row: usize,
-    /// What column the cursor is on. Distance from the start of the line
-    pub col: usize,
 }
 
 impl<T> State<T> {
@@ -148,13 +140,7 @@ impl<T> State<T> {
         match input.code {
             KeyCode::Char('q') => return true,
             KeyCode::Char('i') => {
-                let bytes_to_row: usize = self
-                    .text
-                    .lines()
-                    .take(self.cursorpos.row)
-                    .map(|x| x.len() + 1)
-                    .sum();
-                self.enter_insert(bytes_to_row + self.cursorpos.col);
+                self.enter_insert(self.cursorpos);
             }
             KeyCode::Char(':') => self.mode = Mode::Command(String::new()),
             KeyCode::Left | KeyCode::Char('h') => {
@@ -252,7 +238,7 @@ impl<T> State<T> {
         cmd == "q"
     }
 
-    fn enter_insert(&mut self, pos: usize)
+    fn enter_insert(&mut self, pos: CursorPos)
     where
         T: Read + Write,
     {
@@ -275,9 +261,44 @@ impl<T> State<T> {
                 S2C::Update((client_id, action)) => {
                     let client = self.text.client(client_id);
                     match action {
-                        C2S::Char(c) => client.push_char(c),
-                        C2S::Backspace => client.backspace(),
-                        C2S::Enter => client.push_char('\n'),
+                        C2S::Char(c) => {
+                            client.push_char(c);
+                            if client.data.as_ref().unwrap().pos.row == self.cursorpos.row
+                                && client.data.as_ref().unwrap().pos.col < self.cursorpos.col
+                            {
+                                self.cursorpos.col += 1;
+                            }
+                        }
+                        C2S::Backspace => {
+                            client.backspace();
+                            if client.data.as_ref().unwrap().pos.row == self.cursorpos.row
+                                && client.data.as_ref().unwrap().pos.col < self.cursorpos.col
+                            {
+                                self.cursorpos.col -= 1;
+                            }
+                        }
+                        C2S::Enter => {
+                            client.push_char('\n');
+                            match client
+                                .data
+                                .as_ref()
+                                .unwrap()
+                                .pos
+                                .row
+                                .cmp(&self.cursorpos.row)
+                            {
+                                cmp::Ordering::Less => {
+                                    self.cursorpos.row += 1;
+                                }
+                                cmp::Ordering::Equal => {
+                                    if client.data.as_ref().unwrap().pos.col < self.cursorpos.col {
+                                        self.cursorpos.row += 1;
+                                        self.cursorpos.col = 0;
+                                    }
+                                }
+                                cmp::Ordering::Greater => (),
+                            }
+                        }
                         C2S::EnterInsert(pos) => drop(client.enter_insert(pos)),
                     }
                 }

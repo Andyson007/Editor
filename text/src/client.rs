@@ -5,18 +5,23 @@ use std::{
 };
 
 use append_only_str::AppendOnlyStr;
-
 use piece_table::{table::InnerTable, Piece, TableElem};
-use utils::other::AutoIncrementing;
+use utils::other::{AutoIncrementing, CursorPos};
 
 /// A client which can input text into a `Piece`
 #[derive(Debug)]
 pub struct Client {
     pub(crate) piece: Arc<RwLock<Piece>>,
     pub(crate) buffer: Arc<RwLock<AppendOnlyStr>>,
-    pub(crate) slice: Option<InnerTable<TableElem>>,
     pub(crate) id_counter: Arc<RwLock<AutoIncrementing>>,
     pub(crate) bufnr: usize,
+    pub data: Option<Insertdata>,
+}
+
+#[derive(Debug)]
+pub struct Insertdata {
+    pub(crate) slice: InnerTable<TableElem>,
+    pub pos: CursorPos,
     /// Stores whether its safe to insert a chracter again
     /// # Necessity
     /// This is required because pressing backspace and writing the character again cannot be
@@ -36,10 +41,9 @@ impl Client {
         Self {
             piece,
             buffer,
-            slice: None,
             bufnr,
-            has_deleted: false,
             id_counter,
+            data: None,
         }
     }
 
@@ -49,8 +53,8 @@ impl Client {
     ///
     /// this function will probably only panic when there are locking errors though
     pub fn backspace(&mut self) {
-        let binding = self.slice.as_ref().unwrap();
-        let slice = binding.read();
+        let binding = self.data.as_mut().unwrap();
+        let slice = binding.slice.read();
         if slice.text.is_empty() {
             let binding = self
                 .piece
@@ -79,13 +83,13 @@ impl Client {
                 .unwrap();
         } else {
             drop(slice);
-            let slice = &mut binding.write().unwrap();
+            let slice = &mut binding.slice.write().unwrap();
             slice.text = slice
                 .text
                 .subslice(0..slice.text.len() - slice.text.chars().last().unwrap().len_utf8())
                 .unwrap();
         }
-        self.has_deleted = true;
+        binding.has_deleted = true;
     }
 
     /// appends a char at the current location
@@ -102,15 +106,15 @@ impl Client {
     /// - We can't read our own buffer. This is most likely this crates fault
     pub fn push_str(&mut self, to_push: &str) {
         assert!(
-            self.slice.is_some(),
+            self.data.is_some(),
             "You can only push stuff after entering insert mode"
         );
         if to_push.is_empty() {
             return;
         }
 
-        if self.has_deleted {
-            let slice = self.slice.as_mut().unwrap();
+        if self.data.as_ref().unwrap().has_deleted {
+            let slice = &self.data.as_mut().unwrap().slice;
 
             let client_count = self.piece.read().unwrap().buffers.clients.len();
             let binding = &self.piece.write().unwrap().piece_table;
@@ -129,11 +133,14 @@ impl Client {
                 binding.state(),
                 // self.id_counter.write().unwrap().get() * client_count + self.bufnr,
             ));
-            self.slice = Some(cursor.peek_next().unwrap().clone());
-            self.has_deleted = false;
+            self.data = Some(Insertdata {
+                slice: cursor.peek_next().unwrap().clone(),
+                pos: todo!(),
+                has_deleted: false,
+            });
         }
 
-        let slice = self.slice.as_mut().unwrap();
+        let slice = &self.data.as_mut().unwrap().slice;
 
         self.buffer.write().unwrap().push_str(to_push);
         let a = &mut slice.write().unwrap().text;
@@ -146,12 +153,12 @@ impl Client {
     /// It returns the id of the buffer that got split
     /// # Panics
     /// probably only failed locks
-    pub fn enter_insert(&mut self, index: usize) -> (Option<usize>, usize) {
+    pub fn enter_insert(&mut self, pos: CursorPos) -> (Option<usize>, usize) {
         let (offset, inner_table) = self
             .piece
             .write()
             .unwrap()
-            .insert_at(index, self.bufnr)
+            .insert_at(pos, self.bufnr)
             .unwrap();
         let idx = inner_table.read().id;
         // FIXME: The reason this is here is to fix a stupid bug. I should use std::pin::Pin to fix
@@ -165,7 +172,11 @@ impl Client {
             .read()
             .unwrap()
             .str_slice(self.buffer.read().unwrap().len()..);
-        self.slice = Some(inner_table);
+        self.data = Some(Insertdata {
+            slice: inner_table,
+            has_deleted: false,
+            pos,
+        });
         (offset, idx)
     }
 }

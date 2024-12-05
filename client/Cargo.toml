@@ -9,5 +9,6 @@ crossterm = "0.28.1"
 tokio = { version = "1.41.1", features = ["macros", "rt-multi-thread"] }
 tungstenite = "0.24.0"
 btep = { path = "../btep" }
+utils = { path = "../utils" }
 text = { path = "../text" }
 base64 = "0.22.1"

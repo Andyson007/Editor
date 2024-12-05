@@ -3,6 +3,7 @@
 use std::{collections::VecDeque, mem};
 
 use tungstenite::Message;
+use utils::other::CursorPos;
 
 use crate::{Deserialize, Serialize};
 
@@ -19,7 +20,7 @@ pub enum C2S {
     /// The client pressed entered insert mode at a position
     // TODO: this should use the `EnterInsert` instead which should be more immune to server-client
     // desync
-    EnterInsert(usize),
+    EnterInsert(CursorPos),
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -49,10 +50,10 @@ impl Serialize for C2S {
     fn serialize(&self) -> VecDeque<u8> {
         match self {
             Self::Char(c) => std::iter::once(1)
-                .chain((*c as u32).to_be_bytes())
+                .chain(c.serialize())
                 .collect(),
             Self::EnterInsert(a) => std::iter::once(2)
-                .chain((*a as u64).to_be_bytes())
+                .chain(a.serialize())
                 .collect(),
             Self::Enter => [10].into(),
             Self::Backspace => [8].into(),
@@ -72,11 +73,7 @@ impl Deserialize for C2S {
                 ))
                 .expect("An invalid char was supplied"),
             ),
-            2 => Self::EnterInsert(u64::from_be_bytes(
-                iter.copied()
-                    .next_chunk::<{ mem::size_of::<u64>() }>()
-                    .unwrap(),
-            ) as usize),
+            2 => Self::EnterInsert(CursorPos::deserialize(&data[1..])),
             8 => Self::Backspace,
             10 => Self::Enter,
             _ => unreachable!(),
