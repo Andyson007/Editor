@@ -37,10 +37,11 @@ impl Serialize for &Text {
 
         ret.extend(self.clients.iter().flat_map(|x| {
             let mut ret = VecDeque::new();
-            if let Some(Insertdata { slice, .. }) = &x.data {
+            if let Some(Insertdata { slice, pos, .. }) = &x.data {
                 ret.push_back(1);
                 ret.extend((slice.read().text.start() as u64).to_be_bytes());
                 ret.extend((slice.read().text.end() as u64).to_be_bytes());
+                ret.extend(pos.serialize());
             } else {
                 ret.push_back(0);
             }
@@ -91,11 +92,11 @@ impl Deserialize for Text {
                 ) as usize;
 
                 let pos = CursorPos::deserialize(
-                    iter.by_ref()
+                    dbg!(iter.by_ref()
                         .take(mem::size_of::<u64>() * 2)
                         .copied()
                         .collect::<Vec<_>>()
-                        .as_slice(),
+                        .as_slice()),
                 );
 
                 clients.push(Client {

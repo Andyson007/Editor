@@ -77,6 +77,7 @@ pub async fn run(
         let text = text.clone();
         #[cfg(feature = "security")]
         let pool = Arc::clone(&pool);
+        let mut username = None;
         let callback = |req: &Request, response: Response| {
             debug!("Received new ws handshake");
             trace!("Received a new ws handshake");
@@ -109,16 +110,16 @@ pub async fn run(
 
             #[cfg(not(feature = "security"))]
             {
-                // username = try {
-                //     let auth = req.headers().get("Authorization")?;
-                //     let (credential_type, credentials) = auth.to_str().unwrap().split_once(' ')?;
-                //     if credential_type != "Basic" {
-                //         None?;
-                //     }
-                //     let base64 = BASE64_STANDARD.decode(credentials).ok()?;
-                //     let raw = str::from_utf8(base64.as_slice()).ok()?;
-                //     raw.split_once(':')?.0.to_string()
-                // };
+                username = try {
+                    let auth = req.headers().get("Authorization")?;
+                    let (credential_type, credentials) = auth.to_str().unwrap().split_once(' ')?;
+                    if credential_type != "Basic" {
+                        None?;
+                    }
+                    let base64 = BASE64_STANDARD.decode(credentials).ok()?;
+                    let raw = str::from_utf8(base64.as_slice()).ok()?;
+                    raw.split_once(':')?.0.to_string()
+                };
                 Ok(response)
             }
         };
