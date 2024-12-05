@@ -124,7 +124,7 @@ pub async fn run(
         };
         // NOTE: IDK WHY THIS HAS TO BE HERE
         sleep(Duration::ZERO).await;
-        if let Ok(mut websocket) = dbg!(accept_hdr(stream, callback)) {
+        if let Ok(mut websocket) = accept_hdr(stream, callback) {
             tokio::spawn(async move {
                 {
                     // debug!("{client_id} Connected {:?}", username);

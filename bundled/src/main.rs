@@ -18,8 +18,6 @@ use tracing::{info, level_filters::LevelFilter};
 #[command(version, about, long_about = None)]
 #[command(propagate_version = true)]
 struct Cli {
-    #[arg(short, long)]
-    verbosity: Option<LevelFilter>,
     #[command(subcommand)]
     command: Commands,
 }
@@ -35,12 +33,16 @@ enum Verbosity {
 
 #[derive(Subcommand, Debug)]
 enum Commands {
+    /// hosts a server
     Server(ServerArgs),
+    /// runs a client which can attach to a server
     Client(ClientArgs),
 }
 
 #[derive(Args, Debug)]
 struct ServerArgs {
+    #[arg(short, long)]
+    verbosity: Option<LevelFilter>,
     /// path to the file that should be opened
     ///
     /// it is not a feature yet to share folders
@@ -48,11 +50,18 @@ struct ServerArgs {
     /// IP-address the server should be hosted on
     ///
     /// 0.0.0.0 in order to host on the local network
-    #[arg(short = 'i', default_value = "127.0.0.1", conflicts_with = "address")]
+    #[arg(
+        short = 'i',
+        long,
+        default_value = "127.0.0.1",
+        conflicts_with = "address"
+    )]
     ip: Ipv4Addr,
-    #[arg(short = 'p', default_value = "3012", conflicts_with = "address")]
+    /// Sets the port to listen on
+    #[arg(short = 'p', long, default_value = "3012", conflicts_with = "address")]
     port: u16,
-    #[arg(short = 'a')]
+    /// Sets the address to host on. This has to be exclive from both ip and port
+    #[arg(short = 'a', long)]
     address: Option<SocketAddrV4>,
     #[cfg(feature = "security")]
     /// Add a new user which can access files hosted
@@ -88,11 +97,6 @@ struct ClientArgs {
 
 fn main() -> color_eyre::Result<()> {
     let cli = Cli::parse();
-    tracing_subscriber::fmt()
-        .with_level(true)
-        .with_max_level(cli.verbosity.unwrap_or(LevelFilter::OFF))
-        .init();
-    info!("{cli:?}");
 
     #[cfg(feature = "security")]
     let pool = tokio::runtime::Builder::new_current_thread()
@@ -112,9 +116,15 @@ fn main() -> color_eyre::Result<()> {
             ip,
             port,
             address,
+            verbosity,
             #[cfg(feature = "security")]
                 add_user: false,
         }) => {
+            tracing_subscriber::fmt()
+                .with_level(true)
+                .with_max_level(verbosity.unwrap_or(LevelFilter::OFF))
+                .init();
+            info!("{cli:?}");
             let address = address.unwrap_or(SocketAddrV4::new(*ip, *port));
             server::run(
                 address,
