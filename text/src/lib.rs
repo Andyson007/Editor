@@ -10,9 +10,12 @@ use std::{
 
 use append_only_str::{slices::StrSlice, AppendOnlyStr};
 use btep::{Deserialize, Serialize};
-use client::Client;
+use client::{Client, Insertdata};
 use piece_table::Piece;
-use utils::{iters::IteratorExt, other::AutoIncrementing};
+use utils::{
+    iters::IteratorExt,
+    other::{AutoIncrementing, CursorPos},
+};
 pub mod client;
 
 /// A wrapper around a piece table.
@@ -34,10 +37,10 @@ impl Serialize for &Text {
 
         ret.extend(self.clients.iter().flat_map(|x| {
             let mut ret = VecDeque::new();
-            if let Some(x) = &x.slice {
+            if let Some(Insertdata { slice, .. }) = &x.data {
                 ret.push_back(1);
-                ret.extend((x.read().text.start() as u64).to_be_bytes());
-                ret.extend((x.read().text.end() as u64).to_be_bytes());
+                ret.extend((slice.read().text.start() as u64).to_be_bytes());
+                ret.extend((slice.read().text.end() as u64).to_be_bytes());
             } else {
                 ret.push_back(0);
             }
@@ -87,11 +90,19 @@ impl Deserialize for Text {
                         .unwrap(),
                 ) as usize;
 
+                let pos = CursorPos::deserialize(
+                    iter.by_ref()
+                        .take(mem::size_of::<u64>())
+                        .copied()
+                        .collect::<Vec<_>>()
+                        .as_slice(),
+                );
+
                 clients.push(Client {
                     piece: Arc::clone(&arced),
                     buffer: Arc::clone(&arced.read().unwrap().buffers.clients[counter].1),
                     id_counter: Arc::clone(&arced.read().unwrap().buffers.clients[counter].0),
-                    slice: arced
+                    data: arced
                         .read()
                         .unwrap()
                         .piece_table
@@ -106,18 +117,21 @@ impl Deserialize for Text {
                             };
                             inner.text.start() == start && inner.text.end() == end
                         })
-                        .cloned(),
+                        .cloned()
+                        .map(|slice| Insertdata {
+                            slice,
+                            has_deleted: false,
+                            pos,
+                        }),
                     bufnr: counter,
-                    has_deleted: false,
                 });
             } else {
                 clients.push(Client {
                     piece: Arc::clone(&arced),
                     buffer: Arc::clone(&arced.read().unwrap().buffers.clients[counter].1),
                     id_counter: Arc::clone(&arced.read().unwrap().buffers.clients[counter].0),
-                    slice: None,
+                    data: None,
                     bufnr: counter,
-                    has_deleted: false,
                 });
             }
             counter += 1;

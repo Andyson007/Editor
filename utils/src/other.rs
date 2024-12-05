@@ -33,6 +33,15 @@ impl AutoIncrementing {
     }
 }
 
+/// `CursorPos` is effectively an (x, y) tuple.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct CursorPos {
+    /// The row the cursor is on. This is effectively the line number
+    pub row: usize,
+    /// What column the cursor is on. Distance from the start of the line
+    pub col: usize,
+}
+
 #[cfg(test)]
 mod test {
     use super::AutoIncrementing;

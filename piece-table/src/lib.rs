@@ -15,7 +15,7 @@ use btep::{Deserialize, Serialize};
 use table::{InnerTable, LockError, Table};
 use utils::{
     iters::{InnerIteratorExt, IteratorExt},
-    other::AutoIncrementing,
+    other::{AutoIncrementing, CursorPos},
 };
 
 /// A wrapper around all the buffers
@@ -97,15 +97,21 @@ impl Piece {
     /// Shouldn't panic
     pub fn insert_at(
         &mut self,
-        pos: usize,
+        pos: CursorPos,
         clientid: usize,
     ) -> Option<(Option<usize>, InnerTable<TableElem>)> {
+        let bytes_to_row: usize = self
+            .lines()
+            .take(pos.row)
+            .map(|x| x.len() + 1)
+            .sum();
+        let char_nr = bytes_to_row + pos.col;
         let binding = self.piece_table.write_full().unwrap();
         let mut to_split = binding.write();
         let mut cursor = to_split.cursor_front_mut();
         let mut curr_pos = cursor.current().unwrap().read().text.len();
         let is_end = loop {
-            if curr_pos > pos {
+            if curr_pos > char_nr {
                 break false;
             }
             cursor.move_next();
@@ -136,7 +142,7 @@ impl Piece {
                 let current = cursor.current().unwrap().read();
                 (current.bufnr, current.text.clone())
             };
-            let offset = pos - (curr_pos - current.len());
+            let offset = char_nr - (curr_pos - current.len());
 
             if offset != 0 {
                 cursor.insert_before(InnerTable::new(
