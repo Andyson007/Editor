@@ -205,31 +205,31 @@ impl<T> State<T> {
                 };
                 self.mode = Mode::Normal;
             }
-            KeyCode::Left => todo!(),
-            KeyCode::Right => todo!(),
-            KeyCode::Up => todo!(),
-            KeyCode::Down => todo!(),
-            KeyCode::Home => todo!(),
-            KeyCode::End => todo!(),
-            KeyCode::PageUp => todo!(),
-            KeyCode::PageDown => todo!(),
-            KeyCode::Tab => todo!(),
-            KeyCode::BackTab => todo!(),
-            KeyCode::Delete => todo!(),
-            KeyCode::Insert => todo!(),
-            KeyCode::F(_) => todo!(),
-            KeyCode::Char(_) => todo!(),
-            KeyCode::Null => todo!(),
-            KeyCode::Esc => todo!(),
-            KeyCode::CapsLock => todo!(),
-            KeyCode::ScrollLock => todo!(),
-            KeyCode::NumLock => todo!(),
-            KeyCode::PrintScreen => todo!(),
-            KeyCode::Pause => todo!(),
-            KeyCode::Menu => todo!(),
-            KeyCode::KeypadBegin => todo!(),
-            KeyCode::Media(_) => todo!(),
-            KeyCode::Modifier(_) => todo!(),
+            KeyCode::Left
+            | KeyCode::Right
+            | KeyCode::Up
+            | KeyCode::Down
+            | KeyCode::Home
+            | KeyCode::End
+            | KeyCode::PageUp
+            | KeyCode::PageDown
+            | KeyCode::Tab
+            | KeyCode::BackTab
+            | KeyCode::Delete
+            | KeyCode::Insert
+            | KeyCode::F(_)
+            | KeyCode::Char(_)
+            | KeyCode::Null
+            | KeyCode::Esc
+            | KeyCode::CapsLock
+            | KeyCode::ScrollLock
+            | KeyCode::NumLock
+            | KeyCode::PrintScreen
+            | KeyCode::Pause
+            | KeyCode::Menu
+            | KeyCode::KeypadBegin
+            | KeyCode::Media(_)
+            | KeyCode::Modifier(_) => todo!("Todo in command"),
         }
         false
     }

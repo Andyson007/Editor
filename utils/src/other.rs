@@ -1,4 +1,6 @@
 //! Creates handly utility structs
+
+use std::ops::Add;
 /// A simple wrapper around a usize which increments after each access
 #[derive(Debug, Default)]
 pub struct AutoIncrementing {
@@ -40,6 +42,17 @@ pub struct CursorPos {
     pub row: usize,
     /// What column the cursor is on. Distance from the start of the line
     pub col: usize,
+}
+
+impl Add<(isize, isize)> for CursorPos {
+    type Output = Self;
+
+    fn add(self, rhs: (isize, isize)) -> Self::Output {
+        Self {
+            row: usize::try_from(self.row as isize + rhs.0).unwrap(),
+            col: usize::try_from(self.col as isize + rhs.0).unwrap(),
+        }
+    }
 }
 
 #[cfg(test)]

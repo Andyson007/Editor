@@ -137,7 +137,7 @@ impl Client {
             ));
             self.data = Some(Insertdata {
                 slice: cursor.peek_next().unwrap().clone(),
-                pos: todo!(),
+                pos: self.data.as_ref().unwrap().pos + (0, 1),
                 has_deleted: false,
             });
         }
