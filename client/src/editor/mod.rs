@@ -2,7 +2,8 @@
 //! This includes handling keypressess and adding these
 //! to the queue for sending to the server, but *not*
 //! actually sending them
-use core::panic;
+mod draw;
+
 use std::{
     cmp,
     io::{Read, Write},
@@ -28,6 +29,8 @@ pub struct State<T> {
     pub(crate) mode: Mode,
     /// stores where the cursor is located
     cursorpos: CursorPos,
+    /// stores the amount of lines that have been scrolled down
+    line_offset: usize,
     socket: WebSocket<T>,
 }
 
@@ -41,6 +44,7 @@ impl<T> State<T> {
             id,
             mode: Mode::Normal,
             cursorpos: CursorPos::default(),
+            line_offset: 0,
             socket,
         }
     }
@@ -259,9 +263,7 @@ impl<T> State<T> {
     where
         T: Read + Write,
     {
-        self.socket
-            .write(C2S::Save.into())
-            .unwrap();
+        self.socket.write(C2S::Save.into()).unwrap();
         self.socket.flush().unwrap();
     }
 
@@ -276,9 +278,11 @@ impl<T> State<T> {
     }
 
     /// Fetches the network for any updates and updates the internal buffer accordingly
+    /// # Return value
+    /// returns true if the screen should be redrawn
     /// # Panics
     /// the message received wasn't formatted properly
-    pub fn update(&mut self)
+    pub fn update(&mut self) -> bool
     where
         T: Read + Write,
     {
@@ -334,12 +338,16 @@ impl<T> State<T> {
                         }
                         C2S::EnterInsert(pos) => drop(client.enter_insert(pos)),
                         C2S::Save => unreachable!(),
-                    }
+                    };
+                    true
                 }
                 S2C::NewClient => {
                     self.text.add_client();
+                    false
                 }
             }
+        } else {
+            false
         }
     }
 }

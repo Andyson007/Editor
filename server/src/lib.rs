@@ -146,13 +146,7 @@ pub async fn run(
                     if clientnr == client_id {
                         continue;
                     }
-                    if client
-                        .1
-                        .write(S2C::<&Text>::NewClient.into_message())
-                        .is_ok()
-                    {
-                        client.1.flush().unwrap();
-                    }
+                    let _ = client.1.write(S2C::<&Text>::NewClient.into_message());
                 }
                 loop {
                     let mut to_remove = Vec::with_capacity(1);
@@ -179,7 +173,6 @@ pub async fn run(
                                     }
                                     C2S::Save => {
                                         save_notify.notify_one();
-                                        warn!("test");
                                         continue;
                                     }
                                 }
@@ -193,7 +186,7 @@ pub async fn run(
                                         Ok(_) => client.flush().unwrap(),
                                         Err(e) => {
                                             to_remove.push(*clientnr);
-                                            warn!("{client_id} {e}")
+                                            warn!("{client_id}: {e}")
                                         }
                                     };
                                 }
@@ -205,6 +198,7 @@ pub async fn run(
                     {
                         let mut lock = sockets.write().unwrap();
                         for x in to_remove {
+                            info!("removed client {x}");
                             lock.remove(&x);
                         }
                     }
@@ -212,7 +206,7 @@ pub async fn run(
                         "{client_id} {:?}",
                         text.read().unwrap().lines().collect::<Vec<_>>()
                     );
-                    // trace!("{client_id} yielded");
+                    trace!("{client_id} yielded");
                     tokio::task::yield_now().await;
                 }
             });

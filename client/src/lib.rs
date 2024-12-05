@@ -59,13 +59,13 @@ pub fn run(
 
     let mut app = State::new(initial_text, socket);
 
-    redraw(&mut out, 0, &app)?;
+    app.redraw(&mut out)?;
 
     out.execute(cursor::MoveTo(0, 0)).unwrap();
 
     loop {
         // `read()` blocks until an `Event` is available
-        if event::poll(Duration::from_secs(0)).unwrap() {
+        if if event::poll(Duration::from_secs(0)).unwrap() {
             match event::read()? {
                 Event::Key(event) => {
                     if app.handle_keyevent(&event) {
@@ -77,49 +77,18 @@ pub fn run(
                 Event::Resize(_width, _height) => (),
                 Event::FocusGained | Event::FocusLost => (),
             };
+            true
         } else {
-            app.update();
+            app.update()
+        } {
+            app.recalculate_cursor(terminal::size()?);
+            app.redraw(&mut out).unwrap();
+            out.flush()?;
         }
-        redraw(&mut out, 0, &app)?;
-        out.flush()?;
     }
 
     disable_raw_mode().unwrap();
     execute!(io::stdout(), LeaveAlternateScreen)?;
-    Ok(())
-}
-
-fn redraw<E, T>(out: &mut E, startline: usize, state: &State<T>) -> io::Result<()>
-where
-    E: QueueableCommand + io::Write,
-{
-    out.queue(terminal::Clear(ClearType::All))?;
-    for (linenr, line) in state
-        .text
-        .lines()
-        .skip(startline)
-        .take(size()?.1.into())
-        .enumerate()
-    {
-        out.queue(cursor::MoveTo(0, u16::try_from(linenr).unwrap()))?
-            .queue(Print(
-                line.chars().take(size()?.0.into()).collect::<String>(),
-            ))?;
-    }
-    let size = crossterm::terminal::size()?;
-    if let Mode::Command(ref cmd) = state.mode {
-        out.queue(cursor::MoveTo(0, size.1))?
-            .queue(Print(":"))?
-            .queue(Print(cmd))?
-            .queue(Print(
-                std::iter::repeat_n(' ', usize::from(size.0) - 1 - cmd.len()).collect::<String>(),
-            ))?;
-    }
-    out.queue(cursor::MoveTo(
-        u16::try_from(state.cursor().col).unwrap(),
-        u16::try_from(state.cursor().row).unwrap(),
-    ))?;
-    out.flush()?;
     Ok(())
 }
 
