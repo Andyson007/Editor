@@ -21,6 +21,8 @@ pub enum C2S {
     // TODO: this should use the `EnterInsert` instead which should be more immune to server-client
     // desync
     EnterInsert(CursorPos),
+    /// Force a save to happen
+    Save,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -57,6 +59,7 @@ impl Serialize for C2S {
                 .collect(),
             Self::Enter => [10].into(),
             Self::Backspace => [8].into(),
+            Self::Save => [3].into(),
         }
     }
 }
@@ -74,6 +77,7 @@ impl Deserialize for C2S {
                 .expect("An invalid char was supplied"),
             ),
             2 => Self::EnterInsert(CursorPos::deserialize(&data[1..])),
+            3 => Self::Save,
             8 => Self::Backspace,
             10 => Self::Enter,
             _ => unreachable!(),

@@ -18,7 +18,7 @@ use std::{
     sync::{Arc, RwLock},
     time::Duration,
 };
-use tokio::time::sleep;
+use tokio::{select, sync::Notify, time::sleep};
 
 #[cfg(feature = "security")]
 pub use security::add_user;
@@ -27,9 +27,8 @@ use security::{auth_check, create_tables};
 
 use text::Text;
 use tokio_tungstenite::tungstenite::{
-    accept_hdr, accept_hdr_with_config,
+    accept_hdr,
     handshake::server::{Request, Response},
-    protocol::WebSocketConfig,
 };
 #[allow(unused_imports)]
 use tracing::{debug, error, info, trace, warn};
@@ -56,10 +55,16 @@ pub async fn run(
     let sockets = Arc::new(RwLock::new(HashMap::new()));
     let owned_path = path.to_owned();
     let writer_text = Arc::clone(&text);
+
+    let save_notify = Arc::new(Notify::new());
+    let save_notify_reader = Arc::clone(&save_notify);
     tokio::spawn(async move {
         let text = writer_text;
         loop {
-            sleep(Duration::from_secs(10)).await;
+            select!(
+            _ = sleep(Duration::from_secs(10)) => (),
+            _ = save_notify_reader.notified() => {}
+            );
             let file = OpenOptions::new().write(true).open(&owned_path).unwrap();
             let mut writer = BufWriter::new(file);
             let buf_iter = text.read().unwrap().bufs();
@@ -70,6 +75,7 @@ pub async fn run(
         }
     });
     for (client_id, stream) in server.incoming().enumerate() {
+        let save_notify = Arc::clone(&save_notify);
         debug!("new Client {client_id}");
         let stream = stream.unwrap();
         stream.set_nonblocking(true).unwrap();
@@ -170,6 +176,11 @@ pub async fn run(
                                     C2S::Enter => lock.push_char('\n'),
                                     C2S::EnterInsert(enter_insert) => {
                                         lock.enter_insert(enter_insert);
+                                    }
+                                    C2S::Save => {
+                                        save_notify.notify_one();
+                                        warn!("test");
+                                        continue;
                                     }
                                 }
                                 for (clientnr, client) in socket_lock.as_mut().unwrap().iter_mut() {

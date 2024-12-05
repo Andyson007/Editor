@@ -6,7 +6,7 @@ use core::panic;
 use std::{
     cmp,
     io::{Read, Write},
-    str,
+    mem, str,
 };
 
 use btep::{c2s::C2S, s2c::S2C};
@@ -190,17 +190,18 @@ impl<T> State<T> {
         false
     }
 
-    fn handle_command_keyevent(&mut self, input: &KeyEvent) -> bool {
+    fn handle_command_keyevent(&mut self, input: &KeyEvent) -> bool
+    where
+        T: Read + Write,
+    {
         let Mode::Command(ref mut cmd) = self.mode else {
             panic!("function incorrectly called");
         };
         match input.code {
             KeyCode::Backspace => drop(cmd.pop()),
             KeyCode::Enter => {
-                let Mode::Command(ref cmd) = self.mode else {
-                    panic!("function incorrectly called");
-                };
-                if self.execute_commad(cmd) {
+                let cmd = self.take_mode().unwrap();
+                if self.execute_commad(&cmd) {
                     return true;
                 };
                 self.mode = Mode::Normal;
@@ -234,8 +235,34 @@ impl<T> State<T> {
         false
     }
 
-    fn execute_commad(&self, cmd: &str) -> bool {
-        cmd == "q"
+    fn take_mode(&mut self) -> Option<String> {
+        if let Mode::Command(cmd) = mem::replace(&mut self.mode, Mode::Normal) {
+            Some(cmd)
+        } else {
+            None
+        }
+    }
+
+    fn execute_commad(&mut self, cmd: &str) -> bool
+    where
+        T: Read + Write,
+    {
+        match cmd {
+            "q" => return true,
+            "w" => self.save(),
+            _ => (),
+        }
+        false
+    }
+
+    fn save(&mut self)
+    where
+        T: Read + Write,
+    {
+        self.socket
+            .write(C2S::Save.into())
+            .unwrap();
+        self.socket.flush().unwrap();
     }
 
     fn enter_insert(&mut self, pos: CursorPos)
@@ -306,6 +333,7 @@ impl<T> State<T> {
                             }
                         }
                         C2S::EnterInsert(pos) => drop(client.enter_insert(pos)),
+                        C2S::Save => unreachable!(),
                     }
                 }
                 S2C::NewClient => {
