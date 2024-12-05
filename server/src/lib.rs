@@ -27,8 +27,9 @@ use security::{auth_check, create_tables};
 
 use text::Text;
 use tokio_tungstenite::tungstenite::{
-    accept_hdr,
+    accept_hdr, accept_hdr_with_config,
     handshake::server::{Request, Response},
+    protocol::WebSocketConfig,
 };
 #[allow(unused_imports)]
 use tracing::{debug, error, info, trace, warn};
@@ -76,57 +77,57 @@ pub async fn run(
         let text = text.clone();
         #[cfg(feature = "security")]
         let pool = Arc::clone(&pool);
-        tokio::spawn(async move {
-            let mut username = None;
-            let callback = |req: &Request, response: Response| {
-                debug!("Received new ws handshake");
-                trace!("Received a new ws handshake");
-                trace!("The request's path is: {}", req.uri().path());
-                trace!("The request's headers are:");
-                for (header, _value) in req.headers() {
-                    trace!("* {header}");
-                }
+        let callback = |req: &Request, response: Response| {
+            debug!("Received new ws handshake");
+            trace!("Received a new ws handshake");
+            trace!("The request's path is: {}", req.uri().path());
+            trace!("The request's headers are:");
+            for (header, _value) in req.headers() {
+                trace!("* {header}");
+            }
 
-                #[cfg(feature = "security")]
-                {
-                    use tokio_tungstenite::tungstenite::http::{self, StatusCode};
-                    if let Some(auth) = req.headers().get("Authorization") {
-                        if let Some(user) = futures::executor::block_on(auth_check(auth, &pool)) {
-                            username = Some(user);
-                            Ok(response)
-                        } else {
-                            Err(http::Response::builder()
-                                .status(StatusCode::UNAUTHORIZED)
-                                .body(None)
-                                .unwrap())
-                        }
+            #[cfg(feature = "security")]
+            {
+                use tokio_tungstenite::tungstenite::http::{self, StatusCode};
+                if let Some(auth) = req.headers().get("Authorization") {
+                    if let Some(user) = futures::executor::block_on(auth_check(auth, &pool)) {
+                        username = Some(user);
+                        Ok(response)
                     } else {
                         Err(http::Response::builder()
-                            .status(StatusCode::BAD_REQUEST)
+                            .status(StatusCode::UNAUTHORIZED)
                             .body(None)
                             .unwrap())
                     }
+                } else {
+                    Err(http::Response::builder()
+                        .status(StatusCode::BAD_REQUEST)
+                        .body(None)
+                        .unwrap())
                 }
+            }
 
-                #[cfg(not(feature = "security"))]
+            #[cfg(not(feature = "security"))]
+            {
+                // username = try {
+                //     let auth = req.headers().get("Authorization")?;
+                //     let (credential_type, credentials) = auth.to_str().unwrap().split_once(' ')?;
+                //     if credential_type != "Basic" {
+                //         None?;
+                //     }
+                //     let base64 = BASE64_STANDARD.decode(credentials).ok()?;
+                //     let raw = str::from_utf8(base64.as_slice()).ok()?;
+                //     raw.split_once(':')?.0.to_string()
+                // };
+                Ok(response)
+            }
+        };
+        // NOTE: IDK WHY THIS HAS TO BE HERE
+        sleep(Duration::ZERO).await;
+        if let Ok(mut websocket) = dbg!(accept_hdr(stream, callback)) {
+            tokio::spawn(async move {
                 {
-                    username = try {
-                        let auth = req.headers().get("Authorization")?;
-                        let (credential_type, credentials) =
-                            auth.to_str().unwrap().split_once(' ')?;
-                        if credential_type != "Basic" {
-                            None?;
-                        }
-                        let base64 = BASE64_STANDARD.decode(credentials).ok()?;
-                        let raw = str::from_utf8(base64.as_slice()).ok()?;
-                        raw.split_once(':')?.0.to_string()
-                    };
-                    Ok(response)
-                }
-            };
-            if let Ok(mut websocket) = accept_hdr(stream, callback) {
-                {
-                    debug!("{client_id} Connected {:?}", username);
+                    // debug!("{client_id} Connected {:?}", username);
                     let data = text.read().unwrap();
                     // dbg!(&data);
                     websocket.send(S2C::Full(&*data).into_message()).unwrap();
@@ -202,7 +203,7 @@ pub async fn run(
                     // trace!("{client_id} yielded");
                     tokio::task::yield_now().await;
                 }
-            }
-        });
+            });
+        }
     }
 }
