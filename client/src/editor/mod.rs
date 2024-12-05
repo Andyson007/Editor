@@ -270,11 +270,15 @@ impl<T> State<T> {
                             }
                         }
                         C2S::Backspace => {
-                            client.backspace();
-                            if client.data.as_ref().unwrap().pos.row == self.cursorpos.row
-                                && client.data.as_ref().unwrap().pos.col < self.cursorpos.col
-                            {
-                                self.cursorpos.col -= 1;
+                            if let Some(del_char) = client.backspace() {
+                                if client.data.as_ref().unwrap().pos.row == self.cursorpos.row
+                                    && client.data.as_ref().unwrap().pos.col < self.cursorpos.col
+                                {
+                                    self.cursorpos.col -= 1;
+                                }
+                                if del_char == '\n' {
+                                    self.cursorpos.row -= 1;
+                                }
                             }
                         }
                         C2S::Enter => {

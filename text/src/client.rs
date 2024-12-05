@@ -52,7 +52,8 @@ impl Client {
     /// - function called without ever entering insert mode
     ///
     /// this function will probably only panic when there are locking errors though
-    pub fn backspace(&mut self) {
+    pub fn backspace(&mut self) -> Option<char> {
+        let ret;
         let binding = self.data.as_mut().unwrap();
         let slice = binding.slice.read();
         if slice.text.is_empty() {
@@ -72,11 +73,10 @@ impl Client {
             while cursor.current().unwrap().read().text.is_empty() {
                 cursor.move_prev();
             }
-            let Some(prev) = cursor.current() else {
-                return;
-            };
+            let prev = cursor.current()?;
             drop(slice);
             let slice = &mut prev.write().unwrap();
+            ret = slice.text.chars().last().unwrap();
             slice.text = slice
                 .text
                 .subslice(0..slice.text.len() - slice.text.chars().last().unwrap().len_utf8())
@@ -84,12 +84,14 @@ impl Client {
         } else {
             drop(slice);
             let slice = &mut binding.slice.write().unwrap();
+            ret = slice.text.chars().last().unwrap();
             slice.text = slice
                 .text
                 .subslice(0..slice.text.len() - slice.text.chars().last().unwrap().len_utf8())
                 .unwrap();
         }
         binding.has_deleted = true;
+        Some(ret)
     }
 
     /// appends a char at the current location

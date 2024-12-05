@@ -92,7 +92,7 @@ impl Deserialize for Text {
 
                 let pos = CursorPos::deserialize(
                     iter.by_ref()
-                        .take(mem::size_of::<u64>())
+                        .take(mem::size_of::<u64>() * 2)
                         .copied()
                         .collect::<Vec<_>>()
                         .as_slice(),

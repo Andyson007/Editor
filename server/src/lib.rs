@@ -165,7 +165,7 @@ pub async fn run(
                                 let action = C2S::deserialize(&msg.into_data());
                                 match action {
                                     C2S::Char(c) => lock.push_char(c),
-                                    C2S::Backspace => lock.backspace(),
+                                    C2S::Backspace => drop(lock.backspace()),
                                     C2S::Enter => lock.push_char('\n'),
                                     C2S::EnterInsert(enter_insert) => {
                                         lock.enter_insert(enter_insert);
