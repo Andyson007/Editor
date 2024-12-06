@@ -37,39 +37,6 @@ impl<T> S2C<T> {
     }
 }
 
-impl<T> S2C<T> {
-    /// Converts a message into a byte array
-    /// # Errors
-    /// there is no data in the stream
-    /// # Panics
-    /// The first byte didn't specify a valid format
-    #[must_use]
-    pub fn from_message(msg: Message) -> Option<Self>
-    where
-        T: Deserialize,
-    {
-        let Message::Binary(data) = msg else {
-            panic!("wrong message type")
-        };
-        let mut iter = data.iter();
-        Some(match iter.next()? {
-            0 => Self::Full(T::deserialize(&data[1..])),
-            1 => {
-                let id = u64::from_be_bytes(
-                    iter.by_ref()
-                        .copied()
-                        .chunks::<{ mem::size_of::<u64>() }>()
-                        .next()?,
-                ) as usize;
-                let action = C2S::deserialize(&iter.copied().collect::<Vec<_>>());
-                Self::Update((id, action))
-            }
-            2 => Self::NewClient,
-            _ => panic!("An invalid specifier was found"),
-        })
-    }
-}
-
 impl<T> Serialize for S2C<T>
 where
     T: Serialize,
@@ -90,11 +57,27 @@ where
     }
 }
 
-impl<T> From<S2C<T>> for Message
+impl<T> Deserialize for S2C<T>
 where
-    T: Serialize,
+    T: Deserialize,
 {
-    fn from(value: S2C<T>) -> Self {
-        Self::Binary(value.serialize().into())
+    fn deserialize(data: &[u8]) -> Self {
+        let mut iter = data.iter();
+        match iter.next().unwrap() {
+            0 => Self::Full(T::deserialize(&data[1..])),
+            1 => {
+                let id = u64::from_be_bytes(
+                    iter.by_ref()
+                        .copied()
+                        .chunks::<{ mem::size_of::<u64>() }>()
+                        .next()
+                        .unwrap(),
+                ) as usize;
+                let action = C2S::deserialize(&iter.copied().collect::<Vec<_>>());
+                Self::Update((id, action))
+            }
+            2 => Self::NewClient,
+            _ => panic!("An invalid specifier was found"),
+        }
     }
 }

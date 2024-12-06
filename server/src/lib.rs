@@ -28,13 +28,6 @@ use tokio::{
     sync::Notify,
     time::sleep,
 };
-use tokio_tungstenite::{
-    accept_hdr_async,
-    tungstenite::{
-        handshake::server::{Request, Response},
-        WebSocket,
-    },
-};
 
 #[cfg(feature = "security")]
 pub use security::add_user;
@@ -104,9 +97,15 @@ pub async fn run(
         )
         .await
         {
-            Ok(x) => x,
+            Ok(x) => {
+                stream.write_u8(0).await.unwrap();
+                stream.flush().await.unwrap();
+                x
+            }
             Err(_) => {
                 warn!("client {client_id} failed to connect");
+                stream.write_u8(1).await.unwrap();
+                stream.flush().await.unwrap();
                 continue;
             }
         };

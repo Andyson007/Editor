@@ -9,7 +9,7 @@ use crossterm::QueueableCommand;
 
 use super::{Client, Mode};
 
-impl<T> Client<T> {
+impl Client {
     pub fn redraw<E>(&self, out: &mut E) -> io::Result<()>
     where
         E: QueueableCommand + io::Write,

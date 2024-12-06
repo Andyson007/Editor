@@ -2,8 +2,7 @@
 pub mod editor;
 pub mod errors;
 
-use base64::{prelude::BASE64_STANDARD, Engine};
-use btep::prelude::S2C;
+use btep::{prelude::S2C, Deserialize};
 use crossterm::{
     cursor,
     event::{self, EnableBracketedPaste, Event},
@@ -15,24 +14,19 @@ use crossterm::{
 };
 use editor::Client;
 use std::{
-    io::{self, Write},
-    net::{SocketAddrV4, TcpStream},
+    io::{self, Read, Write},
+    net::SocketAddrV4,
     str,
     time::Duration,
 };
 use text::Text;
-use tungstenite::{
-    connect,
-    handshake::client::{generate_key, Request},
-    http::{self, Uri},
-    stream::MaybeTlsStream,
-    WebSocket,
-};
+use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::TcpStream};
 
 /// Runs a the client side of the editor
 #[allow(clippy::missing_panics_doc)]
 #[allow(clippy::missing_errors_doc)]
-pub fn run(
+#[tokio::main]
+pub async fn run(
     address: SocketAddrV4,
     username: &str,
     password: Option<&str>,
@@ -40,15 +34,12 @@ pub fn run(
     let mut out = io::stdout();
     errors::install_hooks()?;
 
-    let (mut socket, _response) = connect_with_auth(address, username, password);
+    let mut socket = connect_with_auth(address, username, password).await.unwrap();
 
-    let message = loop {
-        if let Ok(x) = socket.read() {
-            break x;
-        }
-    };
+    let mut message = Vec::new();
+    socket.read_buf(&mut message).await.unwrap();
 
-    let S2C::Full(initial_text) = S2C::<Text>::from_message(message).unwrap() else {
+    let S2C::Full(initial_text) = S2C::<Text>::deserialize(&message) else {
         panic!("Initial message in wrong protocol")
     };
 
@@ -65,7 +56,7 @@ pub fn run(
         if if event::poll(Duration::from_secs(0)).unwrap() {
             match event::read()? {
                 Event::Key(event) => {
-                    if app.handle_keyevent(&event) {
+                    if app.handle_keyevent(&event).await {
                         break;
                     };
                 }
@@ -76,7 +67,7 @@ pub fn run(
             };
             true
         } else {
-            app.curr().update()
+            app.curr().update().await
         } {
             app.curr().recalculate_cursor(terminal::size()?);
             app.redraw(&mut out).unwrap();
@@ -89,48 +80,20 @@ pub fn run(
     Ok(())
 }
 
-fn connect_with_auth(
+async fn connect_with_auth(
     address: SocketAddrV4,
     username: &str,
     password: Option<&str>,
-) -> (
-    WebSocket<MaybeTlsStream<TcpStream>>,
-    http::Response<Option<Vec<u8>>>,
-) {
-    let uri = Uri::builder()
-        .scheme("ws")
-        .authority(address.to_string())
-        .path_and_query("/")
-        .build()
-        .unwrap();
-    let authority = uri.authority().unwrap().as_str();
-    let host = authority
-        .find('@')
-        .map_or_else(|| authority, |idx| authority.split_at(idx + 1).1);
-
-    assert!(!host.is_empty());
-
-    let request = Request::builder()
-        .method("GET")
-        .header("Host", host)
-        .header("Connection", "Upgrade")
-        .header(
-            "Authorization",
-            format!(
-                "Basic {}",
-                BASE64_STANDARD.encode(format!("{username}:{}", password.unwrap_or("")))
-            ),
-        )
-        .header("Upgrade", "websocket")
-        .header("Sec-WebSocket-Version", "13")
-        .header("Sec-WebSocket-Key", generate_key())
-        .uri(uri)
-        .body(())
-        .unwrap();
-    let mut ret = connect(request).unwrap();
-    match ret.0.get_mut() {
-        MaybeTlsStream::Plain(x) => x.set_nonblocking(true).unwrap(),
-        _ => unreachable!(),
-    };
-    ret
+) -> io::Result<TcpStream> {
+    let mut stream = TcpStream::connect(address).await?;
+    stream.write_all(username.as_bytes()).await?;
+    if let Some(password) = password {
+        stream.write_u8(254).await?;
+        stream.write_all(password.as_bytes()).await?;
+    }
+    stream.write_all(&[255]).await?;
+    stream.flush().await?;
+    let ret = stream.read_u8().await?;
+    assert_eq!(ret, 0, "You forgot to include a password");
+    Ok(stream)
 }

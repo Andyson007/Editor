@@ -8,28 +8,28 @@ use std::{
     io::{BufReader, Read, Write},
     mem,
 };
+use tokio::{io::AsyncWriteExt, net::TcpStream};
 
-use btep::c2s::C2S;
+use btep::{c2s::C2S, Serialize};
 use buffer::Buffer;
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use text::Text;
-use tungstenite::WebSocket;
 use utils::other::CursorPos;
 mod buffer;
 mod draw;
 
 #[derive(Default)]
-pub struct Client<T> {
-    buffers: Vec<Buffer<T>>,
+pub struct Client {
+    buffers: Vec<Buffer>,
     current_buffer: usize,
     /// Stores the current editing mode. This is
     /// effectively the same as Vims insert/Normal mode
     pub(crate) mode: Mode,
 }
 
-impl<T> Client<T> {
+impl Client {
     pub fn new() -> Self {
-        let buf = Buffer::<T>::new(Text::new(), None);
+        let buf = Buffer::new(Text::new(), None);
         Self {
             buffers: Vec::from([buf]),
             current_buffer: 0,
@@ -37,8 +37,8 @@ impl<T> Client<T> {
         }
     }
 
-    pub fn new_with_buffer(text: Text, socket: Option<WebSocket<T>>) -> Self {
-        let buf = Buffer::<T>::new(text, socket);
+    pub fn new_with_buffer(text: Text, socket: Option<TcpStream>) -> Self {
+        let buf = Buffer::new(text, socket);
         Self {
             buffers: Vec::from([buf]),
             current_buffer: 0,
@@ -46,24 +46,21 @@ impl<T> Client<T> {
         }
     }
 
-    pub fn curr(&mut self) -> &mut Buffer<T> {
+    pub fn curr(&mut self) -> &mut Buffer {
         &mut self.buffers[self.current_buffer]
     }
 
-    fn execute_commad(&mut self, cmd: &str) -> bool
-    where
-        T: Read + Write,
-    {
+    async fn execute_commad(&mut self, cmd: &str) -> bool {
         match cmd {
             "q" => return self.close_current_buffer(),
-            "w" => self.curr().save(),
+            "w" => self.curr().save().await.unwrap(),
             "help" => self.add_buffer(Text::original_from_str(include_str!("../../../help")), None),
             _ => (),
         }
         false
     }
 
-    fn add_buffer(&mut self, text: Text, socket: Option<WebSocket<T>>) {
+    fn add_buffer(&mut self, text: Text, socket: Option<TcpStream>) {
         self.buffers.push(Buffer::new(text, socket));
         self.current_buffer = self.buffers.len() - 1;
     }
@@ -80,15 +77,12 @@ impl<T> Client<T> {
     }
 
     /// Handles a keyevent. This method handles every `mode`
-    pub fn handle_keyevent(&mut self, input: &KeyEvent) -> bool
-    where
-        T: Read + Write,
-    {
+    pub async fn handle_keyevent(&mut self, input: &KeyEvent) -> bool {
         match self.mode {
             Mode::Normal => self.handle_normal_keyevent(input),
-            Mode::Insert => self.handle_insert_keyevent(input),
+            Mode::Insert => self.handle_insert_keyevent(input).await,
             Mode::Command(_) => {
-                if self.handle_command_keyevent(input) {
+                if self.handle_command_keyevent(input).await {
                     return true;
                 }
             }
@@ -103,10 +97,7 @@ impl<T> Client<T> {
         }
     }
 
-    fn handle_command_keyevent(&mut self, input: &KeyEvent) -> bool
-    where
-        T: Read + Write,
-    {
+    async fn handle_command_keyevent(&mut self, input: &KeyEvent) -> bool {
         let Mode::Command(ref mut cmd) = self.mode else {
             panic!("function incorrectly called");
         };
@@ -114,7 +105,7 @@ impl<T> Client<T> {
             KeyCode::Backspace => drop(cmd.pop()),
             KeyCode::Enter => {
                 let cmd = self.take_mode().unwrap();
-                if self.execute_commad(&cmd) {
+                if self.execute_commad(&cmd).await {
                     return true;
                 }
                 self.mode = Mode::Normal;
@@ -149,10 +140,7 @@ impl<T> Client<T> {
     }
 
     /// handles a keypress as if were performed in `Insert` mode
-    fn handle_insert_keyevent(&mut self, input: &KeyEvent)
-    where
-        T: Read + Write,
-    {
+    async fn handle_insert_keyevent(&mut self, input: &KeyEvent) {
         if matches!(
             input,
             KeyEvent {
@@ -187,8 +175,11 @@ impl<T> Client<T> {
                 }
                 self.curr().text.client(curr_id).backspace();
                 if let Some(ref mut socket) = self.curr().socket {
-                    socket.write(C2S::Backspace.into()).unwrap();
-                    socket.flush().unwrap();
+                    socket
+                        .write_all(C2S::Backspace.serialize().make_contiguous())
+                        .await
+                        .unwrap();
+                    socket.flush().await.unwrap();
                 }
             }
             KeyCode::Enter => {
@@ -196,16 +187,22 @@ impl<T> Client<T> {
                 self.curr().cursorpos.col = 0;
                 self.curr().cursorpos.row += 1;
                 if let Some(ref mut socket) = self.curr().socket {
-                    socket.write(C2S::Enter.into()).unwrap();
-                    socket.flush().unwrap();
+                    socket
+                        .write_all(C2S::Enter.serialize().make_contiguous())
+                        .await
+                        .unwrap();
+                    socket.flush().await.unwrap();
                 }
             }
             KeyCode::Char(c) => {
                 self.curr().text.client(curr_id).push_char(c);
                 self.curr().cursorpos.col += c.len_utf8();
                 if let Some(ref mut socket) = self.curr().socket {
-                    socket.write(C2S::Char(c).into()).unwrap();
-                    socket.flush().unwrap();
+                    socket
+                        .write_all(C2S::Char(c).serialize().make_contiguous())
+                        .await
+                        .unwrap();
+                    socket.flush().await.unwrap();
                 }
             }
             KeyCode::Esc => self.mode = Mode::Normal,
@@ -231,10 +228,7 @@ impl<T> Client<T> {
     }
 
     /// handles a keypress as if were performed in `Normal` mode
-    fn handle_normal_keyevent(&mut self, input: &KeyEvent)
-    where
-        T: Read + Write,
-    {
+    fn handle_normal_keyevent(&mut self, input: &KeyEvent) {
         match input.code {
             KeyCode::Char('i') => {
                 let pos = self.curr().cursorpos;
@@ -292,15 +286,15 @@ impl<T> Client<T> {
         };
     }
 
-    fn enter_insert(&mut self, pos: CursorPos)
-    where
-        T: Read + Write,
-    {
+    async fn enter_insert(&mut self, pos: CursorPos) {
         let curr_id = self.curr().id;
         let (_offset, _id) = self.curr().text.client(curr_id).enter_insert(pos);
         if let Some(ref mut socket) = self.curr().socket {
-            socket.write(C2S::EnterInsert(pos).into()).unwrap();
-            socket.flush().unwrap();
+            socket
+                .write_all(C2S::EnterInsert(pos).serialize().make_contiguous())
+                .await
+                .unwrap();
+            socket.flush().await.unwrap();
         }
         self.mode = Mode::Insert;
     }
