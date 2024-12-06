@@ -11,6 +11,7 @@ and a client with
 cargo r -- client
 ```
 You can use --help to ask for more information.
+If you are unfamiliar with vim bindings (I have minimal support at the moment) you can open up a help menu by typing `:help` when entering a client. (Don't worry about what actually gets displayed when you do this)
 ## Security
 There is also an optional feature for security which you can access on the server side with
 ```sh
@@ -20,6 +21,7 @@ to connect with a client you will have to run
 ```sh
 cargo r -- client --password
 ```
+
 
 ## Goals
 - Minimize latency between computers
