@@ -44,6 +44,12 @@ pub struct CursorPos {
     pub col: usize,
 }
 
+impl From<(usize, usize)> for CursorPos {
+    fn from((col, row): (usize, usize)) -> Self {
+        Self { row, col }
+    }
+}
+
 impl Add<(isize, isize)> for CursorPos {
     type Output = Self;
 

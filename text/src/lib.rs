@@ -234,7 +234,7 @@ mod test {
         let mut text = Text::new();
         text.add_client();
 
-        text.clients[0].enter_insert(0);
+        text.clients[0].enter_insert((0, 0).into());
         text.clients[0].push_str("andy");
 
         let mut iter = text.lines();
@@ -248,10 +248,10 @@ mod test {
         let client = text.add_client();
         let client2 = text.add_client();
 
-        text.client(client).enter_insert(0);
+        text.client(client).enter_insert((0, 0).into());
         text.client(client).push_str("andy");
 
-        text.client(client2).enter_insert(2);
+        text.client(client2).enter_insert((2, 0).into());
         text.client(client2).push_str("andy");
 
         let mut iter = text.lines();
@@ -265,13 +265,13 @@ mod test {
         text.add_client();
         text.add_client();
 
-        text.client(0).enter_insert(0);
+        text.client(0).enter_insert((0, 0).into());
         text.client(0).push_str("andy");
 
         text.add_client();
 
-        text.client(1).enter_insert(2);
-        text.client(2).enter_insert(4);
+        text.client(1).enter_insert((2, 0).into());
+        text.client(2).enter_insert((4, 0).into());
         text.client(1).push_str("andy");
 
         text.client(2).push_str("\n\na");
@@ -287,13 +287,13 @@ mod test {
         let mut text = Text::new();
         text.add_client();
 
-        text.client(0).enter_insert(0);
+        text.client(0).enter_insert((0, 0).into());
         text.client(0).push_str("Hello");
 
-        text.client(0).enter_insert(5);
+        text.client(0).enter_insert((5, 0).into());
         text.client(0).push_str("world!");
 
-        text.client(0).enter_insert(5);
+        text.client(0).enter_insert((5, 0).into());
         text.client(0).push_str(" ");
 
         let mut iter = text.lines();
@@ -306,16 +306,16 @@ mod test {
         let mut text = Text::new();
         text.add_client();
 
-        text.client(0).enter_insert(0);
+        text.client(0).enter_insert((0, 0).into());
         text.client(0).push_str("Hello");
 
-        text.client(0).enter_insert(5);
+        text.client(0).enter_insert((5, 0).into());
         text.client(0).push_str("world!");
 
-        text.client(0).enter_insert(5);
+        text.client(0).enter_insert((5, 0).into());
         text.client(0).push_str(" ");
 
-        text.client(0).enter_insert(1);
+        text.client(0).enter_insert((1, 0).into());
         println!(
             "{:?}",
             text.table
@@ -328,7 +328,7 @@ mod test {
                 .map(|x| x.read().text.as_str().to_string())
                 .collect::<Vec<_>>()
         );
-        text.client(0).enter_insert(2);
+        text.client(0).enter_insert((2, 0).into());
         println!(
             "{:?}",
             text.table
@@ -366,8 +366,8 @@ mod test {
     fn backspace_typing() {
         let mut text = Text::new();
         text.add_client();
-        text.clients[0].enter_insert(0);
-        text.clients[0].enter_insert(0);
+        text.clients[0].enter_insert((0, 0).into());
+        text.clients[0].enter_insert((0, 0).into());
         text.clients[0].push_char('t');
         text.clients[0].push_char('e');
         text.clients[0].push_char('k');
