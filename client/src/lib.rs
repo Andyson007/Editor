@@ -8,14 +8,12 @@ use crossterm::{
     cursor,
     event::{self, EnableBracketedPaste, Event},
     execute,
-    style::Print,
     terminal::{
-        self, disable_raw_mode, enable_raw_mode, size, ClearType, EnterAlternateScreen,
-        LeaveAlternateScreen,
+        self, disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
     },
-    ExecutableCommand, QueueableCommand,
+    ExecutableCommand,
 };
-use editor::{Mode, State};
+use editor::{Client, Mode};
 use std::{
     io::{self, Write},
     net::{SocketAddrV4, TcpStream},
@@ -57,18 +55,17 @@ pub fn run(
     execute!(out, EnterAlternateScreen, EnableBracketedPaste)?;
     enable_raw_mode().unwrap();
 
-    let mut app = State::new(initial_text, socket);
+    let mut app = Client::new_with_buffer(initial_text, Some(socket));
 
     app.redraw(&mut out)?;
 
     out.execute(cursor::MoveTo(0, 0)).unwrap();
 
     loop {
-        // `read()` blocks until an `Event` is available
         if if event::poll(Duration::from_secs(0)).unwrap() {
             match event::read()? {
                 Event::Key(event) => {
-                    if app.handle_keyevent(&event) {
+                    if app.curr().handle_keyevent(&event) {
                         break;
                     };
                 }
@@ -79,9 +76,9 @@ pub fn run(
             };
             true
         } else {
-            app.update()
+            app.curr().update()
         } {
-            app.recalculate_cursor(terminal::size()?);
+            app.curr().recalculate_cursor(terminal::size()?);
             app.redraw(&mut out).unwrap();
             out.flush()?;
         }

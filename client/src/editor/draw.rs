@@ -1,4 +1,3 @@
-use core::panic;
 use crossterm::{
     cursor,
     style::Print,
@@ -8,18 +7,20 @@ use std::io;
 
 use crossterm::QueueableCommand;
 
-use super::{Mode, State};
+use super::{Client, Mode};
 
-impl<T> State<T> {
+impl<T> Client<T> {
     pub fn redraw<E>(&self, out: &mut E) -> io::Result<()>
     where
         E: QueueableCommand + io::Write,
     {
+        let buffer = &self.buffers[self.current_buffer];
+
         out.queue(terminal::Clear(ClearType::All))?;
-        for (linenr, line) in self
+        for (linenr, line) in buffer
             .text
             .lines()
-            .skip(self.line_offset)
+            .skip(buffer.line_offset)
             .take(terminal::size()?.1.into())
             .enumerate()
         {
@@ -31,7 +32,7 @@ impl<T> State<T> {
                 ))?;
         }
         let size = crossterm::terminal::size()?;
-        if let Mode::Command(ref cmd) = self.mode {
+        if let Mode::Command(ref cmd) = buffer.mode {
             out.queue(cursor::MoveTo(0, size.1))?
                 .queue(Print(":"))?
                 .queue(Print(cmd))?
@@ -41,18 +42,10 @@ impl<T> State<T> {
                 ))?;
         }
         out.queue(cursor::MoveTo(
-            u16::try_from(self.cursor().col).unwrap(),
-            u16::try_from(self.cursor().row - self.line_offset).unwrap(),
+            u16::try_from(buffer.cursor().col).unwrap(),
+            u16::try_from(buffer.cursor().row - buffer.line_offset).unwrap(),
         ))?;
         out.flush()?;
         Ok(())
-    }
-
-    pub fn recalculate_cursor(&mut self, (cols, rows): (u16, u16)) {
-        if self.line_offset > self.cursorpos.row {
-            self.line_offset = self.cursorpos.row;
-        } else if self.line_offset + usize::from(rows) <= self.cursorpos.row {
-            self.line_offset = self.cursorpos.row - usize::from(rows) + 1;
-        }
     }
 }
