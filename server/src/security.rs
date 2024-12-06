@@ -7,14 +7,11 @@ use sqlx::SqlitePool;
 use std::str;
 use tokio_tungstenite::tungstenite::http::HeaderValue;
 
-pub(crate) async fn auth_check(value: &HeaderValue, pool: &SqlitePool) -> Option<String> {
-    let (credential_type, credentials) = value.to_str().unwrap().split_once(' ')?;
-    if credential_type != "Basic" {
-        return None;
-    }
-    let base64 = BASE64_STANDARD.decode(credentials).ok()?;
-    let raw = str::from_utf8(base64.as_slice()).ok()?;
-    let (username, password) = raw.split_once(':')?;
+pub(crate) async fn auth_check(
+    username: &str,
+    password: &str,
+    pool: &SqlitePool,
+) -> Option<()> {
     let phc: (String,) = sqlx::query_as("SELECT phc FROM users WHERE username=$1")
         .bind(username)
         .fetch_optional(pool)
@@ -25,7 +22,7 @@ pub(crate) async fn auth_check(value: &HeaderValue, pool: &SqlitePool) -> Option
         .verify_password(password.as_bytes(), &PasswordHash::new(&phc.0).unwrap())
         .ok()?;
 
-    Some(username.to_string())
+    Some(())
 }
 
 pub(crate) async fn create_tables(pool: &SqlitePool) -> Result<(), sqlx::Error> {
