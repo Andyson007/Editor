@@ -91,6 +91,23 @@ impl Piece {
         })
     }
 
+    pub fn original_from_str(original: &str) -> Self {
+        let original: AppendOnlyStr = original.into();
+
+        Self {
+            piece_table: iter::once(TableElem {
+                bufnr: None,
+                id: 0,
+                text: original.str_slice(..),
+            })
+            .collect(),
+            buffers: Buffers {
+                original,
+                clients: vec![],
+            },
+        }
+    }
+
     /// Creates an `InnerTable` within the piece table.
     /// This allows the list to be mutated at that point.
     /// # Panics
@@ -100,11 +117,7 @@ impl Piece {
         pos: CursorPos,
         clientid: usize,
     ) -> Option<(Option<usize>, InnerTable<TableElem>)> {
-        let bytes_to_row: usize = self
-            .lines()
-            .take(pos.row)
-            .map(|x| x.len() + 1)
-            .sum();
+        let bytes_to_row: usize = self.lines().take(pos.row).map(|x| x.len() + 1).sum();
         let char_nr = bytes_to_row + pos.col;
         let binding = self.piece_table.write_full().unwrap();
         let mut to_split = binding.write();

@@ -32,7 +32,7 @@ impl<T> Client<T> {
                 ))?;
         }
         let size = crossterm::terminal::size()?;
-        if let Mode::Command(ref cmd) = buffer.mode {
+        if let Mode::Command(ref cmd) = self.mode {
             out.queue(cursor::MoveTo(0, size.1))?
                 .queue(Print(":"))?
                 .queue(Print(cmd))?

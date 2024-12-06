@@ -13,7 +13,7 @@ use crossterm::{
     },
     ExecutableCommand,
 };
-use editor::{Client, Mode};
+use editor::Client;
 use std::{
     io::{self, Write},
     net::{SocketAddrV4, TcpStream},
@@ -65,7 +65,7 @@ pub fn run(
         if if event::poll(Duration::from_secs(0)).unwrap() {
             match event::read()? {
                 Event::Key(event) => {
-                    if app.curr().handle_keyevent(&event) {
+                    if app.handle_keyevent(&event) {
                         break;
                     };
                 }

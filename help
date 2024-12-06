@@ -1,0 +1,39 @@
+                              Andy NVIM - help
+Note:
+- Changes made in this document will not be saved
+- to move down make sure caps lock isn't pressed and press j
+# Basics
+
+## Modal editing
+This editor is a modal editor. This means that you edit a document 
+in multiple different modes. These three modes are 
+"Normal" mode, "Insert" mode, and "Command mode"
+
+### Normal mode
+When first starting to edit a document you start in Normal mode. 
+This mode is used for navigating aronud the document. At the moment 
+only h, j, k, l are supported.
+
+"k" moves the cursor up. "j" moves the cursor down, "h" moves the cursor left,
+and "l" moves the cursor right.
+
+You can visualize it like this:
+   k  
+ h   l
+   j  
+
+Try moving the cursor here: X
+
+### Insert mode
+Insert mode is used for editing the text in the file
+You can press "i" to enter insert mode and "<ESC>" (a raw escape) to exit it.
+In insert mode you can edit text the way you are used together with "<BS>" (backspace)
+
+## Command mode
+Command mode allows you to do more general things. 
+You enter command mode by pressing ":". you can for example execute the command
+":w" which will force a write to happen. 
+
+Other handy commands you might use are
+- ":q" closes the current buffer
+- ":help" opens up this help menu
