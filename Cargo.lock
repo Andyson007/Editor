@@ -173,7 +173,7 @@ dependencies = [
 name = "btep"
 version = "0.1.0"
 dependencies = [
- "tungstenite",
+ "tokio",
  "utils",
 ]
 
@@ -268,6 +268,7 @@ dependencies = [
  "btep",
  "color-eyre",
  "crossterm",
+ "futures",
  "text",
  "tokio",
  "tungstenite",
@@ -369,6 +370,7 @@ checksum = "829d955a0bb380ef178a640b91779e3987da38c9aea133b20614cfed8cdea9c6"
 dependencies = [
  "bitflags",
  "crossterm_winapi",
+ "futures-core",
  "mio",
  "parking_lot",
  "rustix",
@@ -1194,6 +1196,7 @@ version = "0.1.0"
 dependencies = [
  "append_only_str",
  "btep",
+ "tokio",
  "utils",
 ]
 
@@ -1829,6 +1832,7 @@ dependencies = [
  "append_only_str",
  "btep",
  "piece-table",
+ "tokio",
  "utils",
 ]
 
@@ -1889,9 +1893,9 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
 name = "tokio"
-version = "1.41.1"
+version = "1.42.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "22cfb5bee7a6a52939ca9224d6ac897bb669134078daa8735560897f69de4d33"
+checksum = "5cec9b21b0450273377fc97bd4c33a8acffc8c996c987a7c5b319a0083707551"
 dependencies = [
  "backtrace",
  "bytes",
@@ -2100,6 +2104,10 @@ checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
 [[package]]
 name = "utils"
 version = "0.1.0"
+dependencies = [
+ "futures",
+ "tokio",
+]
 
 [[package]]
 name = "valuable"

@@ -3,8 +3,7 @@
 
 use std::{
     collections::VecDeque,
-    io::{self, Read},
-    mem,
+    io::{self, ErrorKind, Read},
     sync::{Arc, RwLock},
 };
 
@@ -12,10 +11,8 @@ use append_only_str::{slices::StrSlice, AppendOnlyStr};
 use btep::{Deserialize, Serialize};
 use client::{Client, Insertdata};
 use piece_table::Piece;
-use utils::{
-    iters::IteratorExt,
-    other::{AutoIncrementing, CursorPos},
-};
+use tokio::io::AsyncReadExt;
+use utils::other::{AutoIncrementing, CursorPos};
 pub mod client;
 
 /// A wrapper around a piece table.
@@ -31,9 +28,10 @@ impl Serialize for &Text {
     fn serialize(&self) -> std::collections::VecDeque<u8> {
         let mut ret = VecDeque::new();
         let to_extend = (&*self.table.read().unwrap()).serialize();
-
         ret.extend((to_extend.len() as u64).to_be_bytes());
         ret.extend(to_extend);
+
+        ret.extend((self.clients.len() as u64).to_be_bytes());
 
         ret.extend(self.clients.iter().flat_map(|x| {
             let mut ret = VecDeque::new();
@@ -52,52 +50,25 @@ impl Serialize for &Text {
 }
 
 impl Deserialize for Text {
-    fn deserialize(data: &[u8]) -> Self {
-        let mut iter = data.iter();
-        let len = u64::from_be_bytes(
-            iter.by_ref()
-                .copied()
-                .chunks::<{ mem::size_of::<u64>() }>()
-                .next()
-                .unwrap(),
-        ) as usize;
-        let piece = Piece::deserialize(
-            iter.by_ref()
-                .copied()
-                .take(len)
-                .collect::<Vec<_>>()
-                .as_slice(),
-        );
+    async fn deserialize<T>(data: &mut T) -> io::Result<Self>
+    where
+        T: AsyncReadExt + Unpin + Send,
+    {
+        let _len = data.read_u64().await? as usize;
+        // NOTE: We should probably limit the length of data here
+        let piece = Piece::deserialize(data).await?;
 
         let arced = Arc::new(RwLock::new(piece));
-        let mut counter = 0;
 
-        let mut clients = Vec::new();
+        let client_count = data.read_u64().await? as usize;
 
-        while let Some(x) = iter.next() {
-            if *x == 1 {
-                let start = u64::from_be_bytes(
-                    iter.by_ref()
-                        .copied()
-                        .chunks::<{ mem::size_of::<u64>() }>()
-                        .next()
-                        .unwrap(),
-                ) as usize;
-                let end = u64::from_be_bytes(
-                    iter.by_ref()
-                        .copied()
-                        .chunks::<{ mem::size_of::<u64>() }>()
-                        .next()
-                        .unwrap(),
-                ) as usize;
+        let mut clients = Vec::with_capacity(client_count as usize);
+        for counter in 0..client_count {
+            if data.read_u8().await? == 1 {
+                let start = data.read_u64().await? as usize;
+                let end = data.read_u64().await? as usize;
 
-                let pos = CursorPos::deserialize(
-                    iter.by_ref()
-                        .take(mem::size_of::<u64>() * 2)
-                        .copied()
-                        .collect::<Vec<_>>()
-                        .as_slice(),
-                );
+                let pos = CursorPos::deserialize(data).await?;
 
                 clients.push(Client {
                     piece: Arc::clone(&arced),
@@ -135,12 +106,11 @@ impl Deserialize for Text {
                     bufnr: counter,
                 });
             }
-            counter += 1;
         }
-        Self {
+        Ok(Self {
             table: arced,
             clients,
-        }
+        })
     }
 }
 
