@@ -23,13 +23,17 @@ where
         let mut ret = VecDeque::new();
         match self {
             Self::Full(x) => {
+                ret.push_front(0);
                 ret.extend(x.serialize());
             }
             Self::Update((id, action)) => {
+                ret.push_front(1);
                 ret.extend((*id as u64).to_be_bytes());
                 ret.extend(action.serialize());
             }
-            Self::NewClient => (),
+            Self::NewClient => {
+                ret.push_front(2);
+            },
         };
         ret
     }
@@ -56,7 +60,7 @@ where
                 Self::Update((id, action))
             }
             2 => Self::NewClient,
-            _ => panic!("An invalid specifier was found"),
+            x => panic!("An invalid specifier was found ({x})"),
         })
     }
 }

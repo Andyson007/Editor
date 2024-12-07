@@ -1,7 +1,7 @@
 use core::str;
 use std::io::{self, ErrorKind};
 
-use tokio::io::{AsyncRead, AsyncReadExt, BufReader};
+use tokio::io::{AsyncRead, AsyncReadExt};
 
 pub trait BufReaderExt {
     /// Returns none if the buffer was read to completion
@@ -11,7 +11,7 @@ pub trait BufReaderExt {
     ) -> impl std::future::Future<Output = io::Result<Option<u8>>> + Send;
 }
 
-impl<T> BufReaderExt for BufReader<T>
+impl<T> BufReaderExt for T
 where
     T: AsyncRead + Unpin + Send,
 {

@@ -252,12 +252,11 @@ impl Deserialize for Piece {
         T: AsyncReadExt + Unpin + Send,
         Self: Sized,
     {
-        let mut reader = BufReader::new(data);
         // `take_while_ref` requires a peekable wrapper
         // #[allow(clippy::unused_peekable)]
         // let mut iter = data.bytes().peekable();
         let mut str_buf = String::new();
-        let mut separator = reader.read_valid_str(&mut str_buf).await?;
+        let mut separator = data.read_valid_str(&mut str_buf).await?;
 
         let original_buffer: AppendOnlyStr = AppendOnlyStr::from_str(&str_buf).unwrap();
 
@@ -267,10 +266,10 @@ impl Deserialize for Piece {
             if separator == Some(255) {
                 break;
             }
-            let counter_start = reader.read_u64().await? as usize;
+            let counter_start = data.read_u64().await? as usize;
 
             str_buf.clear();
-            separator = reader.read_valid_str(&mut str_buf).await?;
+            separator = data.read_valid_str(&mut str_buf).await?;
 
             client_buffers.push((
                 Arc::new(RwLock::new(AutoIncrementing::new_with_start(counter_start))),
@@ -278,14 +277,14 @@ impl Deserialize for Piece {
             ));
         }
 
-        let piece_count = reader.read_u64().await? as usize;
+        let piece_count = data.read_u64().await? as usize;
 
         let mut builder = InnerTable::builder();
         for _ in 0..piece_count {
-            let bufnr = reader.read_u64().await?;
-            let id = reader.read_u64().await? as usize;
-            let start = reader.read_u64().await? as usize;
-            let end = reader.read_u64().await? as usize;
+            let bufnr = data.read_u64().await?;
+            let id = data.read_u64().await? as usize;
+            let start = data.read_u64().await? as usize;
+            let end = data.read_u64().await? as usize;
             builder.push(match bufnr {
                 u64::MAX => TableElem {
                     bufnr: None,

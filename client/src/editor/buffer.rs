@@ -65,7 +65,7 @@ impl Buffer {
     /// save the current buffer
     pub(super) async fn save(&mut self) -> tokio::io::Result<()> {
         if let Some(Socket {
-            writer: ref mut writer,
+            ref mut writer,
             ..
         }) = self.socket
         {
@@ -85,7 +85,7 @@ impl Buffer {
     /// the message received wasn't formatted properly
     pub async fn update(&mut self) -> io::Result<bool> {
         let Some(Socket {
-            reader: ref mut reader,
+            ref mut reader,
             ..
         }) = self.socket
         else {

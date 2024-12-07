@@ -286,7 +286,7 @@ impl Client {
         let curr_id = self.curr().id;
         let (_offset, _id) = self.curr().text.client(curr_id).enter_insert(pos);
         if let Some(buffer::Socket {
-            writer: ref mut writer,
+            ref mut writer,
             ..
         }) = self.curr().socket
         {

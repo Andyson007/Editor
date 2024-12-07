@@ -28,9 +28,10 @@ impl Serialize for &Text {
     fn serialize(&self) -> std::collections::VecDeque<u8> {
         let mut ret = VecDeque::new();
         let to_extend = (&*self.table.read().unwrap()).serialize();
-
         ret.extend((to_extend.len() as u64).to_be_bytes());
         ret.extend(to_extend);
+
+        ret.extend((self.clients.len() as u64).to_be_bytes());
 
         ret.extend(self.clients.iter().flat_map(|x| {
             let mut ret = VecDeque::new();
@@ -58,16 +59,12 @@ impl Deserialize for Text {
         let piece = Piece::deserialize(data).await?;
 
         let arced = Arc::new(RwLock::new(piece));
-        let mut counter = 0;
 
-        let mut clients = Vec::new();
+        let client_count = data.read_u64().await? as usize;
 
-        while let Some(x) = match data.read_u8().await {
-            Ok(x) => Some(x),
-            Err(e) if e.kind() == ErrorKind::UnexpectedEof => None,
-            Err(e) => return Err(e),
-        } {
-            if x == 1 {
+        let mut clients = Vec::with_capacity(client_count as usize);
+        for counter in 0..client_count {
+            if data.read_u8().await? == 1 {
                 let start = data.read_u64().await? as usize;
                 let end = data.read_u64().await? as usize;
 
@@ -109,7 +106,6 @@ impl Deserialize for Text {
                     bufnr: counter,
                 });
             }
-            counter += 1;
         }
         Ok(Self {
             table: arced,

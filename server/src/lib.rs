@@ -118,6 +118,9 @@ pub async fn run(
                     full.serialize()
                 };
                 // dbg!(&data);
+                for (i, elem) in data.iter().enumerate() {
+                    println!("{i}: {elem}");
+                }
                 write.write_all(data.make_contiguous()).await.unwrap();
                 write.flush().await.unwrap();
                 // println!("{data:#?}");
