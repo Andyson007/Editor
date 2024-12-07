@@ -2,10 +2,8 @@ use argon2::{
     password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
     Argon2,
 };
-use base64::{prelude::BASE64_STANDARD, Engine};
 use sqlx::SqlitePool;
 use std::str;
-use tokio_tungstenite::tungstenite::http::HeaderValue;
 
 pub(crate) async fn auth_check(
     username: &str,

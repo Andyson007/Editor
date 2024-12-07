@@ -2,7 +2,6 @@
 #![feature(try_blocks)]
 #[cfg(feature = "security")]
 mod security;
-use base64::{prelude::BASE64_STANDARD, Engine};
 use btep::{c2s::C2S, prelude::S2C, Deserialize, Serialize};
 use futures::executor::block_on;
 #[cfg(feature = "security")]
@@ -100,9 +99,18 @@ pub async fn run(
                 stream.flush().await.unwrap();
                 x
             }
-            Err(_) => {
-                warn!("client {client_id} failed to connect");
-                stream.write_u8(1).await.unwrap();
+            #[cfg(feature = "security")]
+            Err(x) => {
+                match x {
+                    UserAuthError::BadPassword => {
+                        warn!("client {client_id} forgot to include a password");
+                        stream.write_u8(2).await.unwrap();
+                    }
+                    UserAuthError::NeedsPassword => {
+                        warn!("client {client_id} forgot to include a password");
+                        stream.write_u8(1).await.unwrap();
+                    }
+                }
                 stream.flush().await.unwrap();
                 continue;
             }
@@ -207,9 +215,11 @@ where
     let username = iter.next().unwrap().valid();
     #[cfg(feature = "security")]
     {
-        let password = iter.next().unwrap().valid();
-        if auth_check(username, password, pool).is_none() {
-            return UserAuthError::BadPassword;
+        let Some(password) = iter.next() else {
+            return Err(UserAuthError::NeedsPassword);
+        };
+        if auth_check(username, password.valid(), pool).await.is_none() {
+            return Err(UserAuthError::BadPassword);
         };
     }
     Ok(username.to_string())
@@ -218,6 +228,8 @@ where
 enum UserAuthError {
     #[cfg(feature = "security")]
     BadPassword,
+    #[cfg(feature = "security")]
+    NeedsPassword,
 }
 
 impl From<std::io::Error> for UserAuthError {
