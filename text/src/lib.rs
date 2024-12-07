@@ -3,7 +3,7 @@
 
 use std::{
     collections::VecDeque,
-    io::{self, ErrorKind, Read},
+    io::{self, Read},
     sync::{Arc, RwLock},
 };
 

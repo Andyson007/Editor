@@ -3,7 +3,7 @@ use std::{cmp, io};
 use btep::{c2s::C2S, s2c::S2C, Deserialize, Serialize};
 use text::Text;
 use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt, BufReader},
+    io::{AsyncWriteExt, BufReader},
     net::{
         tcp::{OwnedReadHalf, OwnedWriteHalf},
         TcpStream,

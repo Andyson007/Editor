@@ -15,7 +15,7 @@ pub mod table;
 use append_only_str::{slices::StrSlice, AppendOnlyStr};
 use btep::{Deserialize, Serialize};
 use table::{InnerTable, LockError, Table};
-use tokio::io::{AsyncReadExt, BufReader};
+use tokio::io::AsyncReadExt;
 use utils::{
     bufread::BufReaderExt,
     other::{AutoIncrementing, CursorPos},

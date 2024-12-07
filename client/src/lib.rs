@@ -5,7 +5,7 @@ pub mod errors;
 use btep::{prelude::S2C, Deserialize};
 use crossterm::{
     cursor,
-    event::{self, EnableBracketedPaste, Event, EventStream},
+    event::{EnableBracketedPaste, Event, EventStream},
     execute,
     terminal::{
         self, disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
@@ -18,8 +18,6 @@ use std::{
     io::{self, Write},
     net::SocketAddrV4,
     str,
-    sync::{Arc, RwLock},
-    time::Duration,
 };
 use text::Text;
 use tokio::{
@@ -130,6 +128,11 @@ async fn connect_with_auth(
     stream.write_all(&[255]).await?;
     stream.flush().await?;
     let ret = stream.read_u8().await?;
-    assert_eq!(ret, 0, "You forgot to include a password");
+    match ret {
+        0 => (),
+        1 => panic!("You forgot to include a password"),
+        2 => panic!("The username, password combination you supplied isn't authorized"),
+        _ => unreachable!()
+    }
     Ok(stream)
 }
