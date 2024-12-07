@@ -5,7 +5,7 @@ pub mod errors;
 use btep::{prelude::S2C, Deserialize};
 use crossterm::{
     cursor,
-    event::{self, EnableBracketedPaste, Event},
+    event::{self, EnableBracketedPaste, Event, EventStream},
     execute,
     terminal::{
         self, disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
@@ -13,15 +13,17 @@ use crossterm::{
     ExecutableCommand,
 };
 use editor::Client;
+use futures::{FutureExt, StreamExt};
 use std::{
     io::{self, Write},
     net::SocketAddrV4,
     str,
+    sync::{Arc, RwLock},
     time::Duration,
 };
 use text::Text;
 use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt, BufReader},
+    io::{AsyncReadExt, AsyncWriteExt},
     net::TcpStream,
 };
 
@@ -54,27 +56,59 @@ pub async fn run(
 
     out.execute(cursor::MoveTo(0, 0)).unwrap();
 
+    let mut reader = EventStream::new();
     loop {
-        if if event::poll(Duration::from_secs(0)).unwrap() {
-            match event::read()? {
-                Event::Key(event) => {
-                    if app.handle_keyevent(&event).await? {
-                        break;
-                    };
+        let update = app.curr().update().fuse();
+        let event = reader.next().fuse();
+
+        if tokio::select! {
+            maybe_event = event => {
+                match maybe_event {
+                    Some(Ok(event)) => {
+                        match event {
+                            Event::Key(event) => {
+                                if app.handle_keyevent(&event).await? {
+                                    break;
+                                } else {
+                                    true
+                                }
+                            }
+                            Event::Mouse(_event) => todo!("No mouse support sorry"),
+                            Event::Paste(_data) => todo!("No paste support sorry"),
+                            Event::Resize(_width, _height) => true,
+                            Event::FocusGained | Event::FocusLost => false,
+                        }
+                    },
+                    Some(Err(e)) => panic!("{e}"),
+                    None => panic!("idk what this branch is supposed to handle"),
                 }
-                Event::Mouse(_event) => todo!("No mouse support sorry"),
-                Event::Paste(_data) => todo!("No paste support sorry"),
-                Event::Resize(_width, _height) => (),
-                Event::FocusGained | Event::FocusLost => (),
-            };
-            true
-        } else {
-            app.curr().update().await?
+            },
+            x = update => x.unwrap(),
         } {
             app.curr().recalculate_cursor(terminal::size()?);
             app.redraw(&mut out).unwrap();
             out.flush()?;
         }
+        // if if event::poll(Duration::from_secs(0)).unwrap() {
+        //     match event::read()? {
+        //         Event::Key(event) => {
+        //             if app.handle_keyevent(&event).await? {
+        //                 break;
+        //             };
+        //         }
+        //         Event::Mouse(_event) => todo!("No mouse support sorry"),
+        //         Event::Paste(_data) => todo!("No paste support sorry"),
+        //         Event::Resize(_width, _height) => (),
+        //         Event::FocusGained | Event::FocusLost => (),
+        //     };
+        //     true
+        // } else {
+        //     app.curr().update().await?
+        // } {
+        //     app.curr().recalculate_cursor(terminal::size()?);
+        //     app.redraw(&mut out).unwrap();
+        //     out.flush()?;
+        // }
     }
 
     disable_raw_mode().unwrap();

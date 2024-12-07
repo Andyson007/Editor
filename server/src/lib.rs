@@ -21,7 +21,7 @@ use std::{
 use text::Text;
 use tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
-    net::TcpListener,
+    net::{tcp::OwnedWriteHalf, TcpListener},
     select,
     sync::Notify,
     time::sleep,
@@ -54,7 +54,7 @@ pub async fn run(
         Text::original_from_reader(BufReader::new(file)).unwrap(),
     ));
 
-    let sockets = Arc::new(RwLock::new(HashMap::new()));
+    let sockets = Arc::new(RwLock::new(HashMap::<usize, OwnedWriteHalf>::new()));
     let owned_path = path.to_owned();
     let writer_text = Arc::clone(&text);
 
@@ -118,68 +118,62 @@ pub async fn run(
                     full.serialize()
                 };
                 // dbg!(&data);
-                for (i, elem) in data.iter().enumerate() {
-                    println!("{i}: {elem}");
-                }
                 write.write_all(data.make_contiguous()).await.unwrap();
                 write.flush().await.unwrap();
                 // println!("{data:#?}");
             }
             debug_assert_eq!(text.write().unwrap().add_client(), client_id);
-            sockets.write().unwrap().insert(client_id, write);
-            for (clientnr, client) in sockets.write().as_mut().unwrap().iter_mut() {
-                if *clientnr == client_id {
-                    continue;
-                }
-                futures::executor::block_on(
-                    client.write(S2C::<&Text>::NewClient.serialize().make_contiguous()),
-                )
-                .unwrap();
+            for (_, client) in sockets.write().as_mut().unwrap().iter_mut() {
+                block_on(async {
+                    client
+                        .write_all(S2C::<&Text>::NewClient.serialize().make_contiguous())
+                        .await
+                        .unwrap();
+                    client.flush().await.unwrap();
+                });
             }
+            sockets.write().unwrap().insert(client_id, write);
             loop {
                 let mut to_remove = Vec::with_capacity(1);
                 {
-                    let mut msg = Vec::new();
-                    if read.read_buf(&mut msg).await.is_ok() {
-                        let action = {
-                            let action = C2S::deserialize(&mut read).await.unwrap();
-                            let mut binding = text.write().unwrap();
-                            let lock = binding.client(client_id);
-                            match action {
-                                C2S::Char(c) => lock.push_char(c),
-                                C2S::Backspace => drop(lock.backspace()),
-                                C2S::Enter => lock.push_char('\n'),
-                                C2S::EnterInsert(enter_insert) => {
-                                    lock.enter_insert(enter_insert);
-                                }
-                                C2S::Save => {
-                                    save_notify.notify_one();
-                                    continue;
-                                }
+                    let action = {
+                        let action = C2S::deserialize(&mut read).await.unwrap();
+                        let mut binding = text.write().unwrap();
+                        let lock = binding.client(client_id);
+                        match action {
+                            C2S::Char(c) => lock.push_char(c),
+                            C2S::Backspace => drop(lock.backspace()),
+                            C2S::Enter => lock.push_char('\n'),
+                            C2S::EnterInsert(enter_insert) => {
+                                lock.enter_insert(enter_insert);
                             }
-                            action
-                        };
-
-                        let mut socket_lock = sockets.write().unwrap();
-                        for (clientnr, client) in socket_lock.iter_mut() {
-                            if *clientnr == client_id {
+                            C2S::Save => {
+                                save_notify.notify_one();
                                 continue;
                             }
-                            let result = block_on(
-                                client.write(
-                                    S2C::Update::<&Text>((client_id, action))
-                                        .serialize()
-                                        .make_contiguous(),
-                                ),
-                            );
-                            match result {
-                                Ok(_) => block_on(async { client.flush().await.unwrap() }),
-                                Err(e) => {
-                                    to_remove.push(*clientnr);
-                                    warn!("{client_id}: {e}")
-                                }
-                            };
                         }
+                        action
+                    };
+
+                    let mut socket_lock = sockets.write().unwrap();
+                    for (clientnr, client) in socket_lock.iter_mut() {
+                        if *clientnr == client_id {
+                            continue;
+                        }
+                        let result = block_on(
+                            client.write_all(
+                                S2C::Update::<&Text>((client_id, action))
+                                    .serialize()
+                                    .make_contiguous(),
+                            ),
+                        );
+                        match result {
+                            Ok(_) => block_on(async { client.flush().await.unwrap() }),
+                            Err(e) => {
+                                to_remove.push(*clientnr);
+                                warn!("{client_id}: {e}")
+                            }
+                        };
                     }
                 }
                 {

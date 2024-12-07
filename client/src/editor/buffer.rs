@@ -1,7 +1,4 @@
-use std::{
-    cmp,
-    io,
-};
+use std::{cmp, io};
 
 use btep::{c2s::C2S, s2c::S2C, Deserialize, Serialize};
 use text::Text;
@@ -64,11 +61,7 @@ impl Buffer {
 
     /// save the current buffer
     pub(super) async fn save(&mut self) -> tokio::io::Result<()> {
-        if let Some(Socket {
-            ref mut writer,
-            ..
-        }) = self.socket
-        {
+        if let Some(Socket { ref mut writer, .. }) = self.socket {
             writer
                 .write_all(C2S::Save.serialize().make_contiguous())
                 .await?;
@@ -84,15 +77,9 @@ impl Buffer {
     /// # Panics
     /// the message received wasn't formatted properly
     pub async fn update(&mut self) -> io::Result<bool> {
-        let Some(Socket {
-            ref mut reader,
-            ..
-        }) = self.socket
-        else {
+        let Some(Socket { ref mut reader, .. }) = self.socket else {
             return Ok(false);
         };
-        let mut msg = Vec::new();
-        reader.read_buf(&mut msg).await.unwrap();
 
         match S2C::<Text>::deserialize(reader).await? {
             S2C::Full(_) => unreachable!("A full buffer shouldn't be sent"),

@@ -78,7 +78,7 @@ impl Deserialize for C2S {
             3 => Self::Save,
             8 => Self::Backspace,
             10 => Self::Enter,
-            _ => unreachable!(),
+            x => unreachable!("{x}"),
         })
     }
 }
