@@ -14,7 +14,7 @@ use crossterm::{
 };
 use editor::Client;
 use std::{
-    io::{self, Read, Write},
+    io::{self, Write},
     net::SocketAddrV4,
     str,
     time::Duration,
@@ -58,7 +58,7 @@ pub async fn run(
         if if event::poll(Duration::from_secs(0)).unwrap() {
             match event::read()? {
                 Event::Key(event) => {
-                    if app.handle_keyevent(&event).await {
+                    if app.handle_keyevent(&event).await? {
                         break;
                     };
                 }

@@ -4,7 +4,6 @@
 use std::{
     collections::VecDeque,
     io::{self, ErrorKind, Read},
-    mem,
     sync::{Arc, RwLock},
 };
 
@@ -12,11 +11,8 @@ use append_only_str::{slices::StrSlice, AppendOnlyStr};
 use btep::{Deserialize, Serialize};
 use client::{Client, Insertdata};
 use piece_table::Piece;
-use tokio::{io::AsyncReadExt, time::error::Error};
-use utils::{
-    iters::IteratorExt,
-    other::{AutoIncrementing, CursorPos},
-};
+use tokio::io::AsyncReadExt;
+use utils::other::{AutoIncrementing, CursorPos};
 pub mod client;
 
 /// A wrapper around a piece table.
@@ -57,7 +53,7 @@ impl Deserialize for Text {
     where
         T: AsyncReadExt + Unpin + Send,
     {
-        let len = data.read_u64().await? as usize;
+        let _len = data.read_u64().await? as usize;
         // NOTE: We should probably limit the length of data here
         let piece = Piece::deserialize(data).await?;
 

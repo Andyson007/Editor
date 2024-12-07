@@ -13,7 +13,7 @@ pub mod prelude {
 
 use std::{
     collections::VecDeque,
-    io::{self, Read},
+    io,
     mem,
 };
 

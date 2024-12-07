@@ -4,7 +4,7 @@
 mod security;
 use base64::{prelude::BASE64_STANDARD, Engine};
 use btep::{c2s::C2S, prelude::S2C, Deserialize, Serialize};
-use futures::{executor::block_on, Sink, SinkExt, Stream, StreamExt, TryFutureExt};
+use futures::executor::block_on;
 #[cfg(feature = "security")]
 use sqlx::{sqlite::SqliteConnectOptions, SqlitePool};
 #[cfg(feature = "security")]
@@ -12,11 +12,9 @@ use std::str::FromStr;
 use std::{
     collections::HashMap,
     fs::{File, OpenOptions},
-    io::{self, BufReader, BufWriter, Write},
+    io::{BufReader, BufWriter, Write},
     net::SocketAddrV4,
     path::Path,
-    pin::Pin,
-    str,
     sync::{Arc, RwLock},
     time::Duration,
 };

@@ -45,7 +45,9 @@ where
         Self: Sized,
     {
         Ok(match data.read_u8().await? {
-            0 => Self::Full(T::deserialize(data).await?),
+            0 => {
+                Self::Full(T::deserialize(data).await?)
+            },
             1 => {
                 let mut buf = [0; mem::size_of::<u64>()];
                 data.read_exact(&mut buf).await?;

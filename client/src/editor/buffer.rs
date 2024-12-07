@@ -1,6 +1,6 @@
 use std::{
     cmp,
-    io::{self, Read, Write},
+    io,
 };
 
 use btep::{c2s::C2S, s2c::S2C, Deserialize, Serialize};

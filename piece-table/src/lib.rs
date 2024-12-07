@@ -2,7 +2,7 @@
 #![feature(linked_list_cursors)]
 #![feature(async_iterator)]
 use std::{
-    collections::{LinkedList, VecDeque},
+    collections::VecDeque,
     io::{self, Read},
     iter,
     str::FromStr,
@@ -14,7 +14,6 @@ pub mod table;
 
 use append_only_str::{slices::StrSlice, AppendOnlyStr};
 use btep::{Deserialize, Serialize};
-use futures::stream::FuturesOrdered;
 use table::{InnerTable, LockError, Table};
 use tokio::io::{AsyncReadExt, BufReader};
 use utils::{
