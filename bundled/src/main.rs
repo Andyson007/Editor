@@ -9,6 +9,7 @@ use std::str::FromStr;
 use std::{
     io::{self, Write},
     net::{Ipv4Addr, SocketAddrV4},
+    num::NonZeroU64,
     path::PathBuf,
 };
 use termion::input::TermRead;
@@ -47,6 +48,14 @@ struct ServerArgs {
     ///
     /// it is not a feature yet to share folders
     path: PathBuf,
+    /// disables periodic saves. This forces clients to manually save with `:w`
+    #[arg(long, default_value = "false")]
+    disable_auto_save: bool,
+
+    /// specifies the time between writes to the save file in seconds
+    #[arg(long, default_value = "10")]
+    save_interval: NonZeroU64,
+
     /// IP-address the server should be hosted on
     ///
     /// 0.0.0.0 in order to host on the local network
@@ -117,6 +126,8 @@ fn main() -> color_eyre::Result<()> {
             port,
             address,
             verbosity,
+            disable_auto_save,
+            save_interval,
             #[cfg(feature = "security")]
                 add_user: false,
         }) => {
@@ -127,6 +138,7 @@ fn main() -> color_eyre::Result<()> {
             info!("{cli:?}");
             let address = address.unwrap_or(SocketAddrV4::new(*ip, *port));
             server::run(
+                (!disable_auto_save).then_some(*save_interval),
                 address,
                 path,
                 #[cfg(feature = "security")]

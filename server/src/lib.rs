@@ -13,6 +13,7 @@ use std::{
     fs::{File, OpenOptions},
     io::{BufReader, BufWriter, Error, Write},
     net::SocketAddrV4,
+    num::NonZeroU64,
     path::Path,
     sync::{Arc, RwLock},
     time::Duration,
@@ -38,6 +39,7 @@ use tracing::{debug, error, info, trace, warn};
 #[allow(clippy::missing_panics_doc)]
 #[tokio::main]
 pub async fn run(
+    save_interval: Option<NonZeroU64>,
     address: SocketAddrV4,
     path: &Path,
     #[cfg(feature = "security")] pool: SqlitePool,
@@ -62,10 +64,14 @@ pub async fn run(
     tokio::spawn(async move {
         let text = writer_text;
         loop {
-            select!(
-                () = sleep(Duration::from_secs(10)) => (),
-                () = save_notify_reader.notified() => {}
-            );
+            if let Some(x) = save_interval {
+                select!(
+                    () = sleep(Duration::from_secs(x.get())) => (),
+                    () = save_notify_reader.notified() => {}
+                );
+            } else {
+                save_notify_reader.notified().await;
+            }
             let file = OpenOptions::new().write(true).open(&owned_path).unwrap();
             let mut writer = BufWriter::new(file);
             let buf_iter = text.read().unwrap().bufs();
@@ -99,14 +105,15 @@ pub async fn run(
                 stream.flush().await.unwrap();
                 x
             }
-            Err(UserAuthError::IoError(e)) => panic!("{e:?}") ,
-            #[cfg(feature = "security")]
             Err(x) => {
                 match x {
+                    UserAuthError::IoError(e) => panic!("{e:?}"),
+                    #[cfg(feature = "security")]
                     UserAuthError::BadPassword => {
                         warn!("client {client_id} forgot to include a password");
                         stream.write_u8(2).await.unwrap();
                     }
+                    #[cfg(feature = "security")]
                     UserAuthError::NeedsPassword => {
                         warn!("client {client_id} forgot to include a password");
                         stream.write_u8(1).await.unwrap();
@@ -229,7 +236,7 @@ enum UserAuthError {
     BadPassword,
     #[cfg(feature = "security")]
     NeedsPassword,
-    IoError(Error)
+    IoError(Error),
 }
 
 impl From<std::io::Error> for UserAuthError {
