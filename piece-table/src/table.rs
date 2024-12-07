@@ -427,6 +427,7 @@ impl<T> InnerTable<T> {
 /// A builder for a `Table`
 pub struct InnerTableBuilder<T> {
     /// The inner table being modified
+    #[allow(clippy::linkedlist)]
     inner: LinkedList<InnerTable<T>>,
     /// The shared state
     state: Arc<RwLock<TableState>>,
@@ -435,6 +436,7 @@ pub struct InnerTableBuilder<T> {
 impl<T> InnerTableBuilder<T> {
     /// returns its values so that it can be converted to a `Table`
     #[must_use]
+    #[allow(clippy::linkedlist)]
     pub(crate) fn build(self) -> (LinkedList<InnerTable<T>>, Arc<RwLock<TableState>>) {
         (self.inner, self.state)
     }

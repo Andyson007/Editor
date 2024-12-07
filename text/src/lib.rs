@@ -126,6 +126,7 @@ impl Text {
     /// Creates a new piece table with the orginal buffer filled in from the reader.
     /// # Errors
     /// - The reader failed to read
+    #[must_use]
     pub fn original_from_str(original: &str) -> Self {
         let piece = Piece::original_from_str(original);
         Self::with_piece(piece)

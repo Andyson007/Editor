@@ -10,6 +10,11 @@ use crossterm::QueueableCommand;
 use super::{Client, Mode};
 
 impl Client {
+    /// draws the current client to the screen
+    /// # Errors
+    /// - failing to write to the terminal
+    /// # Panics
+    /// - faliing to convert from a usize to a u16
     pub fn redraw<E>(&self, out: &mut E) -> io::Result<()>
     where
         E: QueueableCommand + io::Write,

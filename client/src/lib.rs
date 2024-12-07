@@ -67,9 +67,8 @@ pub async fn run(
                             Event::Key(event) => {
                                 if app.handle_keyevent(&event).await? {
                                     break;
-                                } else {
-                                    true
                                 }
+                                true
                             }
                             Event::Mouse(_event) => todo!("No mouse support sorry"),
                             Event::Paste(_data) => todo!("No paste support sorry"),
@@ -87,26 +86,6 @@ pub async fn run(
             app.redraw(&mut out).unwrap();
             out.flush()?;
         }
-        // if if event::poll(Duration::from_secs(0)).unwrap() {
-        //     match event::read()? {
-        //         Event::Key(event) => {
-        //             if app.handle_keyevent(&event).await? {
-        //                 break;
-        //             };
-        //         }
-        //         Event::Mouse(_event) => todo!("No mouse support sorry"),
-        //         Event::Paste(_data) => todo!("No paste support sorry"),
-        //         Event::Resize(_width, _height) => (),
-        //         Event::FocusGained | Event::FocusLost => (),
-        //     };
-        //     true
-        // } else {
-        //     app.curr().update().await?
-        // } {
-        //     app.curr().recalculate_cursor(terminal::size()?);
-        //     app.redraw(&mut out).unwrap();
-        //     out.flush()?;
-        // }
     }
 
     disable_raw_mode().unwrap();
@@ -132,7 +111,7 @@ async fn connect_with_auth(
         0 => (),
         1 => panic!("You forgot to include a password"),
         2 => panic!("The username, password combination you supplied isn't authorized"),
-        _ => unreachable!()
+        _ => unreachable!(),
     }
     Ok(stream)
 }

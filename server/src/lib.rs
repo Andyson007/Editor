@@ -11,7 +11,7 @@ use std::str::FromStr;
 use std::{
     collections::HashMap,
     fs::{File, OpenOptions},
-    io::{BufReader, BufWriter, Write},
+    io::{BufReader, BufWriter, Error, Write},
     net::SocketAddrV4,
     path::Path,
     sync::{Arc, RwLock},
@@ -63,8 +63,8 @@ pub async fn run(
         let text = writer_text;
         loop {
             select!(
-            _ = sleep(Duration::from_secs(10)) => (),
-            _ = save_notify_reader.notified() => {}
+                () = sleep(Duration::from_secs(10)) => (),
+                () = save_notify_reader.notified() => {}
             );
             let file = OpenOptions::new().write(true).open(&owned_path).unwrap();
             let mut writer = BufWriter::new(file);
@@ -99,6 +99,7 @@ pub async fn run(
                 stream.flush().await.unwrap();
                 x
             }
+            Err(UserAuthError::IoError(e)) => panic!("{e:?}") ,
             #[cfg(feature = "security")]
             Err(x) => {
                 match x {
@@ -176,10 +177,10 @@ pub async fn run(
                             ),
                         );
                         match result {
-                            Ok(_) => block_on(async { client.flush().await.unwrap() }),
+                            Ok(()) => block_on(async { client.flush().await.unwrap() }),
                             Err(e) => {
                                 to_remove.push(*clientnr);
-                                warn!("{client_id}: {e}")
+                                warn!("{client_id}: {e}");
                             }
                         };
                     }
@@ -195,8 +196,6 @@ pub async fn run(
                     "{client_id} {:?}",
                     text.read().unwrap().lines().collect::<Vec<_>>()
                 );
-                trace!("{client_id} yielded");
-                tokio::task::yield_now().await;
             }
         });
     }
@@ -230,10 +229,11 @@ enum UserAuthError {
     BadPassword,
     #[cfg(feature = "security")]
     NeedsPassword,
+    IoError(Error)
 }
 
 impl From<std::io::Error> for UserAuthError {
-    fn from(value: std::io::Error) -> Self {
-        panic!("{value}");
+    fn from(e: std::io::Error) -> Self {
+        Self::IoError(e)
     }
 }

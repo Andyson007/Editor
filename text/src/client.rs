@@ -11,16 +11,24 @@ use utils::other::{AutoIncrementing, CursorPos};
 /// A client which can input text into a `Piece`
 #[derive(Debug)]
 pub struct Client {
+    /// The full piece table we are editing inside of
     pub(crate) piece: Arc<RwLock<Piece>>,
+    /// The current buffer we are editing
     pub(crate) buffer: Arc<RwLock<AppendOnlyStr>>,
+    /// A conuter used to generate unique ids
     pub(crate) id_counter: Arc<RwLock<AutoIncrementing>>,
+    /// The id of the buffer this client is editing
     pub(crate) bufnr: usize,
+    /// None -> You are currently not in insert mode
     pub data: Option<Insertdata>,
 }
 
+/// Stores data related to being in insert mode
 #[derive(Debug)]
 pub struct Insertdata {
+    /// The slice being edited
     pub(crate) slice: InnerTable<TableElem>,
+    /// The cursors location
     pub pos: CursorPos,
     /// Stores whether its safe to insert a chracter again
     /// # Necessity

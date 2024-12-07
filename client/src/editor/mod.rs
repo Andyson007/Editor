@@ -14,9 +14,12 @@ use utils::other::CursorPos;
 mod buffer;
 mod draw;
 
+/// Represents a single client. 
 #[derive(Default)]
 pub struct Client {
-    buffers: Vec<Buffer>,
+    /// All the buffers the client is connected to
+    pub buffers: Vec<Buffer>,
+    /// The buffer that the client should currently be showing
     current_buffer: usize,
     /// Stores the current editing mode. This is
     /// effectively the same as Vims insert/Normal mode
@@ -24,6 +27,8 @@ pub struct Client {
 }
 
 impl Client {
+    /// Cretaes a new client an empty original buffer
+    #[must_use]
     pub fn new() -> Self {
         let buf = Buffer::new(Text::new(), None);
         Self {
@@ -33,6 +38,8 @@ impl Client {
         }
     }
 
+    /// Cretaes a new client with a prepopulated text buffer
+    #[must_use]
     pub fn new_with_buffer(text: Text, socket: Option<TcpStream>) -> Self {
         let buf = Buffer::new(text, socket);
         Self {
@@ -42,10 +49,12 @@ impl Client {
         }
     }
 
+    /// returns the current buffer that should be visible
     pub fn curr(&mut self) -> &mut Buffer {
         &mut self.buffers[self.current_buffer]
     }
 
+    /// Executed a command written in command mode
     async fn execute_commad(&mut self, cmd: &str) -> io::Result<bool> {
         match cmd {
             "q" => return Ok(self.close_current_buffer()),
@@ -56,6 +65,7 @@ impl Client {
         Ok(false)
     }
 
+    /// adds a buffer and switches to it
     fn add_buffer(&mut self, text: Text, socket: Option<TcpStream>) {
         self.buffers.push(Buffer::new(text, socket));
         self.current_buffer = self.buffers.len() - 1;
@@ -304,8 +314,11 @@ impl Client {
 /// These work in the same way as vims modes
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Mode {
+    /// The cursor can move aronud
     Normal,
+    /// Typing into buffers
     Insert,
+    /// Writing a higher level command (: in (neo)vi(m))
     Command(String),
 }
 
