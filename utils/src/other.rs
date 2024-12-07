@@ -53,10 +53,10 @@ impl From<(usize, usize)> for CursorPos {
 impl Add<(isize, isize)> for CursorPos {
     type Output = Self;
 
-    fn add(self, rhs: (isize, isize)) -> Self::Output {
+    fn add(self, (row, col): (isize, isize)) -> Self::Output {
         Self {
-            row: usize::try_from(self.row as isize + rhs.0).unwrap(),
-            col: usize::try_from(self.col as isize + rhs.0).unwrap(),
+            row: usize::try_from(self.row as isize + row).unwrap(),
+            col: usize::try_from(self.col as isize + col).unwrap(),
         }
     }
 }
