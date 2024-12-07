@@ -11,9 +11,14 @@ pub mod prelude {
     pub use crate::s2c::*;
 }
 
-use std::{collections::VecDeque, mem};
+use std::{
+    collections::VecDeque,
+    io::{self, Read},
+    mem,
+};
 
-use utils::{iters::IteratorExt, other::CursorPos};
+use tokio::io::{AsyncRead, AsyncReadExt};
+use utils::other::CursorPos;
 
 /// A trait allow for serialization into the Btep™ format
 pub trait Serialize {
@@ -24,7 +29,10 @@ pub trait Serialize {
 /// `Deserialize` allows for deserialization and is supposed to be the opposite of `Serialize`.
 pub trait Deserialize {
     /// The method provided by `Deserialize`
-    fn deserialize(data: &[u8]) -> Self;
+    fn deserialize<T>(data: &mut T) -> impl std::future::Future<Output = io::Result<Self>>
+    where
+        Self: Sized,
+        T: AsyncReadExt + Unpin + Send;
 }
 
 impl Serialize for usize {
@@ -49,14 +57,15 @@ impl Serialize for CursorPos {
 }
 
 impl Deserialize for CursorPos {
-    fn deserialize(data: &[u8]) -> Self {
-        let mut chunks = data
-            .iter()
-            .copied()
-            .chunks::<{ mem::size_of::<u64>() }>()
-            .take(2);
-        let row = u64::from_be_bytes(chunks.next().unwrap()) as usize;
-        let col = u64::from_be_bytes(chunks.next().unwrap()) as usize;
-        CursorPos { row, col }
+    async fn deserialize<T>(data: &mut T) -> io::Result<Self>
+    where
+        T: AsyncRead + Unpin,
+    {
+        let mut buf = [0; 8];
+        data.read_exact(&mut buf).await?;
+        let row = u64::from_be_bytes(buf) as usize;
+        data.read_exact(&mut buf).await?;
+        let col = u64::from_be_bytes(buf) as usize;
+        Ok(CursorPos { row, col })
     }
 }

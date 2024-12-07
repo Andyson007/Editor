@@ -174,35 +174,47 @@ impl Client {
                     self.curr().cursorpos.col -= 1;
                 }
                 self.curr().text.client(curr_id).backspace();
-                if let Some(ref mut socket) = self.curr().socket {
-                    socket
+                if let Some(buffer::Socket {
+                    reader: ref mut reader,
+                    writer: ref mut writer,
+                }) = self.curr().socket
+                {
+                    writer
                         .write_all(C2S::Backspace.serialize().make_contiguous())
                         .await
                         .unwrap();
-                    socket.flush().await.unwrap();
+                    writer.flush().await.unwrap();
                 }
             }
             KeyCode::Enter => {
                 self.curr().text.client(curr_id).push_char('\n');
                 self.curr().cursorpos.col = 0;
                 self.curr().cursorpos.row += 1;
-                if let Some(ref mut socket) = self.curr().socket {
-                    socket
+                if let Some(buffer::Socket {
+                    reader: ref mut reader,
+                    writer: ref mut writer,
+                }) = self.curr().socket
+                {
+                    writer
                         .write_all(C2S::Enter.serialize().make_contiguous())
                         .await
                         .unwrap();
-                    socket.flush().await.unwrap();
+                    writer.flush().await.unwrap();
                 }
             }
             KeyCode::Char(c) => {
                 self.curr().text.client(curr_id).push_char(c);
                 self.curr().cursorpos.col += c.len_utf8();
-                if let Some(ref mut socket) = self.curr().socket {
-                    socket
+                if let Some(buffer::Socket {
+                    reader: ref mut reader,
+                    writer: ref mut writer,
+                }) = self.curr().socket
+                {
+                    writer
                         .write_all(C2S::Char(c).serialize().make_contiguous())
                         .await
                         .unwrap();
-                    socket.flush().await.unwrap();
+                    writer.flush().await.unwrap();
                 }
             }
             KeyCode::Esc => self.mode = Mode::Normal,
@@ -289,12 +301,16 @@ impl Client {
     async fn enter_insert(&mut self, pos: CursorPos) {
         let curr_id = self.curr().id;
         let (_offset, _id) = self.curr().text.client(curr_id).enter_insert(pos);
-        if let Some(ref mut socket) = self.curr().socket {
-            socket
+        if let Some(buffer::Socket {
+            writer: ref mut writer,
+            ..
+        }) = self.curr().socket
+        {
+            writer
                 .write_all(C2S::EnterInsert(pos).serialize().make_contiguous())
                 .await
                 .unwrap();
-            socket.flush().await.unwrap();
+            writer.flush().await.unwrap();
         }
         self.mode = Mode::Insert;
     }

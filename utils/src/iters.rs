@@ -121,6 +121,21 @@ where
     }
 }
 
+pub struct FromFnExt<F> {
+    func: F,
+}
+
+impl<F, U> Iterator for FromFnExt<F>
+where
+    F: FnMut() -> U,
+{
+    type Item = U;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        Some((self.func)())
+    }
+}
+
 /// Iterator extensions
 pub trait IteratorExt: Iterator + Sized {
     /// Splits the iterator up into chunks which are a known size at compile-time.
@@ -139,6 +154,13 @@ where
     {
         Chunks { iter: self }
     }
+}
+
+pub fn from_fn_ext<F, U>(func: F) -> FromFnExt<F>
+where
+    F: FnMut() -> U,
+{
+    FromFnExt { func }
 }
 
 #[cfg(test)]

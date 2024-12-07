@@ -1,8 +1,8 @@
 //! mdoule for client updates sendt to the server
 
-use std::{collections::VecDeque, mem};
+use std::{collections::VecDeque, io};
 
-use tungstenite::Message;
+use tokio::io::AsyncReadExt;
 use utils::other::CursorPos;
 
 use crate::{Deserialize, Serialize};
@@ -43,7 +43,11 @@ impl Serialize for EnterInsert {
 }
 
 impl Deserialize for EnterInsert {
-    fn deserialize(_data: &[u8]) -> Self {
+    async fn deserialize<T>(_data: &mut T) -> io::Result<Self>
+    where
+        T: AsyncReadExt,
+        Self: Sized,
+    {
         todo!()
     }
 }
@@ -51,12 +55,8 @@ impl Deserialize for EnterInsert {
 impl Serialize for C2S {
     fn serialize(&self) -> VecDeque<u8> {
         match self {
-            Self::Char(c) => std::iter::once(1)
-                .chain(c.serialize())
-                .collect(),
-            Self::EnterInsert(a) => std::iter::once(2)
-                .chain(a.serialize())
-                .collect(),
+            Self::Char(c) => std::iter::once(1).chain(c.serialize()).collect(),
+            Self::EnterInsert(a) => std::iter::once(2).chain(a.serialize()).collect(),
             Self::Enter => [10].into(),
             Self::Backspace => [8].into(),
             Self::Save => [3].into(),
@@ -65,28 +65,20 @@ impl Serialize for C2S {
 }
 
 impl Deserialize for C2S {
-    fn deserialize(data: &[u8]) -> Self {
-        let mut iter = data.iter();
-        match iter.next().unwrap() {
+    async fn deserialize<T>(data: &mut T) -> io::Result<Self>
+    where
+        T: AsyncReadExt + Unpin + Send,
+        Self: Sized,
+    {
+        Ok(match data.read_u8().await? {
             1 => Self::Char(
-                char::from_u32(u32::from_be_bytes(
-                    iter.copied()
-                        .next_chunk::<{ mem::size_of::<u32>() }>()
-                        .unwrap(),
-                ))
-                .expect("An invalid char was supplied"),
+                char::from_u32(data.read_u32().await?).expect("An invalid char was supplied"),
             ),
-            2 => Self::EnterInsert(CursorPos::deserialize(&data[1..])),
+            2 => Self::EnterInsert(CursorPos::deserialize(data).await?),
             3 => Self::Save,
             8 => Self::Backspace,
             10 => Self::Enter,
             _ => unreachable!(),
-        }
-    }
-}
-
-impl From<C2S> for Message {
-    fn from(value: C2S) -> Self {
-        Self::Binary(value.serialize().into())
+        })
     }
 }

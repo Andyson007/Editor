@@ -1,7 +1,6 @@
 //! Communication from the server to the client
-use std::{collections::VecDeque, mem};
-use tungstenite::Message;
-use utils::iters::IteratorExt;
+use std::{collections::VecDeque, io, mem};
+use tokio::io::AsyncReadExt;
 use {crate::c2s::C2S, crate::Deserialize, crate::Serialize};
 
 /// S2C or Server to Client
@@ -14,27 +13,6 @@ pub enum S2C<T> {
     Update((usize, C2S)),
     /// A client has connected
     NewClient,
-}
-
-impl<T> S2C<T> {
-    /// Converts a bytestream into a message
-    #[must_use]
-    pub fn into_message(self) -> Message
-    where
-        T: Serialize,
-    {
-        let mut serialized = self.serialize();
-        match self {
-            Self::Full(_) => {
-                serialized.push_front(0);
-            }
-            Self::Update(_) => {
-                serialized.push_front(1);
-            }
-            Self::NewClient => serialized.push_front(2),
-        }
-        Message::Binary(serialized.into())
-    }
 }
 
 impl<T> Serialize for S2C<T>
@@ -61,23 +39,22 @@ impl<T> Deserialize for S2C<T>
 where
     T: Deserialize,
 {
-    fn deserialize(data: &[u8]) -> Self {
-        let mut iter = data.iter();
-        match iter.next().unwrap() {
-            0 => Self::Full(T::deserialize(&data[1..])),
+    async fn deserialize<D>(data: &mut D) -> io::Result<Self>
+    where
+        D: AsyncReadExt + Unpin + Send,
+        Self: Sized,
+    {
+        Ok(match data.read_u8().await? {
+            0 => Self::Full(T::deserialize(data).await?),
             1 => {
-                let id = u64::from_be_bytes(
-                    iter.by_ref()
-                        .copied()
-                        .chunks::<{ mem::size_of::<u64>() }>()
-                        .next()
-                        .unwrap(),
-                ) as usize;
-                let action = C2S::deserialize(&iter.copied().collect::<Vec<_>>());
+                let mut buf = [0; mem::size_of::<u64>()];
+                data.read_exact(&mut buf).await?;
+                let id = u64::from_be_bytes(buf) as usize;
+                let action = C2S::deserialize(data).await?;
                 Self::Update((id, action))
             }
             2 => Self::NewClient,
             _ => panic!("An invalid specifier was found"),
-        }
+        })
     }
 }

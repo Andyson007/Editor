@@ -22,10 +22,7 @@ where
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Table")
-            .field(
-                "inner",
-                &*self.inner.read().unwrap(),
-            )
+            .field("inner", &*self.inner.read().unwrap())
             .field("state", &self.state)
             .finish()
     }
@@ -48,6 +45,13 @@ impl<T> From<std::sync::PoisonError<T>> for LockError {
 }
 
 impl<T> Table<T> {
+    pub fn new(builder: InnerTableBuilder<T>) -> Self {
+        let (inner, state) = builder.build();
+        Self {
+            inner: Arc::new(RwLock::new(inner)),
+            state,
+        }
+    }
     /// Returns a reading lock on the entire linked list
     /// This means that
     /// - Elements of the list cannot be modified
@@ -386,6 +390,12 @@ where
 }
 
 impl<T> InnerTable<T> {
+    pub fn builder() -> InnerTableBuilder<T> {
+        InnerTableBuilder {
+            inner: LinkedList::new(),
+            state: Arc::new(RwLock::new(TableState::Unshared)),
+        }
+    }
     #[must_use]
     /// locks down the value within this `InnerLock` for writing
     pub fn read(&self) -> TableLockReader<T> {
@@ -407,5 +417,21 @@ impl<T> InnerTable<T> {
             inner: Arc::new(TableLocker::new(value, Arc::clone(&state))),
             state,
         }
+    }
+}
+
+pub struct InnerTableBuilder<T> {
+    inner: LinkedList<InnerTable<T>>,
+    state: Arc<RwLock<TableState>>,
+}
+
+impl<T> InnerTableBuilder<T> {
+    pub fn build(self) -> (LinkedList<InnerTable<T>>, Arc<RwLock<TableState>>) {
+        (self.inner, self.state)
+    }
+
+    pub fn push(&mut self, x: T) {
+        self.inner
+            .push_back(InnerTable::new(x, Arc::clone(&self.state)));
     }
 }

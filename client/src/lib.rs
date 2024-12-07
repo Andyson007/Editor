@@ -20,7 +20,10 @@ use std::{
     time::Duration,
 };
 use text::Text;
-use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::TcpStream};
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    net::TcpStream,
+};
 
 /// Runs a the client side of the editor
 #[allow(clippy::missing_panics_doc)]
@@ -34,12 +37,11 @@ pub async fn run(
     let mut out = io::stdout();
     errors::install_hooks()?;
 
-    let mut socket = connect_with_auth(address, username, password).await.unwrap();
+    let mut socket = connect_with_auth(address, username, password)
+        .await
+        .unwrap();
 
-    let mut message = Vec::new();
-    socket.read_buf(&mut message).await.unwrap();
-
-    let S2C::Full(initial_text) = S2C::<Text>::deserialize(&message) else {
+    let S2C::Full(initial_text) = S2C::<Text>::deserialize(&mut socket).await? else {
         panic!("Initial message in wrong protocol")
     };
 
@@ -67,7 +69,7 @@ pub async fn run(
             };
             true
         } else {
-            app.curr().update().await
+            app.curr().update().await?
         } {
             app.curr().recalculate_cursor(terminal::size()?);
             app.redraw(&mut out).unwrap();

@@ -141,9 +141,9 @@ pub async fn run(
                     let mut msg = Vec::new();
                     if read.read_buf(&mut msg).await.is_ok() {
                         let action = {
+                            let action = C2S::deserialize(&mut read).await.unwrap();
                             let mut binding = text.write().unwrap();
                             let lock = binding.client(client_id);
-                            let action = C2S::deserialize(&msg);
                             match action {
                                 C2S::Char(c) => lock.push_char(c),
                                 C2S::Backspace => drop(lock.backspace()),

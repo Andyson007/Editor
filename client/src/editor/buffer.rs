@@ -1,13 +1,16 @@
 use std::{
     cmp,
-    io::{Read, Write},
+    io::{self, Read, Write},
 };
 
 use btep::{c2s::C2S, s2c::S2C, Deserialize, Serialize};
 use text::Text;
 use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
-    net::TcpStream,
+    io::{AsyncReadExt, AsyncWriteExt, BufReader},
+    net::{
+        tcp::{OwnedReadHalf, OwnedWriteHalf},
+        TcpStream,
+    },
 };
 use utils::other::CursorPos;
 
@@ -23,7 +26,13 @@ pub struct Buffer {
     pub(crate) cursorpos: CursorPos,
     /// stores the amount of lines that have been scrolled down
     pub(crate) line_offset: usize,
-    pub(crate) socket: Option<TcpStream>,
+    pub(crate) socket: Option<Socket>,
+}
+
+#[derive(Debug)]
+pub struct Socket {
+    pub reader: BufReader<OwnedReadHalf>,
+    pub writer: OwnedWriteHalf,
 }
 
 impl Buffer {
@@ -36,7 +45,13 @@ impl Buffer {
             id,
             cursorpos: CursorPos::default(),
             line_offset: 0,
-            socket,
+            socket: socket.map(|x| {
+                let (read, writer) = x.into_split();
+                Socket {
+                    reader: BufReader::new(read),
+                    writer,
+                }
+            }),
         }
     }
 
@@ -49,12 +64,16 @@ impl Buffer {
 
     /// save the current buffer
     pub(super) async fn save(&mut self) -> tokio::io::Result<()> {
-        if let Some(ref mut socket) = self.socket {
-            socket
+        if let Some(Socket {
+            writer: ref mut writer,
+            ..
+        }) = self.socket
+        {
+            writer
                 .write_all(C2S::Save.serialize().make_contiguous())
                 .await?;
 
-            socket.flush().await?;
+            writer.flush().await?;
         }
         Ok(())
     }
@@ -64,14 +83,18 @@ impl Buffer {
     /// returns true if the screen should be redrawn
     /// # Panics
     /// the message received wasn't formatted properly
-    pub async fn update(&mut self) -> bool {
-        let Some(ref mut socket) = self.socket else {
-            return false;
+    pub async fn update(&mut self) -> io::Result<bool> {
+        let Some(Socket {
+            reader: ref mut reader,
+            ..
+        }) = self.socket
+        else {
+            return Ok(false);
         };
         let mut msg = Vec::new();
-        socket.read_buf(&mut msg).await.unwrap();
+        reader.read_buf(&mut msg).await.unwrap();
 
-        match S2C::<Text>::deserialize(&msg) {
+        match S2C::<Text>::deserialize(reader).await? {
             S2C::Full(_) => unreachable!("A full buffer shouldn't be sent"),
             S2C::Update((client_id, action)) => {
                 let client = self.text.client(client_id);
@@ -123,11 +146,11 @@ impl Buffer {
                     C2S::EnterInsert(pos) => drop(client.enter_insert(pos)),
                     C2S::Save => unreachable!(),
                 };
-                true
+                Ok(true)
             }
             S2C::NewClient => {
                 self.text.add_client();
-                false
+                Ok(false)
             }
         }
     }

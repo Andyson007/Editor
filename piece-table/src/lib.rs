@@ -1,9 +1,11 @@
 //! A Piece table implementation with multiple clients
 #![feature(linked_list_cursors)]
+#![feature(async_iterator)]
 use std::{
-    collections::VecDeque,
+    collections::{LinkedList, VecDeque},
     io::{self, Read},
-    iter, mem,
+    iter,
+    str::FromStr,
     sync::{Arc, RwLock},
 };
 
@@ -12,9 +14,11 @@ pub mod table;
 
 use append_only_str::{slices::StrSlice, AppendOnlyStr};
 use btep::{Deserialize, Serialize};
+use futures::stream::FuturesOrdered;
 use table::{InnerTable, LockError, Table};
+use tokio::io::{AsyncReadExt, BufReader};
 use utils::{
-    iters::{InnerIteratorExt, IteratorExt},
+    bufread::BufReaderExt,
     other::{AutoIncrementing, CursorPos},
 };
 
@@ -244,85 +248,69 @@ impl Serialize for &Piece {
 }
 
 impl Deserialize for Piece {
-    fn deserialize(data: &[u8]) -> Self {
+    async fn deserialize<T>(data: &mut T) -> io::Result<Self>
+    where
+        T: AsyncReadExt + Unpin + Send,
+        Self: Sized,
+    {
+        let mut reader = BufReader::new(data);
         // `take_while_ref` requires a peekable wrapper
-        #[allow(clippy::unused_peekable)]
-        let mut iter = data.iter().copied().peekable();
+        // #[allow(clippy::unused_peekable)]
+        // let mut iter = data.bytes().peekable();
+        let mut str_buf = String::new();
+        let mut separator = reader.read_valid_str(&mut str_buf).await?;
 
-        let original_buffer: AppendOnlyStr = String::from_utf8(
-            iter.take_while_ref(|x| !(*x == 254 || *x == 255))
-                .collect::<Vec<_>>(),
-        )
-        .unwrap()
-        .into();
+        let original_buffer: AppendOnlyStr = AppendOnlyStr::from_str(&str_buf).unwrap();
 
         let mut client_buffers = Vec::new();
         loop {
-            if iter.next() == Some(255) {
+            let mut str_buf = String::new();
+            if separator == Some(255) {
                 break;
             }
-            let counter_start = u64::from_be_bytes(
-                iter.by_ref()
-                    .take(mem::size_of::<u64>())
-                    .collect::<Vec<_>>()
-                    .try_into()
-                    .unwrap(),
-            ) as usize;
+            let counter_start = reader.read_u64().await? as usize;
 
-            let buf_content = iter
-                .take_while_ref(|x| !(*x == 254 || *x == 255))
-                .collect::<AppendOnlyStr>();
+            str_buf.clear();
+            separator = reader.read_valid_str(&mut str_buf).await?;
+
             client_buffers.push((
                 Arc::new(RwLock::new(AutoIncrementing::new_with_start(counter_start))),
-                Arc::new(RwLock::new(buf_content)),
+                Arc::new(RwLock::<AppendOnlyStr>::new(str_buf.into())),
             ));
         }
 
-        let pieces: [u8; 8] = iter
-            .by_ref()
-            .take(mem::size_of::<u64>())
-            .collect::<Vec<_>>()
-            .try_into()
-            .unwrap();
-        let piece_count = usize::try_from(u64::from_be_bytes(pieces)).unwrap();
-        let table = iter
-            .by_ref()
-            .chunks::<{ 4 * mem::size_of::<u64>() }>()
-            .take(piece_count)
-            .map(|x| {
-                let slices = x
-                    .into_iter()
-                    .chunks::<{ mem::size_of::<u64>() }>()
-                    .collect::<Vec<_>>();
-                let bufnr = u64::from_be_bytes(slices[0]);
-                let id = usize::try_from(u64::from_be_bytes(slices[1])).unwrap();
-                let start = usize::try_from(u64::from_be_bytes(slices[2])).unwrap();
-                let end = usize::try_from(u64::from_be_bytes(slices[3])).unwrap();
-                match bufnr {
-                    u64::MAX => TableElem {
-                        bufnr: None,
-                        text: original_buffer.str_slice(start..end),
+        let piece_count = reader.read_u64().await? as usize;
+
+        let mut builder = InnerTable::builder();
+        for _ in 0..piece_count {
+            let bufnr = reader.read_u64().await?;
+            let id = reader.read_u64().await? as usize;
+            let start = reader.read_u64().await? as usize;
+            let end = reader.read_u64().await? as usize;
+            builder.push(match bufnr {
+                u64::MAX => TableElem {
+                    bufnr: None,
+                    text: original_buffer.str_slice(start..end),
+                    id,
+                },
+                bufnr => {
+                    let buf = usize::try_from(bufnr).unwrap();
+                    TableElem {
+                        bufnr: Some(buf),
+                        text: client_buffers[buf].1.read().unwrap().str_slice(start..end),
                         id,
-                    },
-                    bufnr => {
-                        let buf = usize::try_from(bufnr).unwrap();
-                        TableElem {
-                            bufnr: Some(buf),
-                            text: client_buffers[buf].1.read().unwrap().str_slice(start..end),
-                            id,
-                        }
                     }
                 }
-            })
-            .collect();
+            });
+        }
 
-        Self {
+        Ok(Self {
             buffers: Buffers {
                 original: original_buffer,
                 clients: client_buffers,
             },
-            piece_table: table,
-        }
+            piece_table: Table::new(builder),
+        })
     }
 }
 
