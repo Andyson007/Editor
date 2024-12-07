@@ -121,6 +121,7 @@ where
     }
 }
 
+/// Generates values with repeated applications of this function
 pub struct FromFnExt<F> {
     func: F,
 }
@@ -156,7 +157,8 @@ where
     }
 }
 
-pub fn from_fn_ext<F, U>(func: F) -> FromFnExt<F>
+/// Generates values with repeated applications of this function
+pub const fn from_fn_ext<F, U>(func: F) -> FromFnExt<F>
 where
     F: FnMut() -> U,
 {

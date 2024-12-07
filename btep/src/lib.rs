@@ -66,6 +66,6 @@ impl Deserialize for CursorPos {
         let row = u64::from_be_bytes(buf) as usize;
         data.read_exact(&mut buf).await?;
         let col = u64::from_be_bytes(buf) as usize;
-        Ok(CursorPos { row, col })
+        Ok(Self { row, col })
     }
 }

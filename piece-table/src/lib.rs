@@ -94,6 +94,7 @@ impl Piece {
         })
     }
 
+    /// Creates a new piece table using an &str as its base
     pub fn original_from_str(original: &str) -> Self {
         let original: AppendOnlyStr = original.into();
 

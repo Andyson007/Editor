@@ -45,6 +45,8 @@ impl<T> From<std::sync::PoisonError<T>> for LockError {
 }
 
 impl<T> Table<T> {
+    #[must_use]
+    /// creates a new Table from a builder
     pub fn new(builder: InnerTableBuilder<T>) -> Self {
         let (inner, state) = builder.build();
         Self {
@@ -390,6 +392,8 @@ where
 }
 
 impl<T> InnerTable<T> {
+    #[must_use]
+    /// creates a builder for an innertable
     pub fn builder() -> InnerTableBuilder<T> {
         InnerTableBuilder {
             inner: LinkedList::new(),
@@ -420,16 +424,22 @@ impl<T> InnerTable<T> {
     }
 }
 
+/// A builder for a `Table`
 pub struct InnerTableBuilder<T> {
+    /// The inner table being modified
     inner: LinkedList<InnerTable<T>>,
+    /// The shared state
     state: Arc<RwLock<TableState>>,
 }
 
 impl<T> InnerTableBuilder<T> {
-    pub fn build(self) -> (LinkedList<InnerTable<T>>, Arc<RwLock<TableState>>) {
+    /// returns its values so that it can be converted to a `Table`
+    #[must_use]
+    pub(crate) fn build(self) -> (LinkedList<InnerTable<T>>, Arc<RwLock<TableState>>) {
         (self.inner, self.state)
     }
 
+    /// Appends a value to the linkedlist
     pub fn push(&mut self, x: T) {
         self.inner
             .push_back(InnerTable::new(x, Arc::clone(&self.state)));

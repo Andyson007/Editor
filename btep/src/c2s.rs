@@ -25,32 +25,32 @@ pub enum C2S {
     Save,
 }
 
-#[derive(Clone, Copy, Debug)]
-/// A representation of entering insert mode which shuold be more accurate than just sending the
-/// clients cursors position
-pub struct EnterInsert {
-    /// The id of the buffer that was split
-    pub id: usize,
-    /// The offset in that buffer
-    /// Option because appending a character has special behaviour
-    pub offset: Option<usize>,
-}
-
-impl Serialize for EnterInsert {
-    fn serialize(&self) -> VecDeque<u8> {
-        todo!()
-    }
-}
-
-impl Deserialize for EnterInsert {
-    async fn deserialize<T>(_data: &mut T) -> io::Result<Self>
-    where
-        T: AsyncReadExt,
-        Self: Sized,
-    {
-        todo!()
-    }
-}
+// #[derive(Clone, Copy, Debug)]
+// /// A representation of entering insert mode which shuold be more accurate than just sending the
+// /// clients cursors position
+// pub struct EnterInsert {
+//     /// The id of the buffer that was split
+//     pub id: usize,
+//     /// The offset in that buffer
+//     /// Option because appending a character has special behaviour
+//     pub offset: Option<usize>,
+// }
+//
+// impl Serialize for EnterInsert {
+//     fn serialize(&self) -> VecDeque<u8> {
+//         todo!()
+//     }
+// }
+//
+// impl Deserialize for EnterInsert {
+//     async fn deserialize<T>(_data: &mut T) -> io::Result<Self>
+//     where
+//         T: AsyncReadExt,
+//         Self: Sized,
+//     {
+//         todo!()
+//     }
+// }
 
 impl Serialize for C2S {
     fn serialize(&self) -> VecDeque<u8> {

@@ -1,9 +1,13 @@
+//! Provides extensions for reading method such as `Read` and `AsyncRead`
 use core::str;
 use std::io::{self, ErrorKind};
 
 use tokio::io::{AsyncRead, AsyncReadExt};
 
+/// Extensions for `AsyncRead`
 pub trait BufReaderExt {
+    /// Reds from a buffer until something that isn't utf-8 compliant is found.
+    /// Errors are ill-defined for overlong-encoded stuff
     /// Returns none if the buffer was read to completion
     fn read_valid_str(
         &mut self,
