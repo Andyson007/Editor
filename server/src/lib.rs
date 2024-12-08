@@ -134,6 +134,9 @@ pub async fn run(
     }
 }
 
+/// Handles a client connection after it has been verified/authorized
+/// # Panics
+/// panics if sockets/text is poisoned
 async fn handle_client(
     client_id: usize,
     username: String,
@@ -161,17 +164,17 @@ async fn handle_client(
         block_on(async {
             client
                 .write_all(S2C::<&Text>::NewClient.serialize().make_contiguous())
-                .await
-                .unwrap();
-            client.flush().await.unwrap();
-        });
+                .await?;
+            client.flush().await?;
+            Ok::<_, io::Error>(())
+        })?;
     }
     sockets.write().unwrap().insert(client_id, write);
     loop {
         let mut to_remove = Vec::with_capacity(1);
         {
             let action = {
-                let action = C2S::deserialize(&mut read).await.unwrap();
+                let action = C2S::deserialize(&mut read).await?;
                 let mut binding = text.write().unwrap();
                 let lock = binding.client(client_id);
                 match action {
@@ -202,7 +205,7 @@ async fn handle_client(
                     ),
                 );
                 match result {
-                    Ok(()) => block_on(async { client.flush().await.unwrap() }),
+                    Ok(()) => block_on(async { client.flush().await })?,
                     Err(e) => {
                         to_remove.push(*clientnr);
                         warn!("{client_id}: {e}");
@@ -217,10 +220,6 @@ async fn handle_client(
                 lock.remove(&x);
             }
         }
-        trace!(
-            "{client_id} {:?}",
-            text.read().unwrap().lines().collect::<Vec<_>>()
-        );
     }
 }
 
