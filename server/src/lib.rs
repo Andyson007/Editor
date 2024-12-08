@@ -48,10 +48,16 @@ pub async fn run(
     #[cfg(feature = "security")]
     let pool = Arc::new(pool);
     #[cfg(feature = "security")]
-    create_tables(&pool).await.unwrap();
+    create_tables(&pool)
+        .await
+        .expect("Failed to create the users table");
 
     let server = TcpListener::bind(address).await.unwrap();
-    let file = File::open(path).unwrap();
+    let file = File::options()
+        .create(true)
+        .truncate(false)
+        .open(path)
+        .unwrap();
     let text = Arc::new(RwLock::new(
         Text::original_from_reader(BufReader::new(file)).unwrap(),
     ));
@@ -228,6 +234,7 @@ async fn handle_client(
     }
 }
 
+/// Checks whether a socket supplies proper authorization credentials
 async fn authorize<T>(
     stream: &mut T,
     #[cfg(feature = "security")] pool: &SqlitePool,
