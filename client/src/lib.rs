@@ -111,6 +111,7 @@ async fn connect_with_auth(
         0 => (),
         1 => panic!("You forgot to include a password"),
         2 => panic!("The username, password combination you supplied isn't authorized"),
+        3 => panic!("This shouldn't be reachable, but it means that you forgot to supply a password"),
         _ => unreachable!(),
     }
     Ok(stream)

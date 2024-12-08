@@ -34,8 +34,7 @@ pub(crate) async fn create_tables(pool: &SqlitePool) -> Result<(), sqlx::Error> 
         "#,
     )
     .execute(pool)
-    .await?;
-    Ok(())
+    .await?
 }
 
 pub async fn add_user(pool: &SqlitePool, username: &str, password: &str) {
