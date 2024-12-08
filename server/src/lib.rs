@@ -3,7 +3,8 @@
 #[cfg(feature = "security")]
 mod security;
 use btep::{c2s::C2S, prelude::S2C, Deserialize, Serialize};
-use futures::executor::block_on;
+use core::error;
+use futures::{executor::block_on, FutureExt};
 #[cfg(feature = "security")]
 use sqlx::{sqlite::SqliteConnectOptions, SqlitePool};
 #[cfg(feature = "security")]
@@ -90,59 +91,82 @@ pub async fn run(
     });
     for client_id in 0.. {
         let save_notify = Arc::clone(&save_notify);
-        let (mut stream, _) = server.accept().await.unwrap();
-        debug!("new Client {client_id}");
-
-        let sockets = Arc::clone(&sockets);
-        let text = text.clone();
-
-        #[cfg(feature = "security")]
-        let pool = Arc::clone(&pool);
-
-        let username = match authorize(
-            &mut stream,
-            #[cfg(feature = "security")]
-            &pool,
-        )
-        .await
-        {
-            Ok(x) => {
-                stream.write_u8(0).await.unwrap();
-                stream.flush().await.unwrap();
-                x
-            }
-            Err(x) => {
-                match x {
-                    UserAuthError::IoError(e) => warn!("{client_id} had an IoError: `{e:?}`"),
-                    #[cfg(feature = "security")]
-                    UserAuthError::NeedsPassword => {
-                        warn!("client {client_id} forgot to include a password");
-                        stream.write_u8(1).await.unwrap();
-                    }
-                    #[cfg(feature = "security")]
-                    UserAuthError::BadPassword => {
-                        warn!("client {client_id} forgot to include a password");
-                        stream.write_u8(2).await.unwrap();
-                    }
-                    UserAuthError::MissingUsername => {
-                        warn!("{client_id} Forgot to supply a username");
-                        stream.write_u8(3).await.unwrap();
-                    }
+        let (stream, _) = server.accept().await.unwrap();
+        tokio::spawn(
+            handle_connection(
+                client_id,
+                stream,
+                save_notify,
+                Arc::clone(&sockets),
+                Arc::clone(&text),
+            )
+            .then(move |output| async move {
+                if let Err(e) = output {
+                    error!("{client_id} {e:?}")
                 }
-                stream.flush().await.unwrap();
-                continue;
-            }
-        };
-
-        tokio::spawn(handle_client(
-            client_id,
-            username,
-            text,
-            stream,
-            sockets,
-            save_notify,
-        ));
+            }),
+        );
     }
+}
+
+async fn handle_connection(
+    client_id: usize,
+    mut stream: TcpStream,
+    save_notify: Arc<Notify>,
+    sockets: Arc<RwLock<HashMap<usize, OwnedWriteHalf>>>,
+    text: Arc<RwLock<Text>>,
+) -> io::Result<()> {
+    debug!("new Client {client_id}");
+
+    let text = text.clone();
+
+    #[cfg(feature = "security")]
+    let pool = Arc::clone(&pool);
+
+    let username = match authorize(
+        &mut stream,
+        #[cfg(feature = "security")]
+        &pool,
+    )
+    .await
+    {
+        Ok(x) => {
+            stream.write_u8(0).await?;
+            stream.flush().await?;
+            x
+        }
+        Err(x) => {
+            match x {
+                UserAuthError::IoError(e) => warn!("{client_id} had an IoError: `{e:?}`"),
+                #[cfg(feature = "security")]
+                UserAuthError::NeedsPassword => {
+                    warn!("client {client_id} forgot to include a password");
+                    stream.write_u8(1).await?;
+                }
+                #[cfg(feature = "security")]
+                UserAuthError::BadPassword => {
+                    warn!("client {client_id} forgot to include a password");
+                    stream.write_u8(2).await?;
+                }
+                UserAuthError::MissingUsername => {
+                    warn!("{client_id} Forgot to supply a username");
+                    stream.write_u8(3).await?;
+                }
+            }
+            stream.flush().await?;
+            return Ok(());
+        }
+    };
+
+    tokio::spawn(handle_client(
+        client_id,
+        username,
+        text,
+        stream,
+        sockets,
+        save_notify,
+    ));
+    Ok(())
 }
 
 /// Handles a client connection after it has been verified/authorized
