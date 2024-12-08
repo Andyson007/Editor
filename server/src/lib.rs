@@ -1,5 +1,5 @@
 //! A server side for an editor meant to be used by multiple clients
-#![feature(try_blocks)]
+#![feature(never_type)]
 #[cfg(feature = "security")]
 mod security;
 use btep::{c2s::C2S, prelude::S2C, Deserialize, Serialize};
@@ -11,7 +11,7 @@ use std::str::FromStr;
 use std::{
     collections::HashMap,
     fs::{File, OpenOptions},
-    io::{BufReader, BufWriter, Error, Write},
+    io::{self, BufReader, BufWriter, Error, Write},
     net::SocketAddrV4,
     num::NonZeroU64,
     path::Path,
@@ -21,7 +21,7 @@ use std::{
 use text::Text;
 use tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
-    net::{tcp::OwnedWriteHalf, TcpListener},
+    net::{tcp::OwnedWriteHalf, TcpListener, TcpStream},
     select,
     sync::Notify,
     time::sleep,
@@ -83,7 +83,6 @@ pub async fn run(
     });
     for client_id in 0.. {
         let save_notify = Arc::clone(&save_notify);
-        // for (client_id, stream) in server.enumerate() {
         let (mut stream, _) = server.accept().await.unwrap();
         debug!("new Client {client_id}");
 
@@ -107,16 +106,16 @@ pub async fn run(
             }
             Err(x) => {
                 match x {
-                    UserAuthError::IoError(e) => panic!("{e:?}"),
-                    #[cfg(feature = "security")]
-                    UserAuthError::BadPassword => {
-                        warn!("client {client_id} forgot to include a password");
-                        stream.write_u8(2).await.unwrap();
-                    }
+                    UserAuthError::IoError(e) => warn!("{client_id} {e:?}"),
                     #[cfg(feature = "security")]
                     UserAuthError::NeedsPassword => {
                         warn!("client {client_id} forgot to include a password");
                         stream.write_u8(1).await.unwrap();
+                    }
+                    #[cfg(feature = "security")]
+                    UserAuthError::BadPassword => {
+                        warn!("client {client_id} forgot to include a password");
+                        stream.write_u8(2).await.unwrap();
                     }
                 }
                 stream.flush().await.unwrap();
@@ -124,87 +123,104 @@ pub async fn run(
             }
         };
 
-        let (mut read, mut write) = stream.into_split();
-        tokio::spawn(async move {
-            {
-                debug!("{client_id} Connected {:?}", username);
-                let mut data = {
-                    let data = text.read().unwrap();
-                    let full = S2C::Full(&*data);
-                    full.serialize()
-                };
-                // dbg!(&data);
-                write.write_all(data.make_contiguous()).await.unwrap();
-                write.flush().await.unwrap();
-                // println!("{data:#?}");
-            }
-            debug_assert_eq!(text.write().unwrap().add_client(), client_id);
-            for (_, client) in sockets.write().as_mut().unwrap().iter_mut() {
-                block_on(async {
-                    client
-                        .write_all(S2C::<&Text>::NewClient.serialize().make_contiguous())
-                        .await
-                        .unwrap();
-                    client.flush().await.unwrap();
-                });
-            }
-            sockets.write().unwrap().insert(client_id, write);
-            loop {
-                let mut to_remove = Vec::with_capacity(1);
-                {
-                    let action = {
-                        let action = C2S::deserialize(&mut read).await.unwrap();
-                        let mut binding = text.write().unwrap();
-                        let lock = binding.client(client_id);
-                        match action {
-                            C2S::Char(c) => lock.push_char(c),
-                            C2S::Backspace => drop(lock.backspace()),
-                            C2S::Enter => lock.push_char('\n'),
-                            C2S::EnterInsert(enter_insert) => {
-                                lock.enter_insert(enter_insert);
-                            }
-                            C2S::Save => {
-                                save_notify.notify_one();
-                                continue;
-                            }
-                        }
-                        action
-                    };
+        tokio::spawn(handle_client(
+            client_id,
+            username,
+            text,
+            stream,
+            sockets,
+            save_notify,
+        ));
+    }
+}
 
-                    let mut socket_lock = sockets.write().unwrap();
-                    for (clientnr, client) in socket_lock.iter_mut() {
-                        if *clientnr == client_id {
-                            continue;
-                        }
-                        let result = block_on(
-                            client.write_all(
-                                S2C::Update::<&Text>((client_id, action))
-                                    .serialize()
-                                    .make_contiguous(),
-                            ),
-                        );
-                        match result {
-                            Ok(()) => block_on(async { client.flush().await.unwrap() }),
-                            Err(e) => {
-                                to_remove.push(*clientnr);
-                                warn!("{client_id}: {e}");
-                            }
-                        };
-                    }
-                }
-                {
-                    let mut lock = sockets.write().unwrap();
-                    for x in to_remove {
-                        info!("removed client {x}");
-                        lock.remove(&x);
-                    }
-                }
-                trace!(
-                    "{client_id} {:?}",
-                    text.read().unwrap().lines().collect::<Vec<_>>()
-                );
-            }
+async fn handle_client(
+    client_id: usize,
+    username: String,
+    text: Arc<RwLock<Text>>,
+    stream: TcpStream,
+    sockets: Arc<RwLock<HashMap<usize, OwnedWriteHalf>>>,
+    save_notify: Arc<Notify>,
+) -> Result<!, io::Error> {
+    let (mut read, mut write) = stream.into_split();
+
+    {
+        debug!("{client_id} Connected {:?}", username);
+        let mut data = {
+            let data = text.read().unwrap();
+            let full = S2C::Full(&*data);
+            full.serialize()
+        };
+        // dbg!(&data);
+        write.write_all(data.make_contiguous()).await?;
+        write.flush().await?;
+        // println!("{data:#?}");
+    }
+    debug_assert_eq!(text.write().unwrap().add_client(), client_id);
+    for (_, client) in sockets.write().as_mut().unwrap().iter_mut() {
+        block_on(async {
+            client
+                .write_all(S2C::<&Text>::NewClient.serialize().make_contiguous())
+                .await
+                .unwrap();
+            client.flush().await.unwrap();
         });
+    }
+    sockets.write().unwrap().insert(client_id, write);
+    loop {
+        let mut to_remove = Vec::with_capacity(1);
+        {
+            let action = {
+                let action = C2S::deserialize(&mut read).await.unwrap();
+                let mut binding = text.write().unwrap();
+                let lock = binding.client(client_id);
+                match action {
+                    C2S::Char(c) => lock.push_char(c),
+                    C2S::Backspace => drop(lock.backspace()),
+                    C2S::Enter => lock.push_char('\n'),
+                    C2S::EnterInsert(enter_insert) => {
+                        lock.enter_insert(enter_insert);
+                    }
+                    C2S::Save => {
+                        save_notify.notify_one();
+                        continue;
+                    }
+                }
+                action
+            };
+
+            let mut socket_lock = sockets.write().unwrap();
+            for (clientnr, client) in socket_lock.iter_mut() {
+                if *clientnr == client_id {
+                    continue;
+                }
+                let result = block_on(
+                    client.write_all(
+                        S2C::Update::<&Text>((client_id, action))
+                            .serialize()
+                            .make_contiguous(),
+                    ),
+                );
+                match result {
+                    Ok(()) => block_on(async { client.flush().await.unwrap() }),
+                    Err(e) => {
+                        to_remove.push(*clientnr);
+                        warn!("{client_id}: {e}");
+                    }
+                };
+            }
+        }
+        {
+            let mut lock = sockets.write().unwrap();
+            for x in to_remove {
+                info!("removed client {x}");
+                lock.remove(&x);
+            }
+        }
+        trace!(
+            "{client_id} {:?}",
+            text.read().unwrap().lines().collect::<Vec<_>>()
+        );
     }
 }
 
