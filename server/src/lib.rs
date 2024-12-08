@@ -15,6 +15,7 @@ use std::{
     net::SocketAddrV4,
     num::NonZeroU64,
     path::Path,
+    str::Utf8Chunk,
     sync::{Arc, RwLock},
     time::Duration,
 };
@@ -106,7 +107,7 @@ pub async fn run(
             }
             Err(x) => {
                 match x {
-                    UserAuthError::IoError(e) => warn!("{client_id} {e:?}"),
+                    UserAuthError::IoError(e) => warn!("{client_id} had an IoError: `{e:?}`"),
                     #[cfg(feature = "security")]
                     UserAuthError::NeedsPassword => {
                         warn!("client {client_id} forgot to include a password");
@@ -116,6 +117,10 @@ pub async fn run(
                     UserAuthError::BadPassword => {
                         warn!("client {client_id} forgot to include a password");
                         stream.write_u8(2).await.unwrap();
+                    }
+                    UserAuthError::MissingUsername => {
+                        warn!("{client_id} Forgot to supply a username");
+                        stream.write_u8(3).await.unwrap();
                     }
                 }
                 stream.flush().await.unwrap();
@@ -233,7 +238,9 @@ where
     let mut buf = Vec::new();
     stream.read_buf(&mut buf).await?;
     let mut iter = buf.utf8_chunks();
-    let username = iter.next().unwrap().valid();
+    let Some(username) = iter.next().map(|x| x.valid()) else {
+        return Err(UserAuthError::MissingUsername);
+    };
     #[cfg(feature = "security")]
     {
         let Some(password) = iter.next() else {
@@ -252,6 +259,7 @@ enum UserAuthError {
     #[cfg(feature = "security")]
     NeedsPassword,
     IoError(Error),
+    MissingUsername,
 }
 
 impl From<std::io::Error> for UserAuthError {
