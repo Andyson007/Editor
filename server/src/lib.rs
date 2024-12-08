@@ -225,6 +225,7 @@ async fn handle_client(
                         save_notify.notify_one();
                         continue;
                     }
+                    C2S::ExitInsert => lock.exit_insert(),
                 }
                 action
             };

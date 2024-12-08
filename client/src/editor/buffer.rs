@@ -131,6 +131,7 @@ impl Buffer {
                         }
                     }
                     C2S::EnterInsert(pos) => drop(client.enter_insert(pos)),
+                    C2S::ExitInsert => client.exit_insert(),
                     C2S::Save => unreachable!(),
                 };
                 Ok(true)

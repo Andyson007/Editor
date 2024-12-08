@@ -21,6 +21,7 @@ pub enum C2S {
     // TODO: this should use the `EnterInsert` instead which should be more immune to server-client
     // desync
     EnterInsert(CursorPos),
+    ExitInsert,
     /// Force a save to happen
     Save,
 }
@@ -57,9 +58,10 @@ impl Serialize for C2S {
         match self {
             Self::Char(c) => std::iter::once(1).chain(c.serialize()).collect(),
             Self::EnterInsert(a) => std::iter::once(2).chain(a.serialize()).collect(),
-            Self::Enter => [10].into(),
-            Self::Backspace => [8].into(),
+            Self::ExitInsert => [4].into(),
             Self::Save => [3].into(),
+            Self::Backspace => [8].into(),
+            Self::Enter => [10].into(),
         }
     }
 }

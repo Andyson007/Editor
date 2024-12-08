@@ -242,6 +242,7 @@ impl<T> Drop for TableWriter<T> {
 /// This means that
 /// - No element of the list can be mutated
 /// - The order of the elements cannot be mutated
+#[derive(Debug)]
 pub struct TableReader<T> {
     #[allow(clippy::linkedlist)]
     val: Arc<RwLock<LinkedList<InnerTable<T>>>>,
