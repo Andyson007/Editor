@@ -388,6 +388,7 @@ mod test {
         text.clients[0].backspace();
         text.clients[0].push_char('t');
         text.clients[1].push_char('e');
+
         let mut iter = text.lines();
         assert_eq!(iter.next(), Some("te".to_string()));
         assert_eq!(iter.next(), None);

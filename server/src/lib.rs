@@ -216,7 +216,7 @@ async fn handle_client(
                 let lock = binding.client(client_id);
                 match action {
                     C2S::Char(c) => lock.push_char(c),
-                    C2S::Backspace => drop(lock.backspace()),
+                    C2S::Backspace(swaps) => drop(lock.backspace_with_swaps(swaps)),
                     C2S::Enter => lock.push_char('\n'),
                     C2S::EnterInsert(enter_insert) => {
                         lock.enter_insert(enter_insert);

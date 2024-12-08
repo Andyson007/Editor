@@ -1,14 +1,12 @@
 //! Implements a client type which can be used to insert data into the piece table
 use std::{
+    collections::linked_list::CursorMut,
     fmt::Debug,
     sync::{Arc, RwLock},
 };
 
 use append_only_str::AppendOnlyStr;
-use piece_table::{
-    table::{InnerTable, TableLockReader, TableReader},
-    Piece, TableElem,
-};
+use piece_table::{table::InnerTable, Piece, TableElem};
 use utils::other::{AutoIncrementing, CursorPos};
 
 /// A client which can input text into a `Piece`
@@ -59,15 +57,22 @@ impl Client {
     }
 
     /// Handles a backspace press by the client
+    /// 0:
+    /// Returns None if the client couldn't press backspace
+    /// This happens when
+    /// - The cursor is at the first byte in the file
+    /// - A different client is editing right in front of this cursor
+    /// Returns some when a character was deleted
+    /// 1: The amount of swaps
+    /// that were made
     /// # Panics
     /// - function called without ever entering insert mode
     ///
     /// this function will probably only panic when there are locking errors though
-    pub fn backspace(&mut self) -> Option<char> {
-        let ret;
+    pub fn backspace(&mut self) -> (Option<char>, usize) {
         let binding = self.data.as_mut().unwrap();
         let slice = binding.slice.read();
-        if slice.text.is_empty() {
+        let ret = if slice.text.is_empty() {
             let binding = self
                 .piece
                 .write()
@@ -81,7 +86,67 @@ impl Client {
             while cursor.current().unwrap().read().text != slice.text {
                 cursor.move_next();
             }
-            loop {
+            Self::delete_from_cursor(&mut cursor)
+        } else {
+            drop(slice);
+            (Self::foo(&mut binding.slice), 0)
+        };
+        binding.has_deleted = true;
+        ret
+    }
+
+    fn delete_from_cursor(cursor: &mut CursorMut<'_, InnerTable<TableElem>>) -> (Option<char>, usize) {
+        let mut swap_count = 0;
+        loop {
+            cursor.move_prev();
+            if cursor.current().unwrap().read().text.is_empty() {
+                swap_count += 1;
+                let curr = cursor.remove_current().unwrap();
+                cursor.insert_after(curr);
+            } else {
+                break;
+            }
+        }
+        let Some(prev) = cursor.current() else {
+            return (None, swap_count);
+        };
+        (Self::foo(prev), swap_count)
+    }
+
+    fn foo(binding: &mut InnerTable<TableElem>) -> Option<char> {
+        let slice = &mut binding.write().unwrap();
+        let ret = slice.text.chars().last();
+        debug_assert!(!slice.text.is_empty());
+        slice.text = slice
+            .text
+            .subslice(0..slice.text.len() - slice.text.chars().last().unwrap().len_utf8())
+            .unwrap();
+        ret
+    }
+
+    pub fn backspace_with_swaps(&mut self, swaps: usize) -> Option<char> {
+        if swaps == 0 {
+            let (ret, swaps) = self.backspace();
+            debug_assert_eq!(swaps, 0);
+            ret
+        } else {
+            let binding = self.data.as_mut().unwrap();
+            let slice = binding.slice.read();
+
+            let binding = self
+                .piece
+                .write()
+                .unwrap()
+                .piece_table
+                .write_full()
+                .unwrap();
+
+            let mut binding2 = binding.write();
+            let mut cursor = binding2.cursor_front_mut();
+            while cursor.current().unwrap().read().text != slice.text {
+                cursor.move_next();
+            }
+            for _ in 0..swaps {
                 cursor.move_prev();
                 if cursor.current().unwrap().read().text.is_empty() {
                     let curr = cursor.remove_current().unwrap();
@@ -90,25 +155,8 @@ impl Client {
                     break;
                 }
             }
-            let prev = cursor.current()?;
-            drop(slice);
-            let slice = &mut prev.write().unwrap();
-            ret = slice.text.chars().last().unwrap();
-            slice.text = slice
-                .text
-                .subslice(0..slice.text.len() - slice.text.chars().last().unwrap().len_utf8())
-                .unwrap();
-        } else {
-            drop(slice);
-            let slice = &mut binding.slice.write().unwrap();
-            ret = slice.text.chars().last().unwrap();
-            slice.text = slice
-                .text
-                .subslice(0..slice.text.len() - slice.text.chars().last().unwrap().len_utf8())
-                .unwrap();
+            todo!()
         }
-        binding.has_deleted = true;
-        Some(ret)
     }
 
     /// appends a char at the current location
