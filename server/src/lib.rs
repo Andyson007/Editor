@@ -57,6 +57,8 @@ pub async fn run(
     let file = File::options()
         .create(true)
         .truncate(false)
+        .read(true)
+        .write(true)
         .open(path)
         .unwrap();
     let text = Arc::new(RwLock::new(
