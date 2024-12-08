@@ -374,4 +374,22 @@ mod test {
         assert_eq!(iter.next(), Some("text".to_string()));
         assert_eq!(iter.next(), None);
     }
+
+    #[test]
+    fn backspace_swap() {
+        let mut text = Text::new();
+        text.add_client();
+        text.add_client();
+        text.clients[0].enter_insert((0, 0).into());
+        text.clients[0].push_char('t');
+        text.clients[1].enter_insert((0, 1).into());
+        text.clients[0].push_char('e');
+        text.clients[0].backspace();
+        text.clients[0].backspace();
+        text.clients[0].push_char('t');
+        text.clients[1].push_char('e');
+        let mut iter = text.lines();
+        assert_eq!(iter.next(), Some("te".to_string()));
+        assert_eq!(iter.next(), None);
+    }
 }

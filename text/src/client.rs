@@ -5,7 +5,10 @@ use std::{
 };
 
 use append_only_str::AppendOnlyStr;
-use piece_table::{table::InnerTable, Piece, TableElem};
+use piece_table::{
+    table::{InnerTable, TableLockReader, TableReader},
+    Piece, TableElem,
+};
 use utils::other::{AutoIncrementing, CursorPos};
 
 /// A client which can input text into a `Piece`
@@ -73,13 +76,19 @@ impl Client {
                 .write_full()
                 .unwrap();
 
-            let binding2 = binding.write();
-            let mut cursor = binding2.cursor_front();
+            let mut binding2 = binding.write();
+            let mut cursor = binding2.cursor_front_mut();
             while cursor.current().unwrap().read().text != slice.text {
                 cursor.move_next();
             }
-            while cursor.current().unwrap().read().text.is_empty() {
+            loop {
                 cursor.move_prev();
+                if cursor.current().unwrap().read().text.is_empty() {
+                    let curr = cursor.remove_current().unwrap();
+                    cursor.insert_after(curr);
+                } else {
+                    break;
+                }
             }
             let prev = cursor.current()?;
             drop(slice);
@@ -108,6 +117,11 @@ impl Client {
     /// - We can't read our own buffer. This is most likely this crates fault
     pub fn push_char(&mut self, to_push: char) {
         self.push_str(&to_push.to_string());
+    }
+
+    /// Exits insert mode
+    pub fn exit_insert(&mut self) {
+        self.data = None;
     }
 
     /// appends a string at the current location
