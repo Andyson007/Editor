@@ -183,6 +183,11 @@ impl Client {
 
     /// Exits insert mode
     pub fn exit_insert(&mut self) {
+        if let Some(data) = self.data.as_mut() {
+            if let Some((_, ref mut occupied)) = data.slice.write().as_mut().unwrap().buf {
+                *occupied = false;
+            }
+        }
         self.data = None;
     }
 
