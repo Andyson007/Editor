@@ -28,7 +28,7 @@ pub struct Buffer {
 
 #[derive(Debug)]
 pub struct Socket {
-    pub reader: BufReader<OwnedReadHalf>,
+    pub reader: OwnedReadHalf,
     pub writer: OwnedWriteHalf,
 }
 
@@ -45,7 +45,7 @@ impl Buffer {
             socket: socket.map(|x| {
                 let (read, writer) = x.into_split();
                 Socket {
-                    reader: BufReader::new(read),
+                    reader: read,
                     writer,
                 }
             }),

@@ -13,7 +13,7 @@ use crossterm::{
     ExecutableCommand,
 };
 use editor::Client;
-use futures::{FutureExt, StreamExt};
+use futures::{future, FutureExt, StreamExt};
 use std::{
     io::{self, Write},
     net::SocketAddrV4,
@@ -21,7 +21,7 @@ use std::{
 };
 use text::Text;
 use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
+    io::{AsyncReadExt, AsyncWriteExt, Interest},
     net::TcpStream,
 };
 
@@ -56,9 +56,7 @@ pub async fn run(
 
     let mut reader = EventStream::new();
     loop {
-        let update = app.curr().update().fuse();
         let event = reader.next().fuse();
-
         if tokio::select! {
             maybe_event = event => {
                 match maybe_event {
@@ -80,7 +78,18 @@ pub async fn run(
                     None => panic!("idk what this branch is supposed to handle"),
                 }
             },
-            x = update => x.unwrap(),
+            x = async {
+                if let Some(x) = &mut app.curr().socket{
+                    let mut buf= [0];
+                    x.reader.peek(&mut buf).await
+                } else {
+                    future::pending::<()>().await;
+                    unreachable!()
+                }
+            } => {
+                x?;
+                app.curr().update().await.unwrap()
+            },
         } {
             app.curr().recalculate_cursor(terminal::size()?);
             app.redraw(&mut out).unwrap();
@@ -111,7 +120,9 @@ async fn connect_with_auth(
         0 => (),
         1 => panic!("You forgot to include a password"),
         2 => panic!("The username, password combination you supplied isn't authorized"),
-        3 => panic!("This shouldn't be reachable, but it means that you forgot to supply a password"),
+        3 => {
+            panic!("This shouldn't be reachable, but it means that you forgot to supply a password")
+        }
         _ => unreachable!(),
     }
     Ok(stream)
