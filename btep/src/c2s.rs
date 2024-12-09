@@ -80,6 +80,7 @@ impl Deserialize for C2S {
             ),
             2 => Self::EnterInsert(CursorPos::deserialize(data).await?),
             3 => Self::Save,
+            4 => Self::ExitInsert,
             8 => Self::Backspace(data.read_u64().await? as usize),
             10 => Self::Enter,
             x => unreachable!("{x}"),

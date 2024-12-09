@@ -167,6 +167,15 @@ impl Client {
                 if self.curr().cursorpos == (CursorPos { row: 0, col: 0 }) {
                     break 'backspace;
                 }
+                let prev_line_len = (self.curr().cursorpos.row != 0).then(|| {
+                    self.curr()
+                        .text
+                        .lines()
+                        .nth(self.curr().cursorpos.row - 1)
+                        .unwrap()
+                        .len()
+                });
+
                 let (deleted, swaps) = self.curr().text.client(curr_id).backspace();
                 if let Some(buffer::Socket { ref mut writer, .. }) = self.curr().socket {
                     writer
@@ -177,13 +186,7 @@ impl Client {
                 if deleted.is_some() {
                     if self.curr().cursorpos.col == 0 {
                         self.curr().cursorpos.row -= 1;
-                        self.curr().cursorpos.col = self
-                            .curr()
-                            .text
-                            .lines()
-                            .nth(self.curr().cursorpos.row)
-                            .unwrap()
-                            .len();
+                        self.curr().cursorpos.col = prev_line_len.unwrap();
                     } else {
                         self.curr().cursorpos.col -= 1;
                     }
