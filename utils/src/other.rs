@@ -45,7 +45,7 @@ pub struct CursorPos {
 }
 
 impl From<(usize, usize)> for CursorPos {
-    fn from((col, row): (usize, usize)) -> Self {
+    fn from((row, col): (usize, usize)) -> Self {
         Self { row, col }
     }
 }

@@ -14,13 +14,14 @@ pub enum C2S {
     /// The client wrote a character
     Char(char),
     /// The client pressed backspace
-    Backspace,
+    Backspace(usize),
     /// The client pressed enter
     Enter,
     /// The client pressed entered insert mode at a position
     // TODO: this should use the `EnterInsert` instead which should be more immune to server-client
     // desync
     EnterInsert(CursorPos),
+    ExitInsert,
     /// Force a save to happen
     Save,
 }
@@ -57,9 +58,12 @@ impl Serialize for C2S {
         match self {
             Self::Char(c) => std::iter::once(1).chain(c.serialize()).collect(),
             Self::EnterInsert(a) => std::iter::once(2).chain(a.serialize()).collect(),
-            Self::Enter => [10].into(),
-            Self::Backspace => [8].into(),
             Self::Save => [3].into(),
+            Self::ExitInsert => [4].into(),
+            Self::Backspace(swaps) => std::iter::once(8)
+                .chain((*swaps as u64).to_be_bytes())
+                .collect(),
+            Self::Enter => [10].into(),
         }
     }
 }
@@ -76,7 +80,7 @@ impl Deserialize for C2S {
             ),
             2 => Self::EnterInsert(CursorPos::deserialize(data).await?),
             3 => Self::Save,
-            8 => Self::Backspace,
+            8 => Self::Backspace(data.read_u64().await? as usize),
             10 => Self::Enter,
             x => unreachable!("{x}"),
         })

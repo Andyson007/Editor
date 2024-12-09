@@ -3,7 +3,6 @@
 #[cfg(feature = "security")]
 mod security;
 use btep::{c2s::C2S, prelude::S2C, Deserialize, Serialize};
-use core::error;
 use futures::{executor::block_on, FutureExt};
 #[cfg(feature = "security")]
 use sqlx::{sqlite::SqliteConnectOptions, SqlitePool};
@@ -16,7 +15,6 @@ use std::{
     net::SocketAddrV4,
     num::NonZeroU64,
     path::Path,
-    str::Utf8Chunk,
     sync::{Arc, RwLock},
     time::Duration,
 };
@@ -216,7 +214,7 @@ async fn handle_client(
                 let lock = binding.client(client_id);
                 match action {
                     C2S::Char(c) => lock.push_char(c),
-                    C2S::Backspace => drop(lock.backspace()),
+                    C2S::Backspace(swaps) => drop(lock.backspace_with_swaps(swaps)),
                     C2S::Enter => lock.push_char('\n'),
                     C2S::EnterInsert(enter_insert) => {
                         lock.enter_insert(enter_insert);
@@ -225,6 +223,7 @@ async fn handle_client(
                         save_notify.notify_one();
                         continue;
                     }
+                    C2S::ExitInsert => lock.exit_insert(),
                 }
                 action
             };

@@ -84,7 +84,7 @@ impl Deserialize for Text {
                         .iter()
                         .find(|x| {
                             let inner = x.read();
-                            if inner.bufnr != Some(counter) {
+                            if inner.buf.map(|(x, _)| x) != Some(counter) {
                                 return false;
                             };
                             inner.text.start() == start && inner.text.end() == end
@@ -230,7 +230,7 @@ mod test {
         text.client(client).enter_insert((0, 0).into());
         text.client(client).push_str("andy");
 
-        text.client(client2).enter_insert((2, 0).into());
+        text.client(client2).enter_insert((0, 2).into());
         text.client(client2).push_str("andy");
 
         let mut iter = text.lines();
@@ -249,8 +249,8 @@ mod test {
 
         text.add_client();
 
-        text.client(1).enter_insert((2, 0).into());
-        text.client(2).enter_insert((4, 0).into());
+        text.client(1).enter_insert((0, 2).into());
+        text.client(2).enter_insert((0, 4).into());
         text.client(1).push_str("andy");
 
         text.client(2).push_str("\n\na");
@@ -269,10 +269,10 @@ mod test {
         text.client(0).enter_insert((0, 0).into());
         text.client(0).push_str("Hello");
 
-        text.client(0).enter_insert((5, 0).into());
+        text.client(0).enter_insert((0, 5).into());
         text.client(0).push_str("world!");
 
-        text.client(0).enter_insert((5, 0).into());
+        text.client(0).enter_insert((0, 5).into());
         text.client(0).push_str(" ");
 
         let mut iter = text.lines();
@@ -288,38 +288,14 @@ mod test {
         text.client(0).enter_insert((0, 0).into());
         text.client(0).push_str("Hello");
 
-        text.client(0).enter_insert((5, 0).into());
+        text.client(0).enter_insert((0, 5).into());
         text.client(0).push_str("world!");
 
-        text.client(0).enter_insert((5, 0).into());
+        text.client(0).enter_insert((0, 5).into());
         text.client(0).push_str(" ");
 
-        text.client(0).enter_insert((1, 0).into());
-        println!(
-            "{:?}",
-            text.table
-                .read()
-                .unwrap()
-                .read_full()
-                .unwrap()
-                .read()
-                .iter()
-                .map(|x| x.read().text.as_str().to_string())
-                .collect::<Vec<_>>()
-        );
-        text.client(0).enter_insert((2, 0).into());
-        println!(
-            "{:?}",
-            text.table
-                .read()
-                .unwrap()
-                .read_full()
-                .unwrap()
-                .read()
-                .iter()
-                .map(|x| x.read().text.as_str().to_string())
-                .collect::<Vec<_>>()
-        );
+        text.client(0).enter_insert((0, 1).into());
+        text.client(0).enter_insert((0, 2).into());
 
         text.client(0).backspace();
 
@@ -372,6 +348,66 @@ mod test {
 
         let mut iter = text.lines();
         assert_eq!(iter.next(), Some("text".to_string()));
+        assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn backspace_swap() {
+        let mut text = Text::new();
+        text.add_client();
+        text.add_client();
+        text.clients[0].enter_insert((0, 0).into());
+        text.clients[0].push_char('t');
+        text.clients[1].enter_insert((0, 1).into());
+        text.clients[0].push_char('e');
+        text.clients[0].backspace();
+        text.clients[0].backspace();
+        text.clients[0].push_char('t');
+        text.clients[1].push_char('e');
+
+        let mut iter = text.lines();
+        assert_eq!(iter.next(), Some("te".to_string()));
+        assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn blocked_backspace() {
+        let mut text = Text::new();
+        text.add_client();
+        text.add_client();
+        text.clients[0].enter_insert((0, 0).into());
+        // println!("{} {:#?}", line!(), text.client(0));
+        text.clients[0].push_char('t');
+        // println!("---------------------------------");
+        // println!("{} {:#?}", line!(), text.client(0));
+        text.clients[0].push_char('e');
+
+        println!(
+            "{} {:?}",
+            line!(),
+            text.client(0).data.as_ref().map(|x| x.slice.read().buf)
+        );
+        println!();
+        text.clients[1].enter_insert((0, 1).into());
+        println!("{} {:?}", line!(), text.bufs().collect::<Vec<_>>());
+        println!(
+            "{} {:?}",
+            line!(),
+            text.client(0).data.as_ref().map(|x| x.slice.read().buf)
+        );
+        text.clients[1].push_char('x');
+        // println!("{} {:?}", line!(), text.bufs().collect::<Vec<_>>());
+        text.clients[0].backspace();
+        // println!("{} {:?}", line!(), text.bufs().collect::<Vec<_>>());
+        text.clients[0].backspace();
+        // println!("{} {:?}", line!(), text.bufs().collect::<Vec<_>>());
+        text.clients[0].push_char('t');
+        // println!("{} {:?}", line!(), text.bufs().collect::<Vec<_>>());
+        text.clients[0].push_char('e');
+        // println!("{} {:?}", line!(), text.bufs().collect::<Vec<_>>());
+
+        let mut iter = text.lines();
+        assert_eq!(iter.next(), Some("txte".to_string()));
         assert_eq!(iter.next(), None);
     }
 }

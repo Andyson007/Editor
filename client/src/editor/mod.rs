@@ -14,7 +14,7 @@ use utils::other::CursorPos;
 mod buffer;
 mod draw;
 
-/// Represents a single client. 
+/// Represents a single client.
 #[derive(Default)]
 pub struct Client {
     /// All the buffers the client is connected to
@@ -167,24 +167,26 @@ impl Client {
                 if self.curr().cursorpos == (CursorPos { row: 0, col: 0 }) {
                     break 'backspace;
                 }
-                if self.curr().cursorpos.col == 0 {
-                    self.curr().cursorpos.row -= 1;
-                    self.curr().cursorpos.col = self
-                        .curr()
-                        .text
-                        .lines()
-                        .nth(self.curr().cursorpos.row)
-                        .unwrap()
-                        .len();
-                } else {
-                    self.curr().cursorpos.col -= 1;
-                }
-                self.curr().text.client(curr_id).backspace();
+                let (deleted, swaps) = self.curr().text.client(curr_id).backspace();
                 if let Some(buffer::Socket { ref mut writer, .. }) = self.curr().socket {
                     writer
-                        .write_all(C2S::Backspace.serialize().make_contiguous())
+                        .write_all(C2S::Backspace(swaps).serialize().make_contiguous())
                         .await?;
                     writer.flush().await?;
+                }
+                if deleted.is_some() {
+                    if self.curr().cursorpos.col == 0 {
+                        self.curr().cursorpos.row -= 1;
+                        self.curr().cursorpos.col = self
+                            .curr()
+                            .text
+                            .lines()
+                            .nth(self.curr().cursorpos.row)
+                            .unwrap()
+                            .len();
+                    } else {
+                        self.curr().cursorpos.col -= 1;
+                    }
                 }
             }
             KeyCode::Enter => {
@@ -295,11 +297,7 @@ impl Client {
     async fn enter_insert(&mut self, pos: CursorPos) -> io::Result<()> {
         let curr_id = self.curr().id;
         let (_offset, _id) = self.curr().text.client(curr_id).enter_insert(pos);
-        if let Some(buffer::Socket {
-            ref mut writer,
-            ..
-        }) = self.curr().socket
-        {
+        if let Some(buffer::Socket { ref mut writer, .. }) = self.curr().socket {
             writer
                 .write_all(C2S::EnterInsert(pos).serialize().make_contiguous())
                 .await?;

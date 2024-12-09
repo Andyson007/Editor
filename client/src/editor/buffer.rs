@@ -94,8 +94,8 @@ impl Buffer {
                             self.cursorpos.col += 1;
                         }
                     }
-                    C2S::Backspace => {
-                        if let Some(del_char) = client.backspace() {
+                    C2S::Backspace(swaps) => {
+                        if let Some(del_char) = client.backspace_with_swaps(swaps) {
                             if client.data.as_ref().unwrap().pos.row == self.cursorpos.row
                                 && client.data.as_ref().unwrap().pos.col < self.cursorpos.col
                             {
@@ -131,6 +131,7 @@ impl Buffer {
                         }
                     }
                     C2S::EnterInsert(pos) => drop(client.enter_insert(pos)),
+                    C2S::ExitInsert => client.exit_insert(),
                     C2S::Save => unreachable!(),
                 };
                 Ok(true)
