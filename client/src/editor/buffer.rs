@@ -124,8 +124,7 @@ impl Buffer {
                             cmp::Ordering::Equal => {
                                 if client.data.as_ref().unwrap().pos.col < self.cursorpos.col {
                                     self.cursorpos.row += 1;
-                                    self.cursorpos.col =
-                                        self.cursorpos.col - client.data.as_ref().unwrap().pos.col;
+                                    self.cursorpos.col -= client.data.as_ref().unwrap().pos.col;
                                 }
                             }
                             cmp::Ordering::Greater => (),
