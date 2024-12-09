@@ -273,6 +273,18 @@ impl Client {
             });
         }
 
+        let mut iter = to_push.split('\n').rev();
+        if let Some(x) = self.data.as_mut() {
+            let len = iter.next().unwrap().len();
+            let rest_count = iter.count();
+            if rest_count == 0 {
+                x.pos.col += len;
+            } else {
+                x.pos.row += rest_count;
+                x.pos.col = len;
+            }
+        }
+
         let slice = &self.data.as_mut().unwrap().slice;
 
         self.buffer.write().unwrap().push_str(to_push);

@@ -123,9 +123,9 @@ impl Buffer {
                         } else {
                             client.backspace_with_swaps(swaps);
                         }
+
                     }
                     C2S::Enter => {
-                        client.push_char('\n');
                         match client
                             .data
                             .as_ref()
@@ -145,6 +145,7 @@ impl Buffer {
                             }
                             cmp::Ordering::Greater => (),
                         }
+                        client.push_char('\n');
                     }
                     C2S::EnterInsert(pos) => drop(client.enter_insert(pos)),
                     C2S::ExitInsert => client.exit_insert(),
