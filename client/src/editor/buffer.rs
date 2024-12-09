@@ -1,4 +1,4 @@
-use std::{cmp, io};
+use std::{cmp, io, thread::current};
 
 use btep::{c2s::C2S, s2c::S2C, Deserialize, Serialize};
 use text::Text;
@@ -95,17 +95,33 @@ impl Buffer {
                         }
                     }
                     C2S::Backspace(swaps) => {
-                        if let Some(del_char) = client.backspace_with_swaps(swaps) {
-                            if client.data.as_ref().unwrap().pos.row == self.cursorpos.row
-                                && client.data.as_ref().unwrap().pos.col < self.cursorpos.col
-                            {
-                                self.cursorpos.col -= 1;
+                        let row = self.cursorpos.row;
+                        let prev_line_len = client
+                            .piece
+                            .read()
+                            .unwrap()
+                            .lines()
+                            .nth(row.saturating_sub(1))
+                            .unwrap()
+                            .len();
+
+                        if client.data.as_ref().unwrap().pos.row == self.cursorpos.row
+                            && client.data.as_ref().unwrap().pos.col <= self.cursorpos.col
+                        {
+                            if let Some(del_char) = client.backspace_with_swaps(swaps) {
+                                if del_char != '\n' {
+                                    self.cursorpos.col -= 1;
+                                } else {
+                                    self.cursorpos.row -= 1;
+                                    self.cursorpos.col += prev_line_len;
+                                }
                             }
-                            if del_char == '\n'
-                                && client.data.as_ref().unwrap().pos.row < self.cursorpos.row
-                            {
+                        } else if client.data.as_ref().unwrap().pos.row < self.cursorpos.row {
+                            if let Some('\n') = client.backspace_with_swaps(swaps) {
                                 self.cursorpos.row -= 1;
                             }
+                        } else {
+                            client.backspace_with_swaps(swaps);
                         }
                     }
                     C2S::Enter => {
