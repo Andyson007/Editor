@@ -167,24 +167,26 @@ impl Client {
                 if self.curr().cursorpos == (CursorPos { row: 0, col: 0 }) {
                     break 'backspace;
                 }
-                if self.curr().cursorpos.col == 0 {
-                    self.curr().cursorpos.row -= 1;
-                    self.curr().cursorpos.col = self
-                        .curr()
-                        .text
-                        .lines()
-                        .nth(self.curr().cursorpos.row)
-                        .unwrap()
-                        .len();
-                } else {
-                    self.curr().cursorpos.col -= 1;
-                }
-                let (_, swaps) = self.curr().text.client(curr_id).backspace();
+                let (deleted, swaps) = self.curr().text.client(curr_id).backspace();
                 if let Some(buffer::Socket { ref mut writer, .. }) = self.curr().socket {
                     writer
                         .write_all(C2S::Backspace(swaps).serialize().make_contiguous())
                         .await?;
                     writer.flush().await?;
+                }
+                if deleted.is_some() {
+                    if self.curr().cursorpos.col == 0 {
+                        self.curr().cursorpos.row -= 1;
+                        self.curr().cursorpos.col = self
+                            .curr()
+                            .text
+                            .lines()
+                            .nth(self.curr().cursorpos.row)
+                            .unwrap()
+                            .len();
+                    } else {
+                        self.curr().cursorpos.col -= 1;
+                    }
                 }
             }
             KeyCode::Enter => {
