@@ -211,7 +211,18 @@ impl Client {
                     writer.flush().await.unwrap();
                 }
             }
-            KeyCode::Esc => self.mode = Mode::Normal,
+            KeyCode::Esc => {
+                self.mode = Mode::Normal;
+                self.curr().text.client(curr_id).exit_insert();
+
+                if let Some(buffer::Socket { ref mut writer, .. }) = self.curr().socket {
+                    writer
+                        .write_all(C2S::ExitInsert.serialize().make_contiguous())
+                        .await
+                        .unwrap();
+                    writer.flush().await.unwrap();
+                }
+            }
             KeyCode::Home => todo!(),
             KeyCode::End => todo!(),
             KeyCode::PageUp | KeyCode::PageDown => todo!(),
