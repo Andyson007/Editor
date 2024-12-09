@@ -127,6 +127,7 @@ impl Piece {
         let bytes_to_row: usize = self.lines().take(pos.row).map(|x| x.len() + 1).sum();
         let char_nr = bytes_to_row + pos.col;
         let binding = self.piece_table.write_full().unwrap();
+
         let mut to_split = binding.write();
         let mut cursor = to_split.cursor_front_mut();
         let mut curr_pos = cursor.current().unwrap().read().text.len();
@@ -187,25 +188,21 @@ impl Piece {
                 ));
             }
 
-            cursor.insert_after(InnerTable::new(
-                TableElem {
-                    buf: buf_of_split,
-                    text: curr.subslice(offset..).unwrap(),
-                    id,
-                },
-                self.piece_table.state(),
-            ));
+            cursor.current().unwrap().write().unwrap().text = curr.subslice(offset..).unwrap();
             Some(offset)
         };
         let curr = self.buffers.clients[clientid].1.read().unwrap();
-        *cursor.current().unwrap().write().unwrap() = TableElem {
-            buf: Some((clientid, true)),
-            text: curr.str_slice(curr.len()..),
-            id: self.buffers.clients[clientid].0.write().unwrap().get()
-                * self.buffers.clients.len()
-                + clientid,
-        };
-        Some((offset, cursor.current().unwrap().clone()))
+        cursor.insert_before(InnerTable::new(
+            TableElem {
+                buf: Some((clientid, true)),
+                text: curr.str_slice(curr.len()..),
+                id: self.buffers.clients[clientid].0.write().unwrap().get()
+                    * self.buffers.clients.len()
+                    + clientid,
+            },
+            self.piece_table.state(),
+        ));
+        Some((offset, cursor.peek_prev().unwrap().clone()))
     }
 
     /// Locks down the full list for reading.

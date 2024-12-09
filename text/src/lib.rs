@@ -382,16 +382,23 @@ mod test {
         // println!("{} {:#?}", line!(), text.client(0));
         text.clients[0].push_char('e');
 
-        println!("{} {:?}", line!(), text.bufs().collect::<Vec<_>>());
-        // println!("{} {:?}", line!(), text.client(0).data);
-        // println!("{} {:#?}", line!(), text.client(0));
+        println!(
+            "{} {:?}",
+            line!(),
+            text.client(0).data.as_ref().map(|x| x.slice.read().buf)
+        );
+        println!();
         text.clients[1].enter_insert((0, 1).into());
         println!("{} {:?}", line!(), text.bufs().collect::<Vec<_>>());
-        println!("{} {:?}", line!(), text.client(0).data);
+        println!(
+            "{} {:?}",
+            line!(),
+            text.client(0).data.as_ref().map(|x| x.slice.read().buf)
+        );
         text.clients[1].push_char('x');
-        println!("{} {:?}", line!(), text.bufs().collect::<Vec<_>>());
+        // println!("{} {:?}", line!(), text.bufs().collect::<Vec<_>>());
         text.clients[0].backspace();
-        println!("{} {:?}", line!(), text.bufs().collect::<Vec<_>>());
+        // println!("{} {:?}", line!(), text.bufs().collect::<Vec<_>>());
         text.clients[0].backspace();
         // println!("{} {:?}", line!(), text.bufs().collect::<Vec<_>>());
         text.clients[0].push_char('t');

@@ -75,7 +75,6 @@ impl Client {
         let slice = binding.slice.read();
         binding.has_deleted = true;
         let ret = if slice.text.is_empty() {
-            println!("test");
             let binding = self
                 .piece
                 .write()
@@ -92,7 +91,6 @@ impl Client {
             drop(slice);
             self.delete_from_cursor(&mut cursor)
         } else {
-            println!("tet");
             drop(slice);
             (Self::foo(&mut binding.slice), 0)
         };
@@ -245,7 +243,6 @@ impl Client {
     /// # Panics
     /// probably only failed locks
     pub fn enter_insert(&mut self, pos: CursorPos) -> (Option<usize>, usize) {
-        println!("{}", self.bufnr);
         let (offset, inner_table) = self
             .piece
             .write()
