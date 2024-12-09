@@ -122,13 +122,13 @@ mod test {
         let original: AppendOnlyStr = text.into();
         let piece = Piece {
             piece_table: iter::once(TableElem {
-                bufnr: None,
+                buf: None,
                 text: original.str_slice(..),
                 id: 0,
             })
             .collect(),
             buffers: Buffers {
-                original,
+                original: (AutoIncrementing::new(), original),
                 clients: vec![],
             },
         };
@@ -143,13 +143,13 @@ mod test {
         let original: AppendOnlyStr = text.into();
         let piece = Piece {
             piece_table: iter::once(TableElem {
-                bufnr: None,
+                buf: None,
                 id: 0,
                 text: original.str_slice(..),
             })
             .collect(),
             buffers: Buffers {
-                original,
+                original: (AutoIncrementing::new(), original),
                 clients: vec![],
             },
         };
@@ -166,12 +166,12 @@ mod test {
         let original: AppendOnlyStr = text.into();
         let piece = Piece {
             piece_table: Table::from_iter(std::iter::once(TableElem {
-                bufnr: None,
+                buf: None,
                 id: 0,
                 text: original.str_slice(..),
             })),
             buffers: Buffers {
-                original,
+                original: (AutoIncrementing::new(), original),
                 clients: vec![],
             },
         };
@@ -190,12 +190,12 @@ mod test {
         let piece = Piece {
             piece_table: [
                 TableElem {
-                    bufnr: None,
+                    buf: None,
                     text: original.str_slice(..),
                     id: 0,
                 },
                 TableElem {
-                    bufnr: Some(0),
+                    buf: Some((0, false)),
                     text: Arc::clone(&client1).read().unwrap().str_slice(..),
                     id: 1,
                 },
@@ -204,7 +204,7 @@ mod test {
             .collect(),
 
             buffers: Buffers {
-                original,
+                original: (AutoIncrementing::new(), original),
                 clients: vec![(Arc::new(RwLock::new(AutoIncrementing::new())), client1)],
             },
         };
@@ -226,28 +226,28 @@ mod test {
         let piece = Piece {
             piece_table: Table::from_iter([
                 TableElem {
-                    bufnr: None,
+                    buf: None,
                     id: 0,
                     text: original.str_slice(0..1),
                 },
                 TableElem {
-                    bufnr: Some(0),
+                    buf: Some((0, false)),
                     text: Arc::clone(&client1).read().unwrap().str_slice(0..1),
                     id: 1,
                 },
                 TableElem {
-                    bufnr: None,
+                    buf: None,
                     id: 2,
                     text: original.str_slice(1..3),
                 },
                 TableElem {
-                    bufnr: Some(0),
+                    buf: Some((0, false)),
                     text: Arc::clone(&client1).read().unwrap().str_slice(1..3),
                     id: 3,
                 },
             ]),
             buffers: Buffers {
-                original,
+                original: (AutoIncrementing::new(), original),
                 clients: vec![(Arc::new(RwLock::new(AutoIncrementing::new())), client1)],
             },
         };

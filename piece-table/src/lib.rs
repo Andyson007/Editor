@@ -7,6 +7,7 @@ use std::{
     iter,
     str::FromStr,
     sync::{Arc, RwLock},
+    thread::current,
 };
 
 pub mod iters;
@@ -25,8 +26,8 @@ use utils::{
 /// This includes the append buffers for each of the clients, and the original buffer
 #[derive(Debug)]
 pub struct Buffers {
-    /// The original file content
-    pub original: AppendOnlyStr,
+    /// The original file content together with its id generator
+    pub original: (AutoIncrementing, AppendOnlyStr),
     /// The appendbuffers for each of the clients
     pub clients: Vec<(Arc<RwLock<AutoIncrementing>>, Arc<RwLock<AppendOnlyStr>>)>,
 }
@@ -44,7 +45,8 @@ pub struct Piece {
 /// An element of the piece table
 pub struct TableElem {
     /// The buffer that the `text` is pointing to
-    pub bufnr: Option<usize>,
+    /// whether the this element is being edited
+    pub buf: Option<(usize, bool)>,
     /// The id of this buffer
     pub id: usize,
     /// A slice to the text
@@ -59,12 +61,12 @@ impl Piece {
         Self {
             piece_table: std::iter::once(TableElem {
                 id: 0,
-                bufnr: None,
+                buf: None,
                 text: original.str_slice(..),
             })
             .collect(),
             buffers: Buffers {
-                original,
+                original: (AutoIncrementing::new(), original),
                 clients: vec![],
             },
         }
@@ -82,13 +84,13 @@ impl Piece {
 
         Ok(Self {
             piece_table: iter::once(TableElem {
-                bufnr: None,
+                buf: None,
                 id: 0,
                 text: original.str_slice(..),
             })
             .collect(),
             buffers: Buffers {
-                original,
+                original: (AutoIncrementing::new(), original),
                 clients: vec![],
             },
         })
@@ -101,13 +103,13 @@ impl Piece {
 
         Self {
             piece_table: iter::once(TableElem {
-                bufnr: None,
+                buf: None,
                 id: 0,
                 text: original.str_slice(..),
             })
             .collect(),
             buffers: Buffers {
-                original,
+                original: (AutoIncrementing::new(), original),
                 clients: vec![],
             },
         }
@@ -143,10 +145,17 @@ impl Piece {
         let offset = if is_end {
             // NOTE: We rely on the cursors position later
             cursor.move_prev();
-            let curr = self.buffers.clients[clientid].1.read().unwrap();
+            let current = cursor.current().unwrap();
+            let buf = current.read().buf;
+            let curr = if let Some((buf, _)) = current.read().buf {
+                &*self.buffers.clients[buf].1.read().unwrap()
+            } else {
+                &self.buffers.original.1
+            };
+
             cursor.insert_after(InnerTable::new(
                 TableElem {
-                    bufnr: Some(clientid),
+                    buf,
                     text: curr.str_slice(curr.len()..),
                     id: self.buffers.clients[clientid].0.write().unwrap().get()
                         * self.buffers.clients.len()
@@ -156,17 +165,20 @@ impl Piece {
             ));
             None
         } else {
-            let (buf_of_split, current) = {
+            let (buf_of_split, id, current) = {
                 let current = cursor.current().unwrap().read();
-                (current.bufnr, current.text.clone())
+                (current.buf, current.id, current.text.clone())
             };
             let offset = char_nr - (curr_pos - current.len());
+
+            let current = cursor.current().unwrap();
+            let curr = current.read().text.clone();
 
             if offset != 0 {
                 cursor.insert_before(InnerTable::new(
                     TableElem {
-                        bufnr: buf_of_split,
-                        text: current.subslice(..offset)?,
+                        buf: buf_of_split.map(|x| (x.0, false)),
+                        text: curr.subslice(..offset).unwrap(),
                         id: self.buffers.clients[clientid].0.write().unwrap().get()
                             * self.buffers.clients.len()
                             + clientid,
@@ -177,18 +189,21 @@ impl Piece {
 
             cursor.insert_after(InnerTable::new(
                 TableElem {
-                    bufnr: buf_of_split,
-                    text: current.subslice(offset..)?,
-                    id: self.buffers.clients[clientid].0.write().unwrap().get()
-                        * self.buffers.clients.len()
-                        + clientid,
+                    buf: buf_of_split,
+                    text: curr.subslice(offset..).unwrap(),
+                    id,
                 },
                 self.piece_table.state(),
             ));
-            let curr = self.buffers.clients[clientid].1.read().unwrap();
-            cursor.current().unwrap().write().unwrap().text = curr.str_slice(curr.len()..);
-            cursor.current().unwrap().write().unwrap().bufnr = Some(clientid);
             Some(offset)
+        };
+        let curr = self.buffers.clients[clientid].1.read().unwrap();
+        *cursor.current().unwrap().write().unwrap() = TableElem {
+            buf: Some((clientid, true)),
+            text: curr.str_slice(curr.len()..),
+            id: self.buffers.clients[clientid].0.write().unwrap().get()
+                * self.buffers.clients.len()
+                + clientid,
         };
         Some((offset, cursor.current().unwrap().clone()))
     }
@@ -223,7 +238,8 @@ impl Default for Piece {
 impl Serialize for &Piece {
     fn serialize(&self) -> std::collections::VecDeque<u8> {
         let mut ret = VecDeque::new();
-        ret.extend(self.buffers.original.str_slice(..).as_str().bytes());
+        ret.extend((self.buffers.original.0.peek() as u64).to_be_bytes());
+        ret.extend(self.buffers.original.1.str_slice(..).as_str().bytes());
         for client in &self.buffers.clients {
             // 0xfe is used here because its not representable by utf8, and makes stuff easier to
             // parse. This is useful because the alternative is the specify the strings length,
@@ -239,7 +255,12 @@ impl Serialize for &Piece {
         for piece in self.piece_table.read_full().unwrap().read().iter() {
             let piece = piece.read();
             // NOTE: This probably shouldn't use u64::MAX, but idk about a better way
-            ret.extend((piece.bufnr.map_or(u64::MAX, |x| x as u64)).to_be_bytes());
+            if let Some((bufnr, occupied)) = piece.buf {
+                ret.extend([if occupied { 2 } else { 1 }]);
+                ret.extend((bufnr as u64).to_be_bytes());
+            } else {
+                ret.extend([0]);
+            }
             ret.extend((piece.id as u64).to_be_bytes());
             ret.extend((piece.text.start() as u64).to_be_bytes());
             ret.extend((piece.text.end() as u64).to_be_bytes());
@@ -258,6 +279,7 @@ impl Deserialize for Piece {
         // #[allow(clippy::unused_peekable)]
         // let mut iter = data.bytes().peekable();
         let mut str_buf = String::new();
+        let mut original_start = data.read_u64().await?;
         let mut separator = data.read_valid_str(&mut str_buf).await?;
 
         let original_buffer: AppendOnlyStr = AppendOnlyStr::from_str(&str_buf).unwrap();
@@ -283,30 +305,29 @@ impl Deserialize for Piece {
 
         let mut builder = InnerTable::builder();
         for _ in 0..piece_count {
-            let bufnr = data.read_u64().await?;
+            let buf = match data.read_u8().await? {
+                0 => None,
+                1 => Some((data.read_i64().await?, false)),
+                2 => Some((data.read_i64().await?, true)),
+                _ => unreachable!(),
+            };
+
             let id = data.read_u64().await? as usize;
             let start = data.read_u64().await? as usize;
             let end = data.read_u64().await? as usize;
-            builder.push(match bufnr {
-                u64::MAX => TableElem {
-                    bufnr: None,
-                    text: original_buffer.str_slice(start..end),
-                    id,
-                },
-                bufnr => {
-                    let buf = usize::try_from(bufnr).unwrap();
-                    TableElem {
-                        bufnr: Some(buf),
-                        text: client_buffers[buf].1.read().unwrap().str_slice(start..end),
-                        id,
-                    }
-                }
+            builder.push(TableElem {
+                buf: None,
+                text: original_buffer.str_slice(start..end),
+                id,
             });
         }
 
         Ok(Self {
             buffers: Buffers {
-                original: original_buffer,
+                original: (
+                    AutoIncrementing::new_with_start(original_start as usize),
+                    original_buffer,
+                ),
                 clients: client_buffers,
             },
             piece_table: Table::new(builder),
@@ -330,7 +351,7 @@ mod test {
         let mut iter = binding.iter();
         let next = iter.next().unwrap().read();
         assert_eq!(&*next.text, "test");
-        assert_eq!(next.bufnr, None);
+        assert_eq!(next.buf, None);
         assert!(iter.next().is_none());
     }
 }

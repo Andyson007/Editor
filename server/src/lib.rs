@@ -3,7 +3,6 @@
 #[cfg(feature = "security")]
 mod security;
 use btep::{c2s::C2S, prelude::S2C, Deserialize, Serialize};
-use core::error;
 use futures::{executor::block_on, FutureExt};
 #[cfg(feature = "security")]
 use sqlx::{sqlite::SqliteConnectOptions, SqlitePool};
@@ -16,7 +15,6 @@ use std::{
     net::SocketAddrV4,
     num::NonZeroU64,
     path::Path,
-    str::Utf8Chunk,
     sync::{Arc, RwLock},
     time::Duration,
 };

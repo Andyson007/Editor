@@ -62,6 +62,7 @@ impl Client {
     /// This happens when
     /// - The cursor is at the first byte in the file
     /// - A different client is editing right in front of this cursor
+    ///
     /// Returns some when a character was deleted
     /// 1: The amount of swaps
     /// that were made
@@ -72,7 +73,9 @@ impl Client {
     pub fn backspace(&mut self) -> (Option<char>, usize) {
         let binding = self.data.as_mut().unwrap();
         let slice = binding.slice.read();
+        binding.has_deleted = true;
         let ret = if slice.text.is_empty() {
+            println!("test");
             let binding = self
                 .piece
                 .write()
@@ -86,16 +89,20 @@ impl Client {
             while cursor.current().unwrap().read().text != slice.text {
                 cursor.move_next();
             }
-            Self::delete_from_cursor(&mut cursor)
+            drop(slice);
+            self.delete_from_cursor(&mut cursor)
         } else {
+            println!("tet");
             drop(slice);
             (Self::foo(&mut binding.slice), 0)
         };
-        binding.has_deleted = true;
         ret
     }
 
-    fn delete_from_cursor(cursor: &mut CursorMut<'_, InnerTable<TableElem>>) -> (Option<char>, usize) {
+    fn delete_from_cursor(
+        &self,
+        cursor: &mut CursorMut<'_, InnerTable<TableElem>>,
+    ) -> (Option<char>, usize) {
         let mut swap_count = 0;
         loop {
             cursor.move_prev();
@@ -110,7 +117,15 @@ impl Client {
         let Some(prev) = cursor.current() else {
             return (None, swap_count);
         };
-        (Self::foo(prev), swap_count)
+        if prev
+            .read()
+            .buf
+            .is_none_or(|(buf, occupied)| !occupied || buf == self.bufnr)
+        {
+            (Self::foo(prev), swap_count)
+        } else {
+            (None, swap_count)
+        }
     }
 
     fn foo(binding: &mut InnerTable<TableElem>) -> Option<char> {
@@ -125,10 +140,8 @@ impl Client {
     }
 
     pub fn backspace_with_swaps(&mut self, swaps: usize) -> Option<char> {
-        if swaps == 0 {
-            let (ret, swaps) = self.backspace();
-            debug_assert_eq!(swaps, 0);
-            ret
+        let (ret, swaps) = if swaps == 0 {
+            self.backspace()
         } else {
             let binding = self.data.as_mut().unwrap();
             let slice = binding.slice.read();
@@ -155,8 +168,11 @@ impl Client {
                     break;
                 }
             }
-            todo!()
-        }
+            drop(slice);
+            self.delete_from_cursor(&mut cursor)
+        };
+        debug_assert_eq!(swaps, 0);
+        ret
     }
 
     /// appends a char at the current location
@@ -177,6 +193,7 @@ impl Client {
     /// - Insert mode isn't entered
     /// - We can't read our own buffer. This is most likely this crates fault
     pub fn push_str(&mut self, to_push: &str) {
+        // println!("{:?}", self.buffer);
         assert!(
             self.data.is_some(),
             "You can only push stuff after entering insert mode"
@@ -196,14 +213,16 @@ impl Client {
             while cursor.current().unwrap().read().text != slice.read().text {
                 cursor.move_next();
             }
+            if let Some(buf) = cursor.current().unwrap().write().unwrap().buf.as_mut() {
+                buf.1 = false;
+            }
             cursor.insert_after(InnerTable::new(
                 TableElem {
-                    bufnr: Some(self.bufnr),
+                    buf: Some((self.bufnr, true)),
                     text: self.buffer.read().unwrap().str_slice_end(),
                     id: self.id_counter.write().unwrap().get() * client_count + self.bufnr,
                 },
                 binding.state(),
-                // self.id_counter.write().unwrap().get() * client_count + self.bufnr,
             ));
             self.data = Some(Insertdata {
                 slice: cursor.peek_next().unwrap().clone(),
@@ -226,12 +245,14 @@ impl Client {
     /// # Panics
     /// probably only failed locks
     pub fn enter_insert(&mut self, pos: CursorPos) -> (Option<usize>, usize) {
+        println!("{}", self.bufnr);
         let (offset, inner_table) = self
             .piece
             .write()
             .unwrap()
             .insert_at(pos, self.bufnr)
             .unwrap();
+        // println!("{inner_table:?}");
         let idx = inner_table.read().id;
         // FIXME: The reason this is here is to fix a stupid bug. I should use std::pin::Pin to fix
         // this.
