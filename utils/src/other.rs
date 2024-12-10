@@ -61,6 +61,12 @@ impl Add<(isize, isize)> for CursorPos {
     }
 }
 
+impl From<CursorPos> for (usize, usize) {
+    fn from(pos: CursorPos) -> Self {
+        (pos.row, pos.col)
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::AutoIncrementing;

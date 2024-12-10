@@ -50,7 +50,12 @@ impl Client {
     }
 
     /// returns the current buffer that should be visible
-    pub fn curr(&mut self) -> &mut Buffer {
+    pub fn curr(&self) -> &Buffer {
+        &self.buffers[self.current_buffer]
+    }
+
+    /// returns the current buffer that should be visible
+    pub fn curr_mut(&mut self) -> &mut Buffer {
         &mut self.buffers[self.current_buffer]
     }
 
@@ -58,7 +63,7 @@ impl Client {
     async fn execute_commad(&mut self, cmd: &str) -> io::Result<bool> {
         match cmd {
             "q" => return Ok(self.close_current_buffer()),
-            "w" => self.curr().save().await?,
+            "w" => self.curr_mut().save().await?,
             "help" => self.add_buffer(Text::original_from_str(include_str!("../../../help")), None),
             _ => (),
         }
@@ -145,7 +150,6 @@ impl Client {
         Ok(false)
     }
 
-    /// handles a keypress as if were performed in `Insert` mode
     async fn handle_insert_keyevent(&mut self, input: &KeyEvent) -> io::Result<()> {
         if matches!(
             input,
@@ -160,43 +164,43 @@ impl Client {
             return Ok(());
         }
 
-        let curr_id = self.curr().id;
+        let curr_id = self.curr_mut().id;
 
         match input.code {
             KeyCode::Backspace => 'backspace: {
-                if self.curr().cursorpos == (CursorPos { row: 0, col: 0 }) {
+                if self.curr_mut().cursorpos == (CursorPos { row: 0, col: 0 }) {
                     break 'backspace;
                 }
-                let prev_line_len = (self.curr().cursorpos.row != 0).then(|| {
-                    self.curr()
+                let prev_line_len = (self.curr_mut().cursorpos.row != 0).then(|| {
+                    self.curr_mut()
                         .text
                         .lines()
-                        .nth(self.curr().cursorpos.row - 1)
+                        .nth(self.curr_mut().cursorpos.row - 1)
                         .unwrap()
                         .len()
                 });
 
-                let (deleted, swaps) = self.curr().text.client(curr_id).backspace();
-                if let Some(buffer::Socket { ref mut writer, .. }) = self.curr().socket {
+                let (deleted, swaps) = self.curr_mut().text.client(curr_id).backspace();
+                if let Some(buffer::Socket { ref mut writer, .. }) = self.curr_mut().socket {
                     writer
                         .write_all(C2S::Backspace(swaps).serialize().make_contiguous())
                         .await?;
                     writer.flush().await?;
                 }
                 if deleted.is_some() {
-                    if self.curr().cursorpos.col == 0 {
-                        self.curr().cursorpos.row -= 1;
-                        self.curr().cursorpos.col = prev_line_len.unwrap();
+                    if self.curr_mut().cursorpos.col == 0 {
+                        self.curr_mut().cursorpos.row -= 1;
+                        self.curr_mut().cursorpos.col = prev_line_len.unwrap();
                     } else {
-                        self.curr().cursorpos.col -= 1;
+                        self.curr_mut().cursorpos.col -= 1;
                     }
                 }
             }
             KeyCode::Enter => {
-                self.curr().text.client(curr_id).push_char('\n');
-                self.curr().cursorpos.col = 0;
-                self.curr().cursorpos.row += 1;
-                if let Some(buffer::Socket { ref mut writer, .. }) = self.curr().socket {
+                self.curr_mut().text.client(curr_id).push_char('\n');
+                self.curr_mut().cursorpos.col = 0;
+                self.curr_mut().cursorpos.row += 1;
+                if let Some(buffer::Socket { ref mut writer, .. }) = self.curr_mut().socket {
                     writer
                         .write_all(C2S::Enter.serialize().make_contiguous())
                         .await?;
@@ -204,9 +208,9 @@ impl Client {
                 }
             }
             KeyCode::Char(c) => {
-                self.curr().text.client(curr_id).push_char(c);
-                self.curr().cursorpos.col += c.len_utf8();
-                if let Some(buffer::Socket { ref mut writer, .. }) = self.curr().socket {
+                self.curr_mut().text.client(curr_id).push_char(c);
+                self.curr_mut().cursorpos.col += c.len_utf8();
+                if let Some(buffer::Socket { ref mut writer, .. }) = self.curr_mut().socket {
                     writer
                         .write_all(C2S::Char(c).serialize().make_contiguous())
                         .await
@@ -216,9 +220,9 @@ impl Client {
             }
             KeyCode::Esc => {
                 self.mode = Mode::Normal;
-                self.curr().text.client(curr_id).exit_insert();
+                self.curr_mut().text.client(curr_id).exit_insert();
 
-                if let Some(buffer::Socket { ref mut writer, .. }) = self.curr().socket {
+                if let Some(buffer::Socket { ref mut writer, .. }) = self.curr_mut().socket {
                     writer
                         .write_all(C2S::ExitInsert.serialize().make_contiguous())
                         .await
@@ -252,34 +256,34 @@ impl Client {
     async fn handle_normal_keyevent(&mut self, input: &KeyEvent) -> io::Result<()> {
         match input.code {
             KeyCode::Char('i') => {
-                let pos = self.curr().cursorpos;
+                let pos = self.curr_mut().cursorpos;
                 self.enter_insert(pos).await?;
             }
             KeyCode::Char(':') => self.mode = Mode::Command(String::new()),
             KeyCode::Left | KeyCode::Char('h') => {
-                self.curr().cursorpos.col = self.curr().cursorpos.col.saturating_sub(1);
+                self.curr_mut().cursorpos.col = self.curr_mut().cursorpos.col.saturating_sub(1);
             }
             KeyCode::Right | KeyCode::Char('l') => {
-                self.curr().cursorpos.col = cmp::min(
-                    self.curr().cursorpos.col + 1,
-                    self.curr()
+                self.curr_mut().cursorpos.col = cmp::min(
+                    self.curr_mut().cursorpos.col + 1,
+                    self.curr_mut()
                         .text
                         .lines()
-                        .nth(self.curr().cursorpos.row)
+                        .nth(self.curr_mut().cursorpos.row)
                         .unwrap()
                         .chars()
                         .count()
-                        - 1,
+                        .saturating_sub(1),
                 );
             }
             KeyCode::Up | KeyCode::Char('k') => {
-                self.curr().cursorpos.row = self.curr().cursorpos.row.saturating_sub(1);
-                self.curr().cursorpos.col = cmp::min(
-                    self.curr().cursorpos.col,
-                    self.curr()
+                self.curr_mut().cursorpos.row = self.curr_mut().cursorpos.row.saturating_sub(1);
+                self.curr_mut().cursorpos.col = cmp::min(
+                    self.curr_mut().cursorpos.col,
+                    self.curr_mut()
                         .text
                         .lines()
-                        .nth(self.curr().cursorpos.row)
+                        .nth(self.curr_mut().cursorpos.row)
                         .unwrap()
                         .chars()
                         .count()
@@ -287,16 +291,16 @@ impl Client {
                 );
             }
             KeyCode::Down | KeyCode::Char('j') => {
-                self.curr().cursorpos.row = cmp::min(
-                    self.curr().cursorpos.row + 1,
-                    self.curr().text.lines().count() - 1,
+                self.curr_mut().cursorpos.row = cmp::min(
+                    self.curr_mut().cursorpos.row + 1,
+                    self.curr_mut().text.lines().count() - 1,
                 );
-                self.curr().cursorpos.col = cmp::min(
-                    self.curr().cursorpos.col,
-                    self.curr()
+                self.curr_mut().cursorpos.col = cmp::min(
+                    self.curr_mut().cursorpos.col,
+                    self.curr_mut()
                         .text
                         .lines()
-                        .nth(self.curr().cursorpos.row)
+                        .nth(self.curr_mut().cursorpos.row)
                         .unwrap()
                         .chars()
                         .count()
@@ -309,9 +313,9 @@ impl Client {
     }
 
     async fn enter_insert(&mut self, pos: CursorPos) -> io::Result<()> {
-        let curr_id = self.curr().id;
-        let (_offset, _id) = self.curr().text.client(curr_id).enter_insert(pos);
-        if let Some(buffer::Socket { ref mut writer, .. }) = self.curr().socket {
+        let curr_id = self.curr_mut().id;
+        let (_offset, _id) = self.curr_mut().text.client(curr_id).enter_insert(pos);
+        if let Some(buffer::Socket { ref mut writer, .. }) = self.curr_mut().socket {
             writer
                 .write_all(C2S::EnterInsert(pos).serialize().make_contiguous())
                 .await?;

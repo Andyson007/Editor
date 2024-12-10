@@ -19,7 +19,7 @@ pub struct Client {
     /// A conuter used to generate unique ids
     pub(crate) id_counter: Arc<RwLock<AutoIncrementing>>,
     /// The id of the buffer this client is editing
-    pub(crate) bufnr: usize,
+    pub bufnr: usize,
     /// None -> You are currently not in insert mode
     pub data: Option<Insertdata>,
 }
@@ -271,17 +271,17 @@ impl Client {
                 pos: self.data.as_ref().unwrap().pos + (0, 1),
                 has_deleted: false,
             });
-        }
-
-        let mut iter = to_push.split('\n').rev();
-        if let Some(x) = self.data.as_mut() {
-            let len = iter.next().unwrap().len();
-            let rest_count = iter.count();
-            if rest_count == 0 {
-                x.pos.col += len;
-            } else {
-                x.pos.row += rest_count;
-                x.pos.col = len;
+        } else {
+            let mut iter = to_push.split('\n').rev();
+            if let Some(x) = self.data.as_mut() {
+                let len = iter.next().unwrap().len();
+                let rest_count = iter.count();
+                if rest_count == 0 {
+                    x.pos.col += len;
+                } else {
+                    x.pos.row += rest_count;
+                    x.pos.col = len;
+                }
             }
         }
 

@@ -4,20 +4,14 @@ pub mod errors;
 
 use btep::{prelude::S2C, Deserialize};
 use crossterm::{
-    cursor,
-    event::{EnableBracketedPaste, Event, EventStream},
-    execute,
-    terminal::{
+    cursor, event::{EnableBracketedPaste, Event, EventStream}, execute, style::Color, terminal::{
         self, disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
-    },
-    ExecutableCommand,
+    }, ExecutableCommand
 };
 use editor::Client;
 use futures::{future, FutureExt, StreamExt};
 use std::{
-    io::{self, Write},
-    net::SocketAddrV4,
-    str,
+    collections::HashMap, io::{self, Write}, net::SocketAddrV4, str
 };
 use text::Text;
 use tokio::{
@@ -79,7 +73,7 @@ pub async fn run(
                 }
             },
             x = async {
-                if let Some(x) = &mut app.curr().socket{
+                if let Some(x) = &mut app.curr_mut().socket{
                     let mut buf= [0];
                     x.reader.peek(&mut buf).await
                 } else {
@@ -88,10 +82,10 @@ pub async fn run(
                 }
             } => {
                 x?;
-                app.curr().update().await.unwrap()
+                app.curr_mut().update().await.unwrap()
             },
         } {
-            app.curr().recalculate_cursor(terminal::size()?);
+            app.curr_mut().recalculate_cursor(terminal::size()?);
             app.redraw(&mut out).unwrap();
             out.flush()?;
         }
