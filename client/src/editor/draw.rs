@@ -1,9 +1,12 @@
 use crossterm::{
     cursor,
-    style::Print,
+    style::{Color, Print, SetBackgroundColor, SetForegroundColor},
     terminal::{self, ClearType},
 };
-use std::io;
+use std::{
+    collections::{HashMap, HashSet},
+    io,
+};
 
 use crossterm::QueueableCommand;
 
@@ -19,6 +22,16 @@ impl Client {
     where
         E: QueueableCommand + io::Write,
     {
+        let cursors: HashMap<(usize, usize), Color> = self
+            .curr()
+            .text
+            .clients()
+            .iter()
+            .filter(|client| client.bufnr != self.curr().id)
+            .zip(self.curr().colors.iter())
+            .filter_map(|(t, c)| t.data.as_ref().map(|x| (x.pos.into(), *c)))
+            .collect();
+
         let buffer = &self.buffers[self.current_buffer];
 
         out.queue(terminal::Clear(ClearType::All))?;
@@ -29,12 +42,18 @@ impl Client {
             .take(terminal::size()?.1.into())
             .enumerate()
         {
-            out.queue(cursor::MoveTo(0, u16::try_from(linenr).unwrap()))?
-                .queue(Print(
-                    line.chars()
-                        .take(terminal::size()?.0.into())
-                        .collect::<String>(),
-                ))?;
+            out.queue(cursor::MoveTo(0, u16::try_from(linenr).unwrap()))?;
+            for (colnr, c) in line.chars().take(terminal::size()?.0.into()).enumerate() {
+                if let Some(color) = cursors.get(&(linenr, colnr)) {
+                    out.queue(SetBackgroundColor(*color))?
+                        .queue(SetForegroundColor(Color::DarkGrey))?;
+                }
+                out.queue(Print(c))?;
+                if cursors.contains_key(&(linenr, colnr)) {
+                    out.queue(SetBackgroundColor(Color::Reset))?
+                        .queue(SetForegroundColor(Color::Reset))?;
+                }
+            }
         }
         let size = crossterm::terminal::size()?;
         if let Mode::Command(ref cmd) = self.mode {

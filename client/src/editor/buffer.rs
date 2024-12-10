@@ -1,9 +1,10 @@
-use std::{cmp, io, thread::current};
+use std::{cmp, io};
 
 use btep::{c2s::C2S, s2c::S2C, Deserialize, Serialize};
+use crossterm::style::Color;
 use text::Text;
 use tokio::{
-    io::{AsyncWriteExt, BufReader},
+    io::AsyncWriteExt,
     net::{
         tcp::{OwnedReadHalf, OwnedWriteHalf},
         TcpStream,
@@ -24,6 +25,7 @@ pub struct Buffer {
     /// stores the amount of lines that have been scrolled down
     pub(crate) line_offset: usize,
     pub(crate) socket: Option<Socket>,
+    pub(crate) colors: Vec<Color>,
 }
 
 #[derive(Debug)]
@@ -49,6 +51,7 @@ impl Buffer {
                     writer,
                 }
             }),
+            colors: Vec::new(),
         }
     }
 
@@ -123,7 +126,6 @@ impl Buffer {
                         } else {
                             client.backspace_with_swaps(swaps);
                         }
-
                     }
                     C2S::Enter => {
                         match client
@@ -155,6 +157,7 @@ impl Buffer {
             }
             S2C::NewClient => {
                 self.text.add_client();
+                self.colors.push(Color::Red);
                 Ok(false)
             }
         }

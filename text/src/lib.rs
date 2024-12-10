@@ -196,6 +196,10 @@ impl Text {
     pub fn client(&mut self, idx: usize) -> &mut Client {
         &mut self.clients[idx]
     }
+
+    pub fn clients(&self) -> &[Client] {
+        &self.clients
+    }
 }
 
 impl Default for Text {
