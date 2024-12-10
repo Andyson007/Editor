@@ -19,57 +19,36 @@ impl Client {
     where
         E: QueueableCommand + io::Write,
     {
-        let cursors: HashMap<(usize, usize), Color> = self
-            .curr()
-            .text
-            .clients()
-            .iter()
-            .filter(|client| client.bufnr != self.curr().id)
-            .zip(self.curr().colors.iter())
-            .filter_map(|(t, c)| t.data.as_ref().map(|x| (x.pos.into(), *c)))
-            .collect();
-
-        let buffer = &self.buffers[self.current_buffer];
+        let current_buffer = &self.buffers[self.current_buffer];
 
         out.queue(terminal::Clear(ClearType::All))?;
-        for (linenr, line) in buffer
-            .text
-            .lines()
-            .skip(buffer.line_offset)
-            .take(terminal::size()?.1.into())
-            .enumerate()
-        {
-            out.queue(cursor::MoveTo(0, u16::try_from(linenr).unwrap()))?;
-            for (colnr, c) in line
-                .chars()
-                .chain([' '])
-                .take(terminal::size()?.0.into())
-                .enumerate()
-            {
-                if let Some(color) = cursors.get(&(linenr, colnr)) {
-                    out.queue(SetBackgroundColor(*color))?
-                        .queue(SetForegroundColor(Color::DarkGrey))?;
-                }
-                out.queue(Print(c))?;
-                if cursors.contains_key(&(linenr, colnr)) {
-                    out.queue(SetBackgroundColor(Color::Reset))?
-                        .queue(SetForegroundColor(Color::Reset))?;
+        let size = crossterm::terminal::size()?;
+        let mut current_line = 0;
+        out.queue(cursor::MoveTo(0, 0))?;
+        'outer: for buf in current_buffer.text.bufs() {
+            for c in buf.read().text.chars() {
+                if c == '\n' {
+                    if current_line >= size.1 as usize + current_buffer.line_offset - 1 {
+                        break 'outer;
+                    };
+                    if current_line >= current_buffer.line_offset {
+                        out.queue(Print("\r\n"))?;
+                    }
+                    current_line += 1;
+                } else if current_line + 1 >= current_buffer.line_offset {
+                    out.queue(Print(c))?;
                 }
             }
         }
-        let size = crossterm::terminal::size()?;
         if let Mode::Command(ref cmd) = self.mode {
             out.queue(cursor::MoveTo(0, size.1))?
+                .queue(terminal::Clear(ClearType::CurrentLine))?
                 .queue(Print(":"))?
-                .queue(Print(cmd))?
-                .queue(Print(
-                    std::iter::repeat_n(' ', usize::from(size.0) - 1 - cmd.len())
-                        .collect::<String>(),
-                ))?;
+                .queue(Print(cmd))?;
         }
         out.queue(cursor::MoveTo(
-            u16::try_from(buffer.cursor().col).unwrap(),
-            u16::try_from(buffer.cursor().row - buffer.line_offset).unwrap(),
+            u16::try_from(current_buffer.cursor().col).unwrap(),
+            u16::try_from(current_buffer.cursor().row - current_buffer.line_offset).unwrap(),
         ))?;
         out.flush()?;
         Ok(())

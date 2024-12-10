@@ -1,7 +1,7 @@
 //! Implements iterator types for Pieces
 use append_only_str::{iters::Chars as AppendChars, slices::StrSlice};
 
-use crate::Piece;
+use crate::{table::InnerTable, Piece, TableElem};
 
 /// An iterator over the chars of a piece.
 /// This locks the `Piece` for writing
@@ -93,14 +93,14 @@ impl Piece {
     /// Creates an iterator over the internal buffers of the piece table.
     /// # Panics
     /// the piece tables state got poisoned
-    pub fn bufs(&self) -> impl Iterator<Item = StrSlice> {
+    pub fn bufs(&self) -> impl Iterator<Item = InnerTable<TableElem>> {
         self.piece_table
             .read_full()
             .unwrap()
             .read()
             .clone()
             .into_iter()
-            .map(|x| x.read().text.clone())
+            .map(|x| x)
     }
 }
 

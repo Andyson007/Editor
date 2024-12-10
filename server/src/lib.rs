@@ -82,7 +82,7 @@ pub async fn run(
             }
             let file = OpenOptions::new().write(true).open(&owned_path).unwrap();
             let mut writer = BufWriter::new(file);
-            let buf_iter = text.read().unwrap().bufs();
+            let buf_iter = text.read().unwrap().bufs().map(|x| x.read().text.clone());
             for elem in buf_iter {
                 writer.write_all(elem.as_bytes()).unwrap();
             }

@@ -10,7 +10,7 @@ use std::{
 use append_only_str::{slices::StrSlice, AppendOnlyStr};
 use btep::{Deserialize, Serialize};
 use client::{Client, Insertdata};
-use piece_table::Piece;
+use piece_table::{table::InnerTable, Piece, TableElem};
 use tokio::io::AsyncReadExt;
 use utils::other::{AutoIncrementing, CursorPos};
 pub mod client;
@@ -35,11 +35,10 @@ impl Serialize for &Text {
 
         ret.extend(self.clients.iter().flat_map(|x| {
             let mut ret = VecDeque::new();
-            if let Some(Insertdata { slice, pos, .. }) = &x.data {
+            if let Some(Insertdata { slice, .. }) = &x.data {
                 ret.push_back(1);
                 ret.extend((slice.read().text.start() as u64).to_be_bytes());
                 ret.extend((slice.read().text.end() as u64).to_be_bytes());
-                ret.extend(pos.serialize());
             } else {
                 ret.push_back(0);
             }
@@ -68,8 +67,6 @@ impl Deserialize for Text {
                 let start = data.read_u64().await? as usize;
                 let end = data.read_u64().await? as usize;
 
-                let pos = CursorPos::deserialize(data).await?;
-
                 clients.push(Client {
                     piece: Arc::clone(&arced),
                     buffer: Arc::clone(&arced.read().unwrap().buffers.clients[counter].1),
@@ -93,7 +90,6 @@ impl Deserialize for Text {
                         .map(|slice| Insertdata {
                             slice,
                             has_deleted: false,
-                            pos,
                         }),
                     bufnr: counter,
                 });
@@ -188,7 +184,7 @@ impl Text {
     /// Creates an iterator over the buffers of the table
     /// # Panics
     /// - Stuff got poisoned
-    pub fn bufs(&self) -> impl Iterator<Item = StrSlice> {
+    pub fn bufs(&self) -> impl Iterator<Item = InnerTable<TableElem>> {
         self.table.read().unwrap().bufs()
     }
 
