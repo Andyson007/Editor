@@ -104,9 +104,9 @@ impl Buffer {
                 };
                 Ok(true)
             }
-            S2C::NewClient => {
+            S2C::NewClient(color) => {
                 self.text.add_client();
-                self.colors.push(Color::Red);
+                self.colors.push(color);
                 Ok(false)
             }
         }

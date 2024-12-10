@@ -3,6 +3,7 @@
 #[cfg(feature = "security")]
 mod security;
 use btep::{c2s::C2S, prelude::S2C, Deserialize, Serialize};
+use crossterm::style::Color;
 use futures::{executor::block_on, FutureExt};
 #[cfg(feature = "security")]
 use sqlx::{sqlite::SqliteConnectOptions, SqlitePool};
@@ -198,7 +199,7 @@ async fn handle_client(
     for (_, client) in sockets.write().as_mut().unwrap().iter_mut() {
         block_on(async {
             client
-                .write_all(S2C::<&Text>::NewClient.serialize().make_contiguous())
+                .write_all(S2C::<&Text>::NewClient(Color::Green).serialize().make_contiguous())
                 .await?;
             client.flush().await?;
             Ok::<_, io::Error>(())

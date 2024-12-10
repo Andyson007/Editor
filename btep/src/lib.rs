@@ -1,5 +1,7 @@
 #![feature(never_type)]
 #![feature(iter_next_chunk)]
+#![feature(maybe_uninit_uninit_array)]
+#![feature(maybe_uninit_array_assume_init)]
 //! This crate implements a custom binary
 //! text transfer protocol.
 pub mod c2s;

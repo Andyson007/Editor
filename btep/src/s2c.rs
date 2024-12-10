@@ -1,5 +1,10 @@
 //! Communication from the server to the client
-use std::{collections::VecDeque, io, mem};
+use crossterm::style::Color;
+use std::{
+    collections::VecDeque,
+    io,
+    mem::{self, MaybeUninit},
+};
 use tokio::io::AsyncReadExt;
 use {crate::c2s::C2S, crate::Deserialize, crate::Serialize};
 
@@ -12,7 +17,7 @@ pub enum S2C<T> {
     /// A client has made an update to their buffer
     Update((usize, C2S)),
     /// A client has connected
-    NewClient,
+    NewClient(Color),
 }
 
 impl<T> Serialize for S2C<T>
@@ -31,8 +36,11 @@ where
                 ret.extend((*id as u64).to_be_bytes());
                 ret.extend(action.serialize());
             }
-            Self::NewClient => {
+            Self::NewClient(color) => {
                 ret.push_front(2);
+                ret.extend(unsafe {
+                    mem::transmute::<Color, [u8; mem::size_of::<Color>()]>(*color)
+                });
             }
         };
         ret
@@ -57,7 +65,13 @@ where
                 let action = C2S::deserialize(data).await?;
                 Self::Update((id, action))
             }
-            2 => Self::NewClient,
+            2 => {
+                let mut buf = [0; mem::size_of::<Color>()];
+                data.read_exact(&mut buf).await?;
+                Self::NewClient(unsafe {
+                    mem::transmute::<[u8; mem::size_of::<Color>()], Color>(buf)
+                })
+            }
             x => panic!("An invalid specifier was found ({x})"),
         })
     }

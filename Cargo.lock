@@ -173,6 +173,7 @@ dependencies = [
 name = "btep"
 version = "0.1.0"
 dependencies = [
+ "crossterm",
  "tokio",
  "utils",
 ]
@@ -1411,6 +1412,7 @@ version = "0.1.0"
 dependencies = [
  "argon2",
  "btep",
+ "crossterm",
  "futures",
  "sqlx",
  "text",
