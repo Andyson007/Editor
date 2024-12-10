@@ -3,10 +3,7 @@ use crossterm::{
     style::{Color, Print, SetBackgroundColor, SetForegroundColor},
     terminal::{self, ClearType},
 };
-use std::{
-    collections::{HashMap, HashSet},
-    io,
-};
+use std::{collections::HashMap, io};
 
 use crossterm::QueueableCommand;
 
@@ -43,7 +40,12 @@ impl Client {
             .enumerate()
         {
             out.queue(cursor::MoveTo(0, u16::try_from(linenr).unwrap()))?;
-            for (colnr, c) in line.chars().take(terminal::size()?.0.into()).enumerate() {
+            for (colnr, c) in line
+                .chars()
+                .chain([' '])
+                .take(terminal::size()?.0.into())
+                .enumerate()
+            {
                 if let Some(color) = cursors.get(&(linenr, colnr)) {
                     out.queue(SetBackgroundColor(*color))?
                         .queue(SetForegroundColor(Color::DarkGrey))?;
