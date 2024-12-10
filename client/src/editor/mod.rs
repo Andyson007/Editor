@@ -150,7 +150,6 @@ impl Client {
         Ok(false)
     }
 
-    /// handles a keypress as if were performed in `Insert` mode
     async fn handle_insert_keyevent(&mut self, input: &KeyEvent) -> io::Result<()> {
         if matches!(
             input,
@@ -274,7 +273,7 @@ impl Client {
                         .unwrap()
                         .chars()
                         .count()
-                        - 1,
+                        .saturating_sub(1),
                 );
             }
             KeyCode::Up | KeyCode::Char('k') => {
