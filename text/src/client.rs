@@ -29,8 +29,6 @@ pub struct Client {
 pub struct Insertdata {
     /// The slice being edited
     pub(crate) slice: InnerTable<TableElem>,
-    /// The cursors location
-    pub pos: CursorPos,
     /// Stores whether its safe to insert a chracter again
     /// # Necessity
     /// This is required because pressing backspace and writing the character again cannot be
@@ -94,45 +92,38 @@ impl Client {
             drop(slice);
             (Self::do_backspace(&mut binding.slice), 0)
         };
-        match deleted {
-            Some('\n') => {
-                let binding = self.data.as_mut().unwrap();
-                let slice = binding.slice.read();
+        let binding = self.data.as_mut().unwrap();
+        let slice = binding.slice.read();
 
-                let mut iter = slice.text.as_str().split('\n').rev();
-                let mut len = iter.next().unwrap().len();
-                if iter.next().is_none() {
-                    // This slice doesn't include a newline we therefore don't know this lines length
-                    let binding = self
-                        .piece
-                        .write()
-                        .unwrap()
-                        .piece_table
-                        .write_full()
-                        .unwrap();
-                    let mut binding2 = binding.write();
-                    let mut cursor = binding2.cursor_front_mut();
-                    while cursor.current().unwrap().read().text != slice.text {
-                        cursor.move_next();
-                    }
-                    loop {
-                        cursor.move_prev();
-                        if let Some(next) = cursor.current() {
-                            let read = next.read();
-                            let mut iter = read.text.as_str().split('\n').rev();
-                            len += iter.next().unwrap().len();
-                            if iter.next().is_some() {
-                                break;
-                            }
-                        }
+        let mut iter = slice.text.as_str().split('\n').rev();
+        let mut len = iter.next().unwrap().len();
+        if iter.next().is_none() {
+            // This slice doesn't include a newline we therefore don't know this lines length
+            let binding = self
+                .piece
+                .write()
+                .unwrap()
+                .piece_table
+                .write_full()
+                .unwrap();
+            let mut binding2 = binding.write();
+            let mut cursor = binding2.cursor_front_mut();
+            while cursor.current().unwrap().read().text != slice.text {
+                cursor.move_next();
+            }
+            loop {
+                cursor.move_prev();
+                if let Some(next) = cursor.current() {
+                    let read = next.read();
+                    let mut iter = read.text.as_str().split('\n').rev();
+                    len += iter.next().unwrap().len();
+                    if iter.next().is_some() {
+                        break;
                     }
                 }
-                binding.pos.col += len;
-                binding.pos.row -= 1;
             }
-            Some(_) => self.data.as_mut().unwrap().pos.col -= 1,
-            _ => (),
         }
+
         (deleted, swaps)
     }
 
@@ -268,21 +259,8 @@ impl Client {
             ));
             self.data = Some(Insertdata {
                 slice: cursor.peek_next().unwrap().clone(),
-                pos: self.data.as_ref().unwrap().pos + (0, 1),
                 has_deleted: false,
             });
-        } else {
-            let mut iter = to_push.split('\n').rev();
-            if let Some(x) = self.data.as_mut() {
-                let len = iter.next().unwrap().len();
-                let rest_count = iter.count();
-                if rest_count == 0 {
-                    x.pos.col += len;
-                } else {
-                    x.pos.row += rest_count;
-                    x.pos.col = len;
-                }
-            }
         }
 
         let slice = &self.data.as_mut().unwrap().slice;
@@ -321,7 +299,6 @@ impl Client {
         self.data = Some(Insertdata {
             slice: inner_table,
             has_deleted: false,
-            pos,
         });
         (offset, idx)
     }

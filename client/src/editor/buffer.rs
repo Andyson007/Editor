@@ -91,62 +91,11 @@ impl Buffer {
                 match action {
                     C2S::Char(c) => {
                         client.push_char(c);
-                        if client.data.as_ref().unwrap().pos.row == self.cursorpos.row
-                            && client.data.as_ref().unwrap().pos.col < self.cursorpos.col
-                        {
-                            self.cursorpos.col += 1;
-                        }
                     }
                     C2S::Backspace(swaps) => {
-                        let row = self.cursorpos.row;
-                        let prev_line_len = client
-                            .piece
-                            .read()
-                            .unwrap()
-                            .lines()
-                            .nth(row.saturating_sub(1))
-                            .unwrap()
-                            .len();
-
-                        if client.data.as_ref().unwrap().pos.row == self.cursorpos.row
-                            && client.data.as_ref().unwrap().pos.col <= self.cursorpos.col
-                        {
-                            if let Some(del_char) = client.backspace_with_swaps(swaps) {
-                                if del_char != '\n' {
-                                    self.cursorpos.col -= 1;
-                                } else {
-                                    self.cursorpos.row -= 1;
-                                    self.cursorpos.col += prev_line_len;
-                                }
-                            }
-                        } else if client.data.as_ref().unwrap().pos.row < self.cursorpos.row {
-                            if let Some('\n') = client.backspace_with_swaps(swaps) {
-                                self.cursorpos.row -= 1;
-                            }
-                        } else {
-                            client.backspace_with_swaps(swaps);
-                        }
+                        client.backspace_with_swaps(swaps);
                     }
                     C2S::Enter => {
-                        match client
-                            .data
-                            .as_ref()
-                            .unwrap()
-                            .pos
-                            .row
-                            .cmp(&self.cursorpos.row)
-                        {
-                            cmp::Ordering::Less => {
-                                self.cursorpos.row += 1;
-                            }
-                            cmp::Ordering::Equal => {
-                                if client.data.as_ref().unwrap().pos.col < self.cursorpos.col {
-                                    self.cursorpos.row += 1;
-                                    self.cursorpos.col -= client.data.as_ref().unwrap().pos.col;
-                                }
-                            }
-                            cmp::Ordering::Greater => (),
-                        }
                         client.push_char('\n');
                     }
                     C2S::EnterInsert(pos) => drop(client.enter_insert(pos)),
@@ -155,9 +104,9 @@ impl Buffer {
                 };
                 Ok(true)
             }
-            S2C::NewClient => {
+            S2C::NewClient(color) => {
                 self.text.add_client();
-                self.colors.push(Color::Red);
+                self.colors.push(color);
                 Ok(false)
             }
         }
