@@ -71,7 +71,28 @@ impl Deserialize for CursorPos {
 
 impl Serialize for Color {
     fn serialize(&self) -> VecDeque<u8> {
-        unsafe { mem::transmute::<Color, [u8; mem::size_of::<Color>()]>(*self).into() }
+        [match self {
+            Color::Reset => 0,
+            Color::Black => 1,
+            Color::DarkGrey => 2,
+            Color::Red => 3,
+            Color::DarkRed => 4,
+            Color::Green => 5,
+            Color::DarkGreen => 6,
+            Color::Yellow => 7,
+            Color::DarkYellow => 8,
+            Color::Blue => 9,
+            Color::DarkBlue => 10,
+            Color::Magenta => 11,
+            Color::DarkMagenta => 12,
+            Color::Cyan => 13,
+            Color::DarkCyan => 14,
+            Color::White => 15,
+            Color::Grey => 16,
+            Color::Rgb { r, g, b } => return [17, *r, *g, *b].into(),
+            Color::AnsiValue(x) => return [18, *x].into(),
+        }]
+        .into()
     }
 }
 
@@ -81,13 +102,33 @@ impl Deserialize for Color {
         Self: Sized,
         T: AsyncReadExt + Unpin + Send,
     {
-        let mut buf = [0; mem::size_of::<Color>()];
-        data.read_exact(&mut buf).await?;
-        Ok(
-            unsafe {
-                mem::transmute::<[u8; mem::size_of::<Color>()], crossterm::style::Color>(buf)
-            },
-        )
+        Ok(match data.read_u8().await? {
+            0 => Color::Reset,
+            1 => Color::Black,
+            2 => Color::DarkGrey,
+            3 => Color::Red,
+            4 => Color::DarkRed,
+            5 => Color::Green,
+            6 => Color::DarkGreen,
+            7 => Color::Yellow,
+            8 => Color::DarkYellow,
+            9 => Color::Blue,
+            10 => Color::DarkBlue,
+            11 => Color::Magenta,
+            12 => Color::DarkMagenta,
+            13 => Color::Cyan,
+            14 => Color::DarkCyan,
+            15 => Color::White,
+            16 => Color::Grey,
+            17 => {
+                let r = data.read_u8().await?;
+                let g = data.read_u8().await?;
+                let b = data.read_u8().await?;
+                Color::Rgb { r, g, b }
+            }
+            18 => Color::AnsiValue(data.read_u8().await?),
+            _ => unreachable!(),
+        })
     }
 }
 

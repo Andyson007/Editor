@@ -38,9 +38,7 @@ where
             }
             Self::NewClient(color) => {
                 ret.push_front(2);
-                ret.extend(unsafe {
-                    mem::transmute::<Color, [u8; mem::size_of::<Color>()]>(*color)
-                });
+                ret.extend(color.serialize());
             }
         };
         ret
@@ -66,11 +64,7 @@ where
                 Self::Update((id, action))
             }
             2 => {
-                let mut buf = [0; mem::size_of::<Color>()];
-                data.read_exact(&mut buf).await?;
-                Self::NewClient(unsafe {
-                    mem::transmute::<[u8; mem::size_of::<Color>()], Color>(buf)
-                })
+                Self::NewClient(<Color as Deserialize>::deserialize(data).await?)
             }
             x => panic!("An invalid specifier was found ({x})"),
         })
