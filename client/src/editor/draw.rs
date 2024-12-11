@@ -4,6 +4,7 @@ use crossterm::{
     terminal::{self, ClearType},
 };
 use std::{collections::HashMap, io};
+use utils::other::CursorPos;
 
 use crossterm::QueueableCommand;
 
@@ -25,11 +26,14 @@ impl Client {
         let size = crossterm::terminal::size()?;
         let mut current_line = 0;
         let mut next_color = None;
+        let mut self_pos = None;
+        let mut relative_col = 0;
         out.queue(cursor::MoveTo(0, 0))?;
         'outer: for buf in current_buffer.text.bufs() {
             let read_lock = buf.read();
             for c in read_lock.text.chars() {
                 if c == '\n' {
+                    relative_col = 0;
                     if current_line >= size.1 as usize + current_buffer.line_offset - 1 {
                         break 'outer;
                     };
@@ -44,6 +48,7 @@ impl Client {
                     }
                     current_line += 1;
                 } else if current_line + 1 >= current_buffer.line_offset {
+                    relative_col += 1;
                     if let Some(x) = next_color.take() {
                         out.queue(SetBackgroundColor(x))?
                             .queue(Print(c))?
@@ -54,14 +59,21 @@ impl Client {
                 }
             }
             if let Some((buf, occupied)) = read_lock.buf {
-                if occupied && buf != current_buffer.id {
-                    next_color = Some(
-                        current_buffer.colors[if buf < current_buffer.id {
-                            buf
-                        } else {
-                            buf - 1
-                        }],
-                    );
+                if occupied {
+                    if buf != current_buffer.id {
+                        next_color = Some(
+                            current_buffer.colors[if buf < current_buffer.id {
+                                buf
+                            } else {
+                                buf - 1
+                            }],
+                        );
+                    } else {
+                        self_pos = Some(CursorPos {
+                            row: current_line - current_buffer.line_offset,
+                            col: relative_col,
+                        })
+                    }
                 }
             }
             if let Some((_, occupied)) = read_lock.buf {
@@ -70,16 +82,27 @@ impl Client {
                 }
             }
         }
+        if let Some(x) = next_color.take() {
+            out.queue(SetBackgroundColor(x))?
+                .queue(Print(' '))?
+                .queue(SetBackgroundColor(Color::Reset))?;
+        }
         if let Mode::Command(ref cmd) = self.mode {
             out.queue(cursor::MoveTo(0, size.1))?
                 .queue(terminal::Clear(ClearType::CurrentLine))?
                 .queue(Print(":"))?
                 .queue(Print(cmd))?;
+        } else if let Some(CursorPos { row, col }) = self_pos {
+            out.queue(cursor::MoveTo(
+                u16::try_from(col).unwrap(),
+                u16::try_from(row).unwrap(),
+            ))?;
+        } else {
+            out.queue(cursor::MoveTo(
+                u16::try_from(current_buffer.cursor().col).unwrap(),
+                u16::try_from(current_buffer.cursor().row - current_buffer.line_offset).unwrap(),
+            ))?;
         }
-        out.queue(cursor::MoveTo(
-            u16::try_from(current_buffer.cursor().col).unwrap(),
-            u16::try_from(current_buffer.cursor().row - current_buffer.line_offset).unwrap(),
-        ))?;
         out.flush()?;
         Ok(())
     }
