@@ -15,6 +15,7 @@ use crossterm::{
 };
 use editor::Client;
 use futures::{future, FutureExt, StreamExt};
+use core::panic;
 use std::{
     io::{self, Write},
     net::SocketAddrV4,
@@ -82,7 +83,7 @@ pub async fn run(
             },
             x = async {
                 if let Some(x) = &mut app.curr_mut().socket{
-                    let mut buf= [0];
+                    let mut buf = [0];
                     x.reader.peek(&mut buf).await
                 } else {
                     future::pending::<()>().await;
@@ -90,7 +91,9 @@ pub async fn run(
                 }
             } => {
                 x?;
-                app.curr_mut().update().await?;
+                if let Err(_) = app.curr_mut().update().await {
+                    panic!("The server disconnected");
+                };
                 Ok::<bool, io::Error>(true)
             },
         }? {
