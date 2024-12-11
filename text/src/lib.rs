@@ -7,12 +7,12 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use append_only_str::{slices::StrSlice, AppendOnlyStr};
+use append_only_str::AppendOnlyStr;
 use btep::{Deserialize, Serialize};
 use client::{Client, Insertdata};
 use piece_table::{table::InnerTable, Piece, TableElem};
 use tokio::io::AsyncReadExt;
-use utils::other::{AutoIncrementing, CursorPos};
+use utils::other::AutoIncrementing;
 pub mod client;
 
 /// A wrapper around a piece table.

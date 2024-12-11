@@ -7,7 +7,6 @@ use std::{
     iter,
     str::FromStr,
     sync::{Arc, RwLock},
-    thread::current,
 };
 
 pub mod iters;
@@ -304,8 +303,8 @@ impl Deserialize for Piece {
         for _ in 0..piece_count {
             let buf = match data.read_u8().await? {
                 0 => None,
-                1 => Some((data.read_i64().await?, false)),
-                2 => Some((data.read_i64().await?, true)),
+                1 => Some((data.read_u64().await? as usize, false)),
+                2 => Some((data.read_u64().await? as usize, true)),
                 _ => unreachable!(),
             };
 
@@ -313,7 +312,7 @@ impl Deserialize for Piece {
             let start = data.read_u64().await? as usize;
             let end = data.read_u64().await? as usize;
             builder.push(TableElem {
-                buf: None,
+                buf,
                 text: original_buffer.str_slice(start..end),
                 id,
             });

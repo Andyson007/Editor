@@ -3,7 +3,7 @@ use crossterm::style::Color;
 use std::{
     collections::VecDeque,
     io,
-    mem::{self, MaybeUninit},
+    mem,
 };
 use tokio::io::AsyncReadExt;
 use {crate::c2s::C2S, crate::Deserialize, crate::Serialize};
