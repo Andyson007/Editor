@@ -13,7 +13,6 @@ use std::{
     collections::HashMap,
     fs::{File, OpenOptions},
     io::{self, BufReader, BufWriter, Error, Write},
-    mem,
     net::SocketAddrV4,
     num::NonZeroU64,
     path::Path,
@@ -103,10 +102,12 @@ pub async fn run(
                 Arc::clone(&sockets),
                 Arc::clone(&text),
                 Arc::clone(&colors),
+                #[cfg(feature = "security")]
+                Arc::clone(&pool),
             )
             .then(move |output| async move {
                 if let Err(e) = output {
-                    error!("{client_id} {e:?}")
+                    error!("{client_id} {e:?}");
                 }
             }),
         );
@@ -120,6 +121,7 @@ async fn handle_connection(
     sockets: Arc<RwLock<HashMap<usize, OwnedWriteHalf>>>,
     text: Arc<RwLock<Text>>,
     colors: Arc<Mutex<Vec<Color>>>,
+    #[cfg(feature = "security")] pool: Arc<SqlitePool>,
 ) -> io::Result<()> {
     debug!("new Client {client_id}");
 
