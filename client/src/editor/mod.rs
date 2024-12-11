@@ -53,6 +53,7 @@ impl Client {
     }
 
     /// returns the current buffer that should be visible
+    #[must_use]
     pub fn curr(&self) -> &Buffer {
         &self.buffers[self.current_buffer]
     }
@@ -277,8 +278,7 @@ impl Client {
                         .text
                         .lines()
                         .nth(self.curr_mut().cursorpos.row)
-                        .map(|x| x.chars().count().saturating_sub(1))
-                        .unwrap_or(0),
+                        .map_or(0, |x| x.chars().count().saturating_sub(1)),
                 );
             }
             KeyCode::Up | KeyCode::Char('k') => {
@@ -289,8 +289,7 @@ impl Client {
                         .text
                         .lines()
                         .nth(self.curr_mut().cursorpos.row)
-                        .map(|x| x.chars().count().saturating_sub(1))
-                        .unwrap_or(0),
+                        .map_or(0, |x| x.chars().count().saturating_sub(1)),
                 );
             }
             KeyCode::Down | KeyCode::Char('j') => {
@@ -304,8 +303,7 @@ impl Client {
                         .text
                         .lines()
                         .nth(self.curr_mut().cursorpos.row)
-                        .map(|x| x.chars().count().saturating_sub(2))
-                        .unwrap_or(0),
+                        .map_or(0, |x| x.chars().count().saturating_sub(2))
                 );
             }
             _ => (),

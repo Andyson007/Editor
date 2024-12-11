@@ -1,9 +1,9 @@
 use crossterm::{
     cursor,
-    style::{self, Color, Print, SetBackgroundColor, SetForegroundColor},
+    style::{Color, Print, SetBackgroundColor},
     terminal::{self, ClearType},
 };
-use std::{collections::HashMap, io};
+use std::io;
 use utils::other::CursorPos;
 
 use crossterm::QueueableCommand;
@@ -60,7 +60,12 @@ impl Client {
             }
             if let Some((buf, occupied)) = read_lock.buf {
                 if occupied {
-                    if buf != current_buffer.id {
+                    if buf == current_buffer.id {
+                        self_pos = Some(CursorPos {
+                            row: current_line - current_buffer.line_offset,
+                            col: relative_col,
+                        });
+                    } else {
                         next_color = Some(
                             current_buffer.colors[if buf < current_buffer.id {
                                 buf
@@ -68,11 +73,6 @@ impl Client {
                                 buf - 1
                             }],
                         );
-                    } else {
-                        self_pos = Some(CursorPos {
-                            row: current_line - current_buffer.line_offset,
-                            col: relative_col,
-                        })
                     }
                 }
             }

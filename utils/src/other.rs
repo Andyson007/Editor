@@ -55,8 +55,8 @@ impl Add<(isize, isize)> for CursorPos {
 
     fn add(self, (row, col): (isize, isize)) -> Self::Output {
         Self {
-            row: usize::try_from(self.row as isize + row).unwrap(),
-            col: usize::try_from(self.col as isize + col).unwrap(),
+            row: usize::try_from(isize::try_from(self.row).unwrap() + row).unwrap(),
+            col: usize::try_from(isize::try_from(self.col).unwrap() + col).unwrap(),
         }
     }
 }

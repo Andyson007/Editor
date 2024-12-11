@@ -165,9 +165,9 @@ impl Piece {
             ));
             None
         } else {
-            let (buf_of_split, id, current) = {
+            let (buf_of_split, current) = {
                 let current = cursor.current().unwrap().read();
-                (current.buf, current.id, current.text.clone())
+                (current.buf, current.text.clone())
             };
             let offset = char_nr - (curr_pos - current.len());
 

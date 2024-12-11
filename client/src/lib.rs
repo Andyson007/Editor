@@ -89,9 +89,7 @@ pub async fn run(
                     unreachable!()
                 }
             } => {
-                if x? == 0{
-                    panic!("The server disconnected");
-                }
+                assert_eq!(x?, 1, "The server disconnected");
                 app.curr_mut().update().await ?;
                 Ok::<bool, io::Error>(true)
             },

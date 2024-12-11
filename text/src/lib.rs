@@ -193,6 +193,8 @@ impl Text {
         &mut self.clients[idx]
     }
 
+    #[must_use]
+    /// returns a slice of all clients
     pub fn clients(&self) -> &[Client] {
         &self.clients
     }

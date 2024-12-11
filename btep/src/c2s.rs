@@ -21,6 +21,7 @@ pub enum C2S {
     // TODO: this should use the `EnterInsert` instead which should be more immune to server-client
     // desync
     EnterInsert(CursorPos),
+    /// A client left insert mode
     ExitInsert,
     /// Force a save to happen
     Save,

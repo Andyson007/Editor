@@ -72,25 +72,25 @@ impl Deserialize for CursorPos {
 impl Serialize for Color {
     fn serialize(&self) -> VecDeque<u8> {
         [match self {
-            Color::Reset => 0,
-            Color::Black => 1,
-            Color::DarkGrey => 2,
-            Color::Red => 3,
-            Color::DarkRed => 4,
-            Color::Green => 5,
-            Color::DarkGreen => 6,
-            Color::Yellow => 7,
-            Color::DarkYellow => 8,
-            Color::Blue => 9,
-            Color::DarkBlue => 10,
-            Color::Magenta => 11,
-            Color::DarkMagenta => 12,
-            Color::Cyan => 13,
-            Color::DarkCyan => 14,
-            Color::White => 15,
-            Color::Grey => 16,
-            Color::Rgb { r, g, b } => return [17, *r, *g, *b].into(),
-            Color::AnsiValue(x) => return [18, *x].into(),
+            Self::Reset => 0,
+            Self::Black => 1,
+            Self::DarkGrey => 2,
+            Self::Red => 3,
+            Self::DarkRed => 4,
+            Self::Green => 5,
+            Self::DarkGreen => 6,
+            Self::Yellow => 7,
+            Self::DarkYellow => 8,
+            Self::Blue => 9,
+            Self::DarkBlue => 10,
+            Self::Magenta => 11,
+            Self::DarkMagenta => 12,
+            Self::Cyan => 13,
+            Self::DarkCyan => 14,
+            Self::White => 15,
+            Self::Grey => 16,
+            Self::Rgb { r, g, b } => return [17, *r, *g, *b].into(),
+            Self::AnsiValue(x) => return [18, *x].into(),
         }]
         .into()
     }
@@ -103,30 +103,30 @@ impl Deserialize for Color {
         T: AsyncReadExt + Unpin + Send,
     {
         Ok(match data.read_u8().await? {
-            0 => Color::Reset,
-            1 => Color::Black,
-            2 => Color::DarkGrey,
-            3 => Color::Red,
-            4 => Color::DarkRed,
-            5 => Color::Green,
-            6 => Color::DarkGreen,
-            7 => Color::Yellow,
-            8 => Color::DarkYellow,
-            9 => Color::Blue,
-            10 => Color::DarkBlue,
-            11 => Color::Magenta,
-            12 => Color::DarkMagenta,
-            13 => Color::Cyan,
-            14 => Color::DarkCyan,
-            15 => Color::White,
-            16 => Color::Grey,
+            0 => Self::Reset,
+            1 => Self::Black,
+            2 => Self::DarkGrey,
+            3 => Self::Red,
+            4 => Self::DarkRed,
+            5 => Self::Green,
+            6 => Self::DarkGreen,
+            7 => Self::Yellow,
+            8 => Self::DarkYellow,
+            9 => Self::Blue,
+            10 => Self::DarkBlue,
+            11 => Self::Magenta,
+            12 => Self::DarkMagenta,
+            13 => Self::Cyan,
+            14 => Self::DarkCyan,
+            15 => Self::White,
+            16 => Self::Grey,
             17 => {
                 let r = data.read_u8().await?;
                 let g = data.read_u8().await?;
                 let b = data.read_u8().await?;
-                Color::Rgb { r, g, b }
+                Self::Rgb { r, g, b }
             }
-            18 => Color::AnsiValue(data.read_u8().await?),
+            18 => Self::AnsiValue(data.read_u8().await?),
             _ => unreachable!(),
         })
     }
@@ -156,7 +156,7 @@ where
         R: AsyncReadExt + Unpin + Send,
     {
         let size = data.read_u64().await? as usize;
-        let mut ret = Vec::with_capacity(size);
+        let mut ret = Self::with_capacity(size);
         for _ in 0..size {
             ret.push(T::deserialize(data).await?);
         }

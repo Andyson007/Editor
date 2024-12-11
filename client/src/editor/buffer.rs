@@ -1,4 +1,4 @@
-use std::{cmp, io};
+use std::io;
 
 use btep::{c2s::C2S, s2c::S2C, Deserialize, Serialize};
 use crossterm::style::Color;

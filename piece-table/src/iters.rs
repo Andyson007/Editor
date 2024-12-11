@@ -100,7 +100,6 @@ impl Piece {
             .read()
             .clone()
             .into_iter()
-            .map(|x| x)
     }
 }
 

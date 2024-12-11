@@ -90,39 +90,8 @@ impl Client {
             self.delete_from_cursor(&mut cursor)
         } else {
             drop(slice);
-            (Self::do_backspace(&mut binding.slice), 0)
+            (Self::do_backspace(&binding.slice), 0)
         };
-        let binding = self.data.as_mut().unwrap();
-        let slice = binding.slice.read();
-
-        let mut iter = slice.text.as_str().split('\n').rev();
-        let mut len = iter.next().unwrap().len();
-        if iter.next().is_none() {
-            // This slice doesn't include a newline we therefore don't know this lines length
-            let binding = self
-                .piece
-                .write()
-                .unwrap()
-                .piece_table
-                .write_full()
-                .unwrap();
-            let mut binding2 = binding.write();
-            let mut cursor = binding2.cursor_front_mut();
-            while cursor.current().unwrap().read().text != slice.text {
-                cursor.move_next();
-            }
-            loop {
-                cursor.move_prev();
-                if let Some(next) = cursor.current() {
-                    let read = next.read();
-                    let mut iter = read.text.as_str().split('\n').rev();
-                    len += iter.next().unwrap().len();
-                    if iter.next().is_some() {
-                        break;
-                    }
-                }
-            }
-        }
 
         (deleted, swaps)
     }
@@ -156,7 +125,7 @@ impl Client {
         }
     }
 
-    fn do_backspace(binding: &mut InnerTable<TableElem>) -> Option<char> {
+    fn do_backspace(binding: &InnerTable<TableElem>) -> Option<char> {
         let slice = &mut binding.write().unwrap();
         let ret = slice.text.chars().last();
         debug_assert!(!slice.text.is_empty());
@@ -167,6 +136,10 @@ impl Client {
         ret
     }
 
+    /// Does backspace with a predetermined amonut of swaps
+    /// # Panics
+    /// - More swaps were required (in debug)
+    /// - poisoning
     pub fn backspace_with_swaps(&mut self, swaps: usize) -> Option<char> {
         let (ret, swaps) = if swaps == 0 {
             self.backspace()
