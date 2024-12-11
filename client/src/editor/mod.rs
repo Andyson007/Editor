@@ -267,6 +267,10 @@ impl Client {
                 let pos = self.curr_mut().cursorpos;
                 self.enter_insert(pos).await?;
             }
+            KeyCode::Char('a') => {
+                let pos = self.curr_mut().cursorpos;
+                self.enter_insert(pos + (0, 1)).await?;
+            }
             KeyCode::Char(':') => self.mode = Mode::Command(String::new()),
             KeyCode::Left | KeyCode::Char('h') => {
                 self.curr_mut().cursorpos.col = self.curr_mut().cursorpos.col.saturating_sub(1);
@@ -303,7 +307,7 @@ impl Client {
                         .text
                         .lines()
                         .nth(self.curr_mut().cursorpos.row)
-                        .map_or(0, |x| x.chars().count().saturating_sub(2))
+                        .map_or(0, |x| x.chars().count().saturating_sub(2)),
                 );
             }
             _ => (),
