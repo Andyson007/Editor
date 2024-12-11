@@ -38,9 +38,9 @@ pub async fn run(
     let mut out = io::stdout();
     errors::install_hooks()?;
 
-    let mut socket = connect_with_auth(address, username, password)
-        .await
-        .unwrap();
+    let Ok(mut socket) = connect_with_auth(address, username, password).await else {
+        panic!("Failed to connect to the server. Maybe the server is not running?")
+    };
 
     let S2C::Full(initial_text) = S2C::<Text>::deserialize(&mut socket).await? else {
         panic!("Initial message in wrong protocol")
