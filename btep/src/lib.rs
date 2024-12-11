@@ -122,3 +122,17 @@ where
         Ok(ret)
     }
 }
+
+impl<T> Serialize for [T]
+where
+    T: Serialize,
+{
+    fn serialize(&self) -> VecDeque<u8> {
+        let mut ret = VecDeque::new();
+        ret.extend((self.len() as u64).to_be_bytes());
+        for elem in self {
+            ret.extend(elem.serialize());
+        }
+        ret
+    }
+}
