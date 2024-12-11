@@ -277,10 +277,8 @@ impl Client {
                         .text
                         .lines()
                         .nth(self.curr_mut().cursorpos.row)
-                        .unwrap()
-                        .chars()
-                        .count()
-                        .saturating_sub(1),
+                        .map(|x| x.chars().count().saturating_sub(1))
+                        .unwrap_or(0),
                 );
             }
             KeyCode::Up | KeyCode::Char('k') => {
@@ -291,16 +289,14 @@ impl Client {
                         .text
                         .lines()
                         .nth(self.curr_mut().cursorpos.row)
-                        .unwrap()
-                        .chars()
-                        .count()
-                        .saturating_sub(1),
+                        .map(|x| x.chars().count().saturating_sub(1))
+                        .unwrap_or(0),
                 );
             }
             KeyCode::Down | KeyCode::Char('j') => {
                 self.curr_mut().cursorpos.row = cmp::min(
                     self.curr_mut().cursorpos.row + 1,
-                    self.curr_mut().text.lines().count() - 1,
+                    self.curr_mut().text.lines().count().saturating_sub(1),
                 );
                 self.curr_mut().cursorpos.col = cmp::min(
                     self.curr_mut().cursorpos.col,
@@ -308,10 +304,8 @@ impl Client {
                         .text
                         .lines()
                         .nth(self.curr_mut().cursorpos.row)
-                        .unwrap()
-                        .chars()
-                        .count()
-                        .saturating_sub(2),
+                        .map(|x| x.chars().count().saturating_sub(2))
+                        .unwrap_or(0),
                 );
             }
             _ => (),
