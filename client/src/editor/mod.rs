@@ -8,7 +8,10 @@ use tokio::{io::AsyncWriteExt, net::TcpStream};
 
 use btep::{c2s::C2S, Serialize};
 use buffer::Buffer;
-use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use crossterm::{
+    event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers},
+    style::Color,
+};
 use text::Text;
 use utils::other::CursorPos;
 mod buffer;
@@ -30,7 +33,7 @@ impl Client {
     /// Cretaes a new client an empty original buffer
     #[must_use]
     pub fn new() -> Self {
-        let buf = Buffer::new(Text::new(), None);
+        let buf = Buffer::new(Text::new(), Vec::new(), None);
         Self {
             buffers: Vec::from([buf]),
             current_buffer: 0,
@@ -40,8 +43,8 @@ impl Client {
 
     /// Cretaes a new client with a prepopulated text buffer
     #[must_use]
-    pub fn new_with_buffer(text: Text, socket: Option<TcpStream>) -> Self {
-        let buf = Buffer::new(text, socket);
+    pub fn new_with_buffer(text: Text, colors: Vec<Color>, socket: Option<TcpStream>) -> Self {
+        let buf = Buffer::new(text, colors, socket);
         Self {
             buffers: Vec::from([buf]),
             current_buffer: 0,
@@ -64,15 +67,19 @@ impl Client {
         match cmd {
             "q" => return Ok(self.close_current_buffer()),
             "w" => self.curr_mut().save().await?,
-            "help" => self.add_buffer(Text::original_from_str(include_str!("../../../help")), None),
+            "help" => self.add_buffer(
+                Text::original_from_str(include_str!("../../../help")),
+                Vec::new(),
+                None,
+            ),
             _ => (),
         }
         Ok(false)
     }
 
     /// adds a buffer and switches to it
-    fn add_buffer(&mut self, text: Text, socket: Option<TcpStream>) {
-        self.buffers.push(Buffer::new(text, socket));
+    fn add_buffer(&mut self, text: Text, colors: Vec<Color>, socket: Option<TcpStream>) {
+        self.buffers.push(Buffer::new(text, colors, socket));
         self.current_buffer = self.buffers.len() - 1;
     }
 

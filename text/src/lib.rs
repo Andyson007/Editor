@@ -34,13 +34,13 @@ impl Serialize for &Text {
         ret.extend((self.clients.len() as u64).to_be_bytes());
 
         ret.extend(self.clients.iter().flat_map(|x| {
-            let mut ret = VecDeque::new();
+            let mut ret = Vec::new();
             if let Some(Insertdata { slice, .. }) = &x.data {
-                ret.push_back(1);
+                ret.push(1);
                 ret.extend((slice.read().text.start() as u64).to_be_bytes());
                 ret.extend((slice.read().text.end() as u64).to_be_bytes());
             } else {
-                ret.push_back(0);
+                ret.push(0);
             }
             ret
         }));
