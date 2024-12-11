@@ -15,7 +15,6 @@ use crossterm::{
 };
 use editor::Client;
 use futures::{future, FutureExt, StreamExt};
-use core::panic;
 use std::{
     io::{self, Write},
     net::SocketAddrV4,
@@ -90,10 +89,10 @@ pub async fn run(
                     unreachable!()
                 }
             } => {
-                x?;
-                if let Err(_) = app.curr_mut().update().await {
+                if x? == 0{
                     panic!("The server disconnected");
-                };
+                }
+                app.curr_mut().update().await ?;
                 Ok::<bool, io::Error>(true)
             },
         }? {
