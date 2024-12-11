@@ -4,18 +4,26 @@ pub mod errors;
 
 use btep::{prelude::S2C, Deserialize};
 use crossterm::{
-    cursor, event::{EnableBracketedPaste, Event, EventStream}, execute, style::Color, terminal::{
+    cursor,
+    event::{EnableBracketedPaste, Event, EventStream},
+    execute,
+    style::Color,
+    terminal::{
         self, disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
-    }, ExecutableCommand
+    },
+    ExecutableCommand,
 };
 use editor::Client;
 use futures::{future, FutureExt, StreamExt};
+use core::panic;
 use std::{
-    collections::HashMap, io::{self, Write}, net::SocketAddrV4, str
+    io::{self, Write},
+    net::SocketAddrV4,
+    str,
 };
 use text::Text;
 use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt, Interest},
+    io::{AsyncReadExt, AsyncWriteExt},
     net::TcpStream,
 };
 
@@ -39,10 +47,11 @@ pub async fn run(
         panic!("Initial message in wrong protocol")
     };
 
+    let colors = Vec::<Color>::deserialize(&mut socket).await?;
+    let mut app = Client::new_with_buffer(initial_text, colors, Some(socket));
+
     execute!(out, EnterAlternateScreen, EnableBracketedPaste)?;
     enable_raw_mode().unwrap();
-
-    let mut app = Client::new_with_buffer(initial_text, Some(socket));
 
     app.redraw(&mut out)?;
 

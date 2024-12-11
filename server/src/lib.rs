@@ -13,10 +13,11 @@ use std::{
     collections::HashMap,
     fs::{File, OpenOptions},
     io::{self, BufReader, BufWriter, Error, Write},
+    mem,
     net::SocketAddrV4,
     num::NonZeroU64,
     path::Path,
-    sync::{Arc, RwLock},
+    sync::{Arc, Mutex, RwLock},
     time::Duration,
 };
 use text::Text;
@@ -63,6 +64,7 @@ pub async fn run(
     let text = Arc::new(RwLock::new(
         Text::original_from_reader(BufReader::new(file)).unwrap(),
     ));
+    let colors = Arc::new(Mutex::new(Vec::new()));
 
     let sockets = Arc::new(RwLock::new(HashMap::<usize, OwnedWriteHalf>::new()));
     let owned_path = path.to_owned();
@@ -100,6 +102,7 @@ pub async fn run(
                 save_notify,
                 Arc::clone(&sockets),
                 Arc::clone(&text),
+                Arc::clone(&colors),
             )
             .then(move |output| async move {
                 if let Err(e) = output {
@@ -116,6 +119,7 @@ async fn handle_connection(
     save_notify: Arc<Notify>,
     sockets: Arc<RwLock<HashMap<usize, OwnedWriteHalf>>>,
     text: Arc<RwLock<Text>>,
+    colors: Arc<Mutex<Vec<Color>>>,
 ) -> io::Result<()> {
     debug!("new Client {client_id}");
 
@@ -163,6 +167,7 @@ async fn handle_connection(
         client_id,
         username,
         text,
+        colors,
         stream,
         sockets,
         save_notify,
@@ -177,12 +182,12 @@ async fn handle_client(
     client_id: usize,
     username: String,
     text: Arc<RwLock<Text>>,
+    colors: Arc<Mutex<Vec<Color>>>,
     stream: TcpStream,
     sockets: Arc<RwLock<HashMap<usize, OwnedWriteHalf>>>,
     save_notify: Arc<Notify>,
 ) -> Result<!, io::Error> {
     let (mut read, mut write) = stream.into_split();
-
     {
         debug!("{client_id} Connected {:?}", username);
         let mut data = {
@@ -192,15 +197,26 @@ async fn handle_client(
         };
         // dbg!(&data);
         write.write_all(data.make_contiguous()).await?;
+
+        let mut colors = colors.lock().unwrap().serialize();
+        write.write_all(colors.make_contiguous()).await?;
         write.flush().await?;
         // println!("{data:#?}");
     }
     debug_assert_eq!(text.write().unwrap().add_client(), client_id);
+    colors.lock().unwrap().push(Color::Green);
+    debug_assert_eq!(colors.lock().unwrap().len(), client_id + 1, "Color desync");
+
     for (_, client) in sockets.write().as_mut().unwrap().iter_mut() {
         block_on(async {
             client
-                .write_all(S2C::<&Text>::NewClient(Color::Green).serialize().make_contiguous())
+                .write_all(
+                    S2C::<&Text>::NewClient(Color::Green)
+                        .serialize()
+                        .make_contiguous(),
+                )
                 .await?;
+
             client.flush().await?;
             Ok::<_, io::Error>(())
         })?;

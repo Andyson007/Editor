@@ -37,7 +37,7 @@ pub struct Socket {
 impl Buffer {
     /// Creates a new appstate
     #[must_use]
-    pub fn new(mut text: Text, socket: Option<TcpStream>) -> Self {
+    pub fn new(mut text: Text, colors: Vec<Color>, socket: Option<TcpStream>) -> Self {
         let id = text.add_client();
         Self {
             text,
@@ -51,7 +51,7 @@ impl Buffer {
                     writer,
                 }
             }),
-            colors: Vec::new(),
+            colors,
         }
     }
 

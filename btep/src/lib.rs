@@ -13,12 +13,9 @@ pub mod prelude {
     pub use crate::s2c::*;
 }
 
-use std::{
-    collections::VecDeque,
-    io,
-    mem,
-};
+use std::{collections::VecDeque, io, mem};
 
+use crossterm::style::Color;
 use tokio::io::{AsyncRead, AsyncReadExt};
 use utils::other::CursorPos;
 
@@ -69,5 +66,73 @@ impl Deserialize for CursorPos {
         data.read_exact(&mut buf).await?;
         let col = u64::from_be_bytes(buf) as usize;
         Ok(Self { row, col })
+    }
+}
+
+impl Serialize for Color {
+    fn serialize(&self) -> VecDeque<u8> {
+        unsafe { mem::transmute::<Color, [u8; mem::size_of::<Color>()]>(*self).into() }
+    }
+}
+
+impl Deserialize for Color {
+    async fn deserialize<T>(data: &mut T) -> io::Result<Self>
+    where
+        Self: Sized,
+        T: AsyncReadExt + Unpin + Send,
+    {
+        let mut buf = [0; mem::size_of::<Color>()];
+        data.read_exact(&mut buf).await?;
+        Ok(
+            unsafe {
+                mem::transmute::<[u8; mem::size_of::<Color>()], crossterm::style::Color>(buf)
+            },
+        )
+    }
+}
+
+impl<T> Serialize for Vec<T>
+where
+    T: Serialize,
+{
+    fn serialize(&self) -> VecDeque<u8> {
+        let mut ret = VecDeque::new();
+        ret.extend((self.len() as u64).to_be_bytes());
+        for elem in self {
+            ret.extend(elem.serialize());
+        }
+        ret
+    }
+}
+
+impl<T> Deserialize for Vec<T>
+where
+    T: Deserialize,
+{
+    async fn deserialize<R>(data: &mut R) -> io::Result<Self>
+    where
+        Self: Sized,
+        R: AsyncReadExt + Unpin + Send,
+    {
+        let size = data.read_u64().await? as usize;
+        let mut ret = Vec::with_capacity(size);
+        for _ in 0..size {
+            ret.push(T::deserialize(data).await?);
+        }
+        Ok(ret)
+    }
+}
+
+impl<T> Serialize for [T]
+where
+    T: Serialize,
+{
+    fn serialize(&self) -> VecDeque<u8> {
+        let mut ret = VecDeque::new();
+        ret.extend((self.len() as u64).to_be_bytes());
+        for elem in self {
+            ret.extend(elem.serialize());
+        }
+        ret
     }
 }
