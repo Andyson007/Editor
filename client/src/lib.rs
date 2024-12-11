@@ -61,7 +61,7 @@ pub async fn run(
         let event = reader.next().fuse();
         if tokio::select! {
             maybe_event = event => {
-                match maybe_event {
+                Ok(match maybe_event {
                     Some(Ok(event)) => {
                         match event {
                             Event::Key(event) => {
@@ -78,7 +78,7 @@ pub async fn run(
                     },
                     Some(Err(e)) => panic!("{e}"),
                     None => panic!("idk what this branch is supposed to handle"),
-                }
+                })
             },
             x = async {
                 if let Some(x) = &mut app.curr_mut().socket{
@@ -90,9 +90,10 @@ pub async fn run(
                 }
             } => {
                 x?;
-                app.curr_mut().update().await.unwrap()
+                app.curr_mut().update().await?;
+                Ok::<bool, io::Error>(true)
             },
-        } {
+        }? {
             app.curr_mut().recalculate_cursor(terminal::size()?);
             app.redraw(&mut out).unwrap();
             out.flush()?;
