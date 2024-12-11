@@ -15,7 +15,6 @@ use crossterm::{
 };
 use editor::Client;
 use futures::{future, FutureExt, StreamExt};
-use core::panic;
 use std::{
     io::{self, Write},
     net::SocketAddrV4,

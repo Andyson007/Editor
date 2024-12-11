@@ -275,7 +275,7 @@ impl Deserialize for Piece {
         // #[allow(clippy::unused_peekable)]
         // let mut iter = data.bytes().peekable();
         let mut str_buf = String::new();
-        let mut original_start = data.read_u64().await?;
+        let original_start = data.read_u64().await?;
         let mut separator = data.read_valid_str(&mut str_buf).await?;
 
         let original_buffer: AppendOnlyStr = AppendOnlyStr::from_str(&str_buf).unwrap();
@@ -313,7 +313,15 @@ impl Deserialize for Piece {
             let end = data.read_u64().await? as usize;
             builder.push(TableElem {
                 buf,
-                text: original_buffer.str_slice(start..end),
+                text: if let Some((bufid, _)) = buf {
+                    client_buffers[bufid]
+                        .1
+                        .read()
+                        .unwrap()
+                        .str_slice(start..end)
+                } else {
+                    original_buffer.str_slice(start..end)
+                },
                 id,
             });
         }

@@ -266,6 +266,7 @@ async fn handle_client(
                 };
             }
         }
+        // trace!("{:?}", text.read().unwrap().lines().collect::<Vec<_>>());
         {
             let mut lock = sockets.write().unwrap();
             for x in to_remove {
