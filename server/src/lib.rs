@@ -258,7 +258,7 @@ async fn handle_client(
                     ),
                 );
                 match result {
-                    Ok(()) => block_on(async { client.flush().await })?,
+                    Ok(()) => block_on(client.flush())?,
                     Err(e) => {
                         to_remove.push(*clientnr);
                         warn!("{client_id}: {e}");
@@ -266,12 +266,35 @@ async fn handle_client(
                 };
             }
         }
-        // trace!("{:?}", text.read().unwrap().lines().collect::<Vec<_>>());
         {
-            let mut lock = sockets.write().unwrap();
-            for x in to_remove {
-                info!("removed client {x}");
-                lock.remove(&x);
+            let mut socket_lock = sockets.write().unwrap();
+            for client_to_remove in to_remove {
+                info!("removed client {client_to_remove}");
+
+                text.write().unwrap().client(client_to_remove).exit_insert();
+
+                debug!("{}", line!());
+                debug!("{socket_lock:?}");
+                for (clientnr, client) in socket_lock.iter_mut() {
+                    if *clientnr == client_to_remove {
+                        continue;
+                    }
+                    let result = block_on(
+                        client.write_all(
+                            S2C::Update::<&Text>((client_to_remove, C2S::ExitInsert))
+                                .serialize()
+                                .make_contiguous(),
+                        ),
+                    );
+                    match result {
+                        Ok(()) => block_on(client.flush())?,
+                        Err(_) => {
+                            // The responsible thing to do would be to remove it here, but it'll be
+                            // removed anyways at the next iteration
+                        }
+                    };
+                }
+                socket_lock.remove(&client_to_remove);
             }
         }
     }
