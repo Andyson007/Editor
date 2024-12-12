@@ -27,6 +27,8 @@ pub struct Client {
     /// Stores the current editing mode. This is
     /// effectively the same as Vims insert/Normal mode
     pub(crate) mode: Mode,
+    /// Stores a message that should be rendered to the user
+    pub(crate) info: Option<String>,
 }
 
 impl Client {
@@ -38,6 +40,7 @@ impl Client {
             buffers: Vec::from([buf]),
             current_buffer: 0,
             mode: Mode::Normal,
+            info: Some("Press Escape then :help to view help".to_string()),
         }
     }
 
@@ -49,6 +52,7 @@ impl Client {
             buffers: Vec::from([buf]),
             current_buffer: 0,
             mode: Mode::Normal,
+            info: Some("Press Escape then :help to view help".to_string()),
         }
     }
 

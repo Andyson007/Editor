@@ -92,16 +92,24 @@ impl Client {
                 .queue(terminal::Clear(ClearType::CurrentLine))?
                 .queue(Print(":"))?
                 .queue(Print(cmd))?;
-        } else if let Some(CursorPos { row, col }) = self_pos {
-            out.queue(cursor::MoveTo(
-                u16::try_from(col).unwrap(),
-                u16::try_from(row).unwrap(),
-            ))?;
         } else {
-            out.queue(cursor::MoveTo(
-                u16::try_from(current_buffer.cursor().col).unwrap(),
-                u16::try_from(current_buffer.cursor().row - current_buffer.line_offset).unwrap(),
-            ))?;
+            if let Some(ref info) = self.info {
+                out.queue(cursor::MoveTo(size.0 - info.len() as u16, size.1))?
+                    .queue(terminal::Clear(ClearType::CurrentLine))?
+                    .queue(Print(info))?;
+            }
+            if let Some(CursorPos { row, col }) = self_pos {
+                out.queue(cursor::MoveTo(
+                    u16::try_from(col).unwrap(),
+                    u16::try_from(row).unwrap(),
+                ))?;
+            } else {
+                out.queue(cursor::MoveTo(
+                    u16::try_from(current_buffer.cursor().col).unwrap(),
+                    u16::try_from(current_buffer.cursor().row - current_buffer.line_offset)
+                        .unwrap(),
+                ))?;
+            }
         }
         out.flush()?;
         Ok(())
