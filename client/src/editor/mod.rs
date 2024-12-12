@@ -106,6 +106,9 @@ impl Client {
                 }
             }
         };
+        if let Some(buffer::Socket { ref mut writer, .. }) = self.curr_mut().socket {
+            writer.flush().await?;
+        }
         Ok(false)
     }
     fn take_mode(&mut self) -> Option<String> {
@@ -158,7 +161,12 @@ impl Client {
         Ok(false)
     }
 
+    /// Handles an input in insert mode
+    /// This function does not flush the output stream
+    /// # Panics
+    /// This function may panic if this client isn't in insert mode when this function is called
     async fn handle_insert_keyevent(&mut self, input: &KeyEvent) -> io::Result<()> {
+        let curr_id = self.curr_mut().id;
         if matches!(
             input,
             KeyEvent {
@@ -168,11 +176,18 @@ impl Client {
                 ..
             }
         ) {
-            self.mode = Mode::Insert;
+            self.mode = Mode::Normal;
+            self.curr_mut().text.client(curr_id).exit_insert();
+
+            if let Some(buffer::Socket { ref mut writer, .. }) = self.curr_mut().socket {
+                writer
+                    .write_all(C2S::ExitInsert.serialize().make_contiguous())
+                    .await
+                    .unwrap();
+            }
+
             return Ok(());
         }
-
-        let curr_id = self.curr_mut().id;
 
         match input.code {
             KeyCode::Backspace => 'backspace: {
@@ -193,7 +208,6 @@ impl Client {
                     writer
                         .write_all(C2S::Backspace(swaps).serialize().make_contiguous())
                         .await?;
-                    writer.flush().await?;
                 }
                 if deleted.is_some() {
                     if self.curr_mut().cursorpos.col == 0 {
@@ -212,7 +226,6 @@ impl Client {
                     writer
                         .write_all(C2S::Enter.serialize().make_contiguous())
                         .await?;
-                    writer.flush().await?;
                 }
             }
             KeyCode::Char(c) => {
@@ -223,7 +236,6 @@ impl Client {
                         .write_all(C2S::Char(c).serialize().make_contiguous())
                         .await
                         .unwrap();
-                    writer.flush().await.unwrap();
                 }
             }
             KeyCode::Esc => {
@@ -235,7 +247,6 @@ impl Client {
                         .write_all(C2S::ExitInsert.serialize().make_contiguous())
                         .await
                         .unwrap();
-                    writer.flush().await.unwrap();
                 }
             }
             KeyCode::Home => todo!(),
@@ -315,6 +326,7 @@ impl Client {
         Ok(())
     }
 
+    /// Note this does not flush the writer
     async fn enter_insert(&mut self, pos: CursorPos) -> io::Result<()> {
         let curr_id = self.curr_mut().id;
         let (_offset, _id) = self.curr_mut().text.client(curr_id).enter_insert(pos);
@@ -322,7 +334,6 @@ impl Client {
             writer
                 .write_all(C2S::EnterInsert(pos).serialize().make_contiguous())
                 .await?;
-            writer.flush().await?;
         }
         self.mode = Mode::Insert;
         Ok(())
