@@ -25,8 +25,8 @@ pub struct Text {
 }
 
 impl Serialize for &Text {
-    fn serialize(&self) -> std::collections::VecDeque<u8> {
-        let mut ret = VecDeque::new();
+    fn serialize(&self) -> Vec<u8> {
+        let mut ret = Vec::new();
         let to_extend = (&*self.table.read().unwrap()).serialize();
         ret.extend((to_extend.len() as u64).to_be_bytes());
         ret.extend(to_extend);

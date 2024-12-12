@@ -232,20 +232,20 @@ impl Default for Piece {
 }
 
 impl Serialize for &Piece {
-    fn serialize(&self) -> std::collections::VecDeque<u8> {
-        let mut ret = VecDeque::new();
+    fn serialize(&self) -> Vec<u8> {
+        let mut ret = Vec::new();
         ret.extend((self.buffers.original.0.peek() as u64).to_be_bytes());
         ret.extend(self.buffers.original.1.str_slice(..).as_str().bytes());
         for client in &self.buffers.clients {
             // 0xfe is used here because its not representable by utf8, and makes stuff easier to
             // parse. This is useful because the alternative is the specify the strings length,
             // which would take up at least as many bytes
-            ret.push_back(0xfe);
+            ret.push(0xfe);
             ret.extend((client.0.read().unwrap().peek() as u64).to_be_bytes());
             ret.extend(client.1.read().unwrap().str_slice(..).as_str().bytes());
         }
         // Might be useless, but it's a single byte
-        ret.push_back(0xff);
+        ret.push(0xff);
         ret.extend((self.piece_table.read_full().unwrap().read().len() as u64).to_be_bytes());
 
         for piece in self.piece_table.read_full().unwrap().read().iter() {

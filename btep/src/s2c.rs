@@ -20,27 +20,20 @@ impl<T> Serialize for S2C<T>
 where
     T: Serialize,
 {
-    fn serialize(&self) -> VecDeque<u8> {
-        let mut ret = VecDeque::new();
-        ret.push_front(6);
+    fn serialize(&self) -> Vec<u8> {
+        let mut ret = Vec::new();
         match self {
             Self::Full(x) => {
-                ret.push_front(0);
-                ret.push_front(7);
                 ret.extend(x.serialize());
-                ret.push_front(8);
             }
             Self::Update((id, action)) => {
-                ret.push_front(1);
+                ret.push(1);
                 ret.extend((*id as u64).to_be_bytes());
                 ret.extend(action.serialize());
             }
             Self::NewClient((username, color)) => {
-                ret.push_front(2);
                 ret.extend(username.serialize());
-                ret.push_back(5);
                 ret.extend(color.serialize());
-                ret.push_back(5);
             }
         };
         ret
@@ -56,14 +49,8 @@ where
         D: AsyncReadExt + Unpin + Send,
         Self: Sized,
     {
-        assert_eq!(data.read_u8().await?, 6);
         Ok(match data.read_u8().await? {
-            0 => {
-                assert_eq!(data.read_u8().await?, 7);
-                let ret = Self::Full(T::deserialize(data).await?);
-                assert_eq!(data.read_u8().await?, 8);
-                ret
-            }
+            0 => Self::Full(T::deserialize(data).await?),
             1 => {
                 let mut buf = [0; mem::size_of::<u64>()];
                 data.read_exact(&mut buf).await?;
@@ -73,9 +60,7 @@ where
             }
             2 => {
                 let username = String::deserialize(data).await?;
-                assert_eq!(data.read_u8().await?, 5);
                 let color = <Color as Deserialize>::deserialize(data).await?;
-                assert_eq!(data.read_u8().await?, 5);
                 Self::NewClient((username, color))
             }
             x => panic!("An invalid specifier was found ({x})"),

@@ -198,13 +198,12 @@ async fn handle_client(
             full.serialize()
         };
         // dbg!(&data);
-        write.write_u8(4).await?;
-        panic!("{:?}", data.make_contiguous());
-        // write.write_all().await?;
+
+        write.write_all(&data).await?;
 
         write.write_u8(5).await?;
         let mut colors = colors.lock().unwrap().serialize();
-        write.write_all(colors.make_contiguous()).await?;
+        write.write_all(&colors).await?;
         write.flush().await?;
         // println!("{data:#?}");
     }
@@ -219,11 +218,7 @@ async fn handle_client(
         let username = username.clone();
         block_on(async move {
             client
-                .write_all(
-                    S2C::<&Text>::NewClient((username.clone(), Color::Green))
-                        .serialize()
-                        .make_contiguous(),
-                )
+                .write_all(&S2C::<&Text>::NewClient((username.clone(), Color::Green)).serialize())
                 .await?;
 
             client.flush().await?;
@@ -260,11 +255,7 @@ async fn handle_client(
                     continue;
                 }
                 let result = block_on(
-                    client.write_all(
-                        S2C::Update::<&Text>((client_id, action))
-                            .serialize()
-                            .make_contiguous(),
-                    ),
+                    client.write_all(&S2C::Update::<&Text>((client_id, action)).serialize()),
                 );
                 match result {
                     Ok(()) => block_on(client.flush())?,
@@ -291,13 +282,9 @@ async fn handle_client(
                     if *clientnr == client_to_remove {
                         continue;
                     }
-                    let result = block_on(
-                        client.write_all(
-                            S2C::Update::<&Text>((client_to_remove, C2S::ExitInsert))
-                                .serialize()
-                                .make_contiguous(),
-                        ),
-                    );
+                    let result = block_on(client.write_all(
+                        &S2C::Update::<&Text>((client_to_remove, C2S::ExitInsert)).serialize(),
+                    ));
                     match result {
                         Ok(()) => block_on(client.flush())?,
                         Err(_) => {

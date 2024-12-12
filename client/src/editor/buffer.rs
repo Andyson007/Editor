@@ -71,7 +71,7 @@ impl Buffer {
     pub(super) async fn save(&mut self) -> tokio::io::Result<()> {
         if let Some(Socket { ref mut writer, .. }) = self.socket {
             writer
-                .write_all(C2S::Save.serialize().make_contiguous())
+                .write_all(&C2S::Save.serialize())
                 .await?;
 
             writer.flush().await?;

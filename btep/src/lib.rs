@@ -23,7 +23,7 @@ use utils::other::CursorPos;
 /// A trait allow for serialization into the Btep™ format
 pub trait Serialize {
     /// The method provide by `Serialize`.
-    fn serialize(&self) -> VecDeque<u8>;
+    fn serialize(&self) -> Vec<u8>;
 }
 
 /// `Deserialize` allows for deserialization and is supposed to be the opposite of `Serialize`.
@@ -36,20 +36,20 @@ pub trait Deserialize {
 }
 
 impl Serialize for usize {
-    fn serialize(&self) -> VecDeque<u8> {
+    fn serialize(&self) -> Vec<u8> {
         (*self as u64).to_be_bytes().into()
     }
 }
 
 impl Serialize for char {
-    fn serialize(&self) -> VecDeque<u8> {
+    fn serialize(&self) -> Vec<u8> {
         (*self as u32).to_be_bytes().into()
     }
 }
 
 impl Serialize for CursorPos {
-    fn serialize(&self) -> VecDeque<u8> {
-        let mut ret = VecDeque::with_capacity(const { mem::size_of::<u64>() * 2 });
+    fn serialize(&self) -> Vec<u8> {
+        let mut ret = Vec::with_capacity(const { mem::size_of::<u64>() * 2 });
         ret.extend(self.row.serialize());
         ret.extend(self.col.serialize());
         ret
@@ -71,7 +71,7 @@ impl Deserialize for CursorPos {
 }
 
 impl Serialize for Color {
-    fn serialize(&self) -> VecDeque<u8> {
+    fn serialize(&self) -> Vec<u8> {
         [match self {
             Self::Reset => 0,
             Self::Black => 1,
@@ -137,8 +137,8 @@ impl<T> Serialize for Vec<T>
 where
     T: Serialize,
 {
-    fn serialize(&self) -> VecDeque<u8> {
-        let mut ret = VecDeque::new();
+    fn serialize(&self) -> Vec<u8> {
+        let mut ret = Vec::new();
         ret.extend((self.len() as u64).to_be_bytes());
         for elem in self {
             ret.extend(elem.serialize());
@@ -170,8 +170,8 @@ impl<T> Serialize for [T]
 where
     T: Serialize,
 {
-    fn serialize(&self) -> VecDeque<u8> {
-        let mut ret = VecDeque::new();
+    fn serialize(&self) -> Vec<u8> {
+        let mut ret = Vec::new();
         ret.extend((self.len() as u64).to_be_bytes());
         for elem in self {
             ret.extend(elem.serialize());
@@ -181,8 +181,8 @@ where
 }
 
 impl Serialize for &str {
-    fn serialize(&self) -> VecDeque<u8> {
-        let mut ret = VecDeque::new();
+    fn serialize(&self) -> Vec<u8> {
+        let mut ret = Vec::new();
         ret.extend((self.len() as u64).to_be_bytes());
         ret.extend(self.as_bytes());
         ret
@@ -190,8 +190,8 @@ impl Serialize for &str {
 }
 
 impl Serialize for String {
-    fn serialize(&self) -> VecDeque<u8> {
-        let mut ret = VecDeque::new();
+    fn serialize(&self) -> Vec<u8> {
+        let mut ret = Vec::new();
         ret.extend((self.len() as u64).to_be_bytes());
         ret.extend(self.as_bytes());
         ret

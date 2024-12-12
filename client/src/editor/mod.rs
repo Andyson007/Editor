@@ -198,7 +198,7 @@ impl Client {
 
             if let Some(buffer::Socket { ref mut writer, .. }) = self.curr_mut().socket {
                 writer
-                    .write_all(C2S::ExitInsert.serialize().make_contiguous())
+                    .write_all(&C2S::ExitInsert.serialize())
                     .await
                     .unwrap();
             }
@@ -223,7 +223,7 @@ impl Client {
                 let (deleted, swaps) = self.curr_mut().text.client_mut(curr_id).backspace();
                 if let Some(buffer::Socket { ref mut writer, .. }) = self.curr_mut().socket {
                     writer
-                        .write_all(C2S::Backspace(swaps).serialize().make_contiguous())
+                        .write_all(&C2S::Backspace(swaps).serialize())
                         .await?;
                 }
                 if deleted.is_some() {
@@ -247,7 +247,7 @@ impl Client {
 
                 if let Some(buffer::Socket { ref mut writer, .. }) = self.curr_mut().socket {
                     writer
-                        .write_all(C2S::ExitInsert.serialize().make_contiguous())
+                        .write_all(&C2S::ExitInsert.serialize())
                         .await
                         .unwrap();
                 }
@@ -289,7 +289,7 @@ impl Client {
         }
         if let Some(buffer::Socket { ref mut writer, .. }) = self.curr_mut().socket {
             writer
-                .write_all(C2S::Char(c).serialize().make_contiguous())
+                .write_all(&C2S::Char(c).serialize())
                 .await?
         }
         Ok(())
@@ -369,7 +369,7 @@ impl Client {
         let (_offset, _id) = self.curr_mut().text.client_mut(curr_id).enter_insert(pos);
         if let Some(buffer::Socket { ref mut writer, .. }) = self.curr_mut().socket {
             writer
-                .write_all(C2S::EnterInsert(pos).serialize().make_contiguous())
+                .write_all(&C2S::EnterInsert(pos).serialize())
                 .await?;
         }
         self.mode = Mode::Insert;

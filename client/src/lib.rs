@@ -42,12 +42,10 @@ pub async fn run(
         panic!("Failed to connect to the server. Maybe the server is not running?")
     };
 
-    assert_eq!(socket.read_u8().await?, 4);
     let S2C::Full(initial_text) = S2C::<Text>::deserialize(&mut socket).await? else {
         panic!("Initial message in wrong protocol")
     };
 
-    assert_eq!(socket.read_u8().await?, 5);
     let colors = Vec::<Color>::deserialize(&mut socket).await?;
     let mut app = Client::new_with_buffer(username.to_string(), initial_text, colors, Some(socket));
 
