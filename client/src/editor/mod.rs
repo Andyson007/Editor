@@ -166,7 +166,7 @@ impl Client {
     /// # Panics
     /// This function may panic if this client isn't in insert mode when this function is called
     async fn handle_insert_keyevent(&mut self, input: &KeyEvent) -> io::Result<()> {
-        let curr_id = self.curr_mut().id;
+        let curr_id = self.curr().id;
         if matches!(
             input,
             KeyEvent {
@@ -219,24 +219,10 @@ impl Client {
                 }
             }
             KeyCode::Enter => {
-                self.curr_mut().text.client(curr_id).push_char('\n');
-                self.curr_mut().cursorpos.col = 0;
-                self.curr_mut().cursorpos.row += 1;
-                if let Some(buffer::Socket { ref mut writer, .. }) = self.curr_mut().socket {
-                    writer
-                        .write_all(C2S::Enter.serialize().make_contiguous())
-                        .await?;
-                }
+                self.type_char('\n').await?;
             }
             KeyCode::Char(c) => {
-                self.curr_mut().text.client(curr_id).push_char(c);
-                self.curr_mut().cursorpos.col += c.len_utf8();
-                if let Some(buffer::Socket { ref mut writer, .. }) = self.curr_mut().socket {
-                    writer
-                        .write_all(C2S::Char(c).serialize().make_contiguous())
-                        .await
-                        .unwrap();
-                }
+                self.type_char(c).await?;
             }
             KeyCode::Esc => {
                 self.mode = Mode::Normal;
@@ -271,6 +257,27 @@ impl Client {
         Ok(())
     }
 
+    /// types a char in insert mode
+    /// This function handles sending the request *without* flushing the stream.
+    /// Cursor movement is also handled
+    async fn type_char(&mut self, c: char) -> io::Result<()> {
+        let curr_id = self.curr().id;
+        self.curr_mut().text.client(curr_id).push_char(c);
+        match c {
+            '\n' => {
+                self.curr_mut().cursorpos.col = 0;
+                self.curr_mut().cursorpos.row += 1;
+            }
+            _ => self.curr_mut().cursorpos.col += 1,
+        }
+        if let Some(buffer::Socket { ref mut writer, .. }) = self.curr_mut().socket {
+            writer
+                .write_all(C2S::Char(c).serialize().make_contiguous())
+                .await?
+        }
+        Ok(())
+    }
+
     /// handles a keypress as if were performed in `Normal` mode
     async fn handle_normal_keyevent(&mut self, input: &KeyEvent) -> io::Result<()> {
         match input.code {
@@ -281,6 +288,19 @@ impl Client {
             KeyCode::Char('a') => {
                 let pos = self.curr_mut().cursorpos;
                 self.enter_insert(pos + (0, 1)).await?;
+            }
+            KeyCode::Char('o') => {
+                let pos = CursorPos {
+                    row: self.curr().cursorpos.row,
+                    col: self
+                        .curr()
+                        .text
+                        .lines()
+                        .nth(self.curr_mut().cursorpos.row)
+                        .map_or(0, |x| x.chars().count()),
+                };
+                self.enter_insert(pos).await?;
+                self.type_char('\n').await?;
             }
             KeyCode::Char(':') => self.mode = Mode::Command(String::new()),
             KeyCode::Left | KeyCode::Char('h') => {
