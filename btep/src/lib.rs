@@ -183,11 +183,8 @@ where
 impl Serialize for &str {
     fn serialize(&self) -> Vec<u8> {
         let mut ret = Vec::new();
-        ret.push(10);
-        ret.extend(dbg!((self.len() as u64).to_be_bytes()));
-        ret.push(11);
-        ret.extend(dbg!(self.as_bytes()));
-        ret.push(12);
+        ret.extend((self.len() as u64).to_be_bytes());
+        ret.extend(self.as_bytes());
         ret
     }
 }
@@ -204,14 +201,9 @@ impl Deserialize for String {
         Self: Sized,
         T: AsyncReadExt + Unpin + Send,
     {
-        assert_eq!(data.read_u8().await?, 10);
         let len = data.read_u64().await? as usize;
-        assert_eq!(data.read_u8().await?, 11);
-        println!("{len}");
         let mut buf = vec![0; len];
         data.read_exact(&mut buf).await?;
-        println!("{buf:?}");
-        assert_eq!(data.read_u8().await?, 12);
         Ok(String::from_utf8(buf).expect("Invalid utf was sent"))
     }
 }

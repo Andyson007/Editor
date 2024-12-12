@@ -25,9 +25,7 @@ where
         match self {
             Self::Full(x) => {
                 ret.push(0);
-                ret.push(1);
                 ret.extend(x.serialize());
-                ret.push(2);
             }
             Self::Update((id, action)) => {
                 ret.push(1);
@@ -53,13 +51,8 @@ where
         D: AsyncReadExt + Unpin + Send,
         Self: Sized,
     {
-        Ok(match dbg!(data.read_u8().await?) {
-            0 => {
-                assert_eq!(data.read_u8().await?, 1);
-                let ret = Self::Full(T::deserialize(data).await?);
-                assert_eq!(data.read_u8().await?, 2);
-                ret
-            }
+        Ok(match data.read_u8().await? {
+            0 => Self::Full(T::deserialize(data).await?),
             1 => {
                 let mut buf = [0; mem::size_of::<u64>()];
                 data.read_exact(&mut buf).await?;
