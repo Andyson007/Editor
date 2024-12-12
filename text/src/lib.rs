@@ -35,7 +35,9 @@ impl Serialize for &Text {
 
         ret.extend(self.clients.iter().flat_map(|x| {
             let mut ret = Vec::new();
+            ret.push(7);
             ret.extend(x.username.serialize());
+            ret.push(8);
             if let Some(Insertdata { slice, .. }) = &x.data {
                 ret.push(1);
                 ret.extend((slice.read().text.start() as u64).to_be_bytes());
@@ -43,6 +45,7 @@ impl Serialize for &Text {
             } else {
                 ret.push(0);
             }
+            ret.push(9);
             ret
         }));
         ret
@@ -61,11 +64,13 @@ impl Deserialize for Text {
         let arced = Arc::new(RwLock::new(piece));
 
         let client_count = data.read_u64().await? as usize;
-        assert_eq!(client_count, 0);
+        // assert_eq!(client_count, 0);
 
         let mut clients = Vec::with_capacity(client_count as usize);
         for counter in 0..client_count {
+            assert_eq!(data.read_u8().await?, 7);
             let username = String::deserialize(data).await?;
+            assert_eq!(data.read_u8().await?, 8);
             if data.read_u8().await? == 1 {
                 let start = data.read_u64().await? as usize;
                 let end = data.read_u64().await? as usize;
@@ -107,6 +112,7 @@ impl Deserialize for Text {
                     bufnr: counter,
                 });
             }
+            assert_eq!(data.read_u8().await?, 9);
         }
         Ok(Self {
             table: arced,

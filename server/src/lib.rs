@@ -199,11 +199,13 @@ async fn handle_client(
         };
         // dbg!(&data);
 
+        write.write_u8(4).await?;
         write.write_all(&data).await?;
 
         write.write_u8(5).await?;
-        let mut colors = colors.lock().unwrap().serialize();
+        let colors = colors.lock().unwrap().serialize();
         write.write_all(&colors).await?;
+        write.write_u8(6).await?;
         write.flush().await?;
         // println!("{data:#?}");
     }

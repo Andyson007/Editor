@@ -24,7 +24,10 @@ where
         let mut ret = Vec::new();
         match self {
             Self::Full(x) => {
+                ret.push(0);
+                ret.push(1);
                 ret.extend(x.serialize());
+                ret.push(2);
             }
             Self::Update((id, action)) => {
                 ret.push(1);
@@ -32,6 +35,7 @@ where
                 ret.extend(action.serialize());
             }
             Self::NewClient((username, color)) => {
+                ret.push(2);
                 ret.extend(username.serialize());
                 ret.extend(color.serialize());
             }
@@ -49,8 +53,13 @@ where
         D: AsyncReadExt + Unpin + Send,
         Self: Sized,
     {
-        Ok(match data.read_u8().await? {
-            0 => Self::Full(T::deserialize(data).await?),
+        Ok(match dbg!(data.read_u8().await?) {
+            0 => {
+                assert_eq!(data.read_u8().await?, 1);
+                let ret = Self::Full(T::deserialize(data).await?);
+                assert_eq!(data.read_u8().await?, 2);
+                ret
+            }
             1 => {
                 let mut buf = [0; mem::size_of::<u64>()];
                 data.read_exact(&mut buf).await?;
