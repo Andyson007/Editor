@@ -35,6 +35,7 @@ impl Serialize for &Text {
 
         ret.extend(self.clients.iter().flat_map(|x| {
             let mut ret = Vec::new();
+            ret.extend(x.username.serialize());
             if let Some(Insertdata { slice, .. }) = &x.data {
                 ret.push(1);
                 ret.extend((slice.read().text.start() as u64).to_be_bytes());
@@ -60,14 +61,17 @@ impl Deserialize for Text {
         let arced = Arc::new(RwLock::new(piece));
 
         let client_count = data.read_u64().await? as usize;
+        assert_eq!(client_count, 0);
 
         let mut clients = Vec::with_capacity(client_count as usize);
         for counter in 0..client_count {
+            let username = String::deserialize(data).await?;
             if data.read_u8().await? == 1 {
                 let start = data.read_u64().await? as usize;
                 let end = data.read_u64().await? as usize;
 
                 clients.push(Client {
+                    username,
                     piece: Arc::clone(&arced),
                     buffer: Arc::clone(&arced.read().unwrap().buffers.clients[counter].1),
                     id_counter: Arc::clone(&arced.read().unwrap().buffers.clients[counter].0),
@@ -95,6 +99,7 @@ impl Deserialize for Text {
                 });
             } else {
                 clients.push(Client {
+                    username,
                     piece: Arc::clone(&arced),
                     buffer: Arc::clone(&arced.read().unwrap().buffers.clients[counter].1),
                     id_counter: Arc::clone(&arced.read().unwrap().buffers.clients[counter].0),
@@ -149,7 +154,7 @@ impl Text {
     /// Creates a `Client` with an attached buffer
     /// # Panics
     /// probably only when failing to lock the buffers
-    pub fn add_client(&mut self) -> usize {
+    pub fn add_client(&mut self, username: String) -> usize {
         let buf = Arc::new(RwLock::new(AppendOnlyStr::new()));
         let counter = Arc::new(RwLock::new(AutoIncrementing::new()));
         self.table
@@ -159,6 +164,7 @@ impl Text {
             .clients
             .push((Arc::clone(&counter), Arc::clone(&buf)));
         self.clients.push(Client::new(
+            username,
             Arc::clone(&self.table),
             buf,
             self.clients.len(),
@@ -189,7 +195,12 @@ impl Text {
     }
 
     /// returns a mutable reference to a given client
-    pub fn client(&mut self, idx: usize) -> &mut Client {
+    pub fn client(&self, idx: usize) -> &Client {
+        &self.clients[idx]
+    }
+
+    /// returns a mutable reference to a given client
+    pub fn client_mut(&mut self, idx: usize) -> &mut Client {
         &mut self.clients[idx]
     }
 
@@ -229,11 +240,11 @@ mod test {
         let client = text.add_client();
         let client2 = text.add_client();
 
-        text.client(client).enter_insert((0, 0).into());
-        text.client(client).push_str("andy");
+        text.client_mut(client).enter_insert((0, 0).into());
+        text.client_mut(client).push_str("andy");
 
-        text.client(client2).enter_insert((0, 2).into());
-        text.client(client2).push_str("andy");
+        text.client_mut(client2).enter_insert((0, 2).into());
+        text.client_mut(client2).push_str("andy");
 
         let mut iter = text.lines();
         assert_eq!(iter.next(), Some("anandydy".into()));
@@ -246,16 +257,16 @@ mod test {
         text.add_client();
         text.add_client();
 
-        text.client(0).enter_insert((0, 0).into());
-        text.client(0).push_str("andy");
+        text.client_mut(0).enter_insert((0, 0).into());
+        text.client_mut(0).push_str("andy");
 
         text.add_client();
 
-        text.client(1).enter_insert((0, 2).into());
-        text.client(2).enter_insert((0, 4).into());
-        text.client(1).push_str("andy");
+        text.client_mut(1).enter_insert((0, 2).into());
+        text.client_mut(2).enter_insert((0, 4).into());
+        text.client_mut(1).push_str("andy");
 
-        text.client(2).push_str("\n\na");
+        text.client_mut(2).push_str("\n\na");
         let mut iter = text.lines();
         assert_eq!(iter.next(), Some("anandydy".into()));
         assert_eq!(iter.next(), Some("".into()));
@@ -268,14 +279,14 @@ mod test {
         let mut text = Text::new();
         text.add_client();
 
-        text.client(0).enter_insert((0, 0).into());
-        text.client(0).push_str("Hello");
+        text.client_mut(0).enter_insert((0, 0).into());
+        text.client_mut(0).push_str("Hello");
 
-        text.client(0).enter_insert((0, 5).into());
-        text.client(0).push_str("world!");
+        text.client_mut(0).enter_insert((0, 5).into());
+        text.client_mut(0).push_str("world!");
 
-        text.client(0).enter_insert((0, 5).into());
-        text.client(0).push_str(" ");
+        text.client_mut(0).enter_insert((0, 5).into());
+        text.client_mut(0).push_str(" ");
 
         let mut iter = text.lines();
         assert_eq!(iter.next(), Some("Hello world!".to_string()));
@@ -287,19 +298,19 @@ mod test {
         let mut text = Text::new();
         text.add_client();
 
-        text.client(0).enter_insert((0, 0).into());
-        text.client(0).push_str("Hello");
+        text.client_mut(0).enter_insert((0, 0).into());
+        text.client_mut(0).push_str("Hello");
 
-        text.client(0).enter_insert((0, 5).into());
-        text.client(0).push_str("world!");
+        text.client_mut(0).enter_insert((0, 5).into());
+        text.client_mut(0).push_str("world!");
 
-        text.client(0).enter_insert((0, 5).into());
-        text.client(0).push_str(" ");
+        text.client_mut(0).enter_insert((0, 5).into());
+        text.client_mut(0).push_str(" ");
 
-        text.client(0).enter_insert((0, 1).into());
-        text.client(0).enter_insert((0, 2).into());
+        text.client_mut(0).enter_insert((0, 1).into());
+        text.client_mut(0).enter_insert((0, 2).into());
 
-        text.client(0).backspace();
+        text.client_mut(0).backspace();
 
         println!(
             "{:?}",
@@ -387,7 +398,7 @@ mod test {
         println!(
             "{} {:?}",
             line!(),
-            text.client(0).data.as_ref().map(|x| x.slice.read().buf)
+            text.client_mut(0).data.as_ref().map(|x| x.slice.read().buf)
         );
         println!();
         text.clients[1].enter_insert((0, 1).into());
@@ -395,7 +406,7 @@ mod test {
         println!(
             "{} {:?}",
             line!(),
-            text.client(0).data.as_ref().map(|x| x.slice.read().buf)
+            text.client_mut(0).data.as_ref().map(|x| x.slice.read().buf)
         );
         text.clients[1].push_char('x');
         // println!("{} {:?}", line!(), text.bufs().collect::<Vec<_>>());

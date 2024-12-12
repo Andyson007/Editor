@@ -13,6 +13,7 @@ pub mod prelude {
     pub use crate::s2c::*;
 }
 
+use core::str;
 use std::{collections::VecDeque, io, mem};
 
 use crossterm::style::Color;
@@ -156,6 +157,7 @@ where
         R: AsyncReadExt + Unpin + Send,
     {
         let size = data.read_u64().await? as usize;
+        println!("{size}");
         let mut ret = Self::with_capacity(size);
         for _ in 0..size {
             ret.push(T::deserialize(data).await?);
@@ -175,5 +177,36 @@ where
             ret.extend(elem.serialize());
         }
         ret
+    }
+}
+
+impl Serialize for &str {
+    fn serialize(&self) -> VecDeque<u8> {
+        let mut ret = VecDeque::new();
+        ret.extend((self.len() as u64).to_be_bytes());
+        ret.extend(self.as_bytes());
+        ret
+    }
+}
+
+impl Serialize for String {
+    fn serialize(&self) -> VecDeque<u8> {
+        let mut ret = VecDeque::new();
+        ret.extend((self.len() as u64).to_be_bytes());
+        ret.extend(self.as_bytes());
+        ret
+    }
+}
+
+impl Deserialize for String {
+    async fn deserialize<T>(data: &mut T) -> io::Result<Self>
+    where
+        Self: Sized,
+        T: AsyncReadExt + Unpin + Send,
+    {
+        let len = data.read_u64().await? as usize;
+        let mut buf = Vec::with_capacity(len);
+        data.read_exact(&mut buf).await?;
+        Ok(String::from_utf8(buf).expect("Invalid utf was sent"))
     }
 }

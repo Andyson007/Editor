@@ -34,8 +34,8 @@ pub struct Client {
 impl Client {
     /// Cretaes a new client an empty original buffer
     #[must_use]
-    pub fn new() -> Self {
-        let buf = Buffer::new(Text::new(), Vec::new(), None);
+    pub fn new(username: String) -> Self {
+        let buf = Buffer::new(username, Text::new(), Vec::new(), None);
         Self {
             buffers: Vec::from([buf]),
             current_buffer: 0,
@@ -46,8 +46,13 @@ impl Client {
 
     /// Cretaes a new client with a prepopulated text buffer
     #[must_use]
-    pub fn new_with_buffer(text: Text, colors: Vec<Color>, socket: Option<TcpStream>) -> Self {
-        let buf = Buffer::new(text, colors, socket);
+    pub fn new_with_buffer(
+        username: String,
+        text: Text,
+        colors: Vec<Color>,
+        socket: Option<TcpStream>,
+    ) -> Self {
+        let buf = Buffer::new(username, text, colors, socket);
         Self {
             buffers: Vec::from([buf]),
             current_buffer: 0,
@@ -73,6 +78,7 @@ impl Client {
             "q" => return Ok(self.close_current_buffer()),
             "w" => self.curr_mut().save().await?,
             "help" => self.add_buffer(
+                "Doesn't matter".to_string(),
                 Text::original_from_str(include_str!("../../../help")),
                 Vec::new(),
                 None,
@@ -83,8 +89,15 @@ impl Client {
     }
 
     /// adds a buffer and switches to it
-    fn add_buffer(&mut self, text: Text, colors: Vec<Color>, socket: Option<TcpStream>) {
-        self.buffers.push(Buffer::new(text, colors, socket));
+    fn add_buffer(
+        &mut self,
+        username: String,
+        text: Text,
+        colors: Vec<Color>,
+        socket: Option<TcpStream>,
+    ) {
+        self.buffers
+            .push(Buffer::new(username, text, colors, socket));
         self.current_buffer = self.buffers.len() - 1;
     }
 
@@ -181,7 +194,7 @@ impl Client {
             }
         ) {
             self.mode = Mode::Normal;
-            self.curr_mut().text.client(curr_id).exit_insert();
+            self.curr_mut().text.client_mut(curr_id).exit_insert();
 
             if let Some(buffer::Socket { ref mut writer, .. }) = self.curr_mut().socket {
                 writer
@@ -207,7 +220,7 @@ impl Client {
                         .len()
                 });
 
-                let (deleted, swaps) = self.curr_mut().text.client(curr_id).backspace();
+                let (deleted, swaps) = self.curr_mut().text.client_mut(curr_id).backspace();
                 if let Some(buffer::Socket { ref mut writer, .. }) = self.curr_mut().socket {
                     writer
                         .write_all(C2S::Backspace(swaps).serialize().make_contiguous())
@@ -230,7 +243,7 @@ impl Client {
             }
             KeyCode::Esc => {
                 self.mode = Mode::Normal;
-                self.curr_mut().text.client(curr_id).exit_insert();
+                self.curr_mut().text.client_mut(curr_id).exit_insert();
 
                 if let Some(buffer::Socket { ref mut writer, .. }) = self.curr_mut().socket {
                     writer
@@ -266,7 +279,7 @@ impl Client {
     /// Cursor movement is also handled
     async fn type_char(&mut self, c: char) -> io::Result<()> {
         let curr_id = self.curr().id;
-        self.curr_mut().text.client(curr_id).push_char(c);
+        self.curr_mut().text.client_mut(curr_id).push_char(c);
         match c {
             '\n' => {
                 self.curr_mut().cursorpos.col = 0;
@@ -353,7 +366,7 @@ impl Client {
     /// Note this does not flush the writer
     async fn enter_insert(&mut self, pos: CursorPos) -> io::Result<()> {
         let curr_id = self.curr_mut().id;
-        let (_offset, _id) = self.curr_mut().text.client(curr_id).enter_insert(pos);
+        let (_offset, _id) = self.curr_mut().text.client_mut(curr_id).enter_insert(pos);
         if let Some(buffer::Socket { ref mut writer, .. }) = self.curr_mut().socket {
             writer
                 .write_all(C2S::EnterInsert(pos).serialize().make_contiguous())

@@ -198,22 +198,29 @@ async fn handle_client(
             full.serialize()
         };
         // dbg!(&data);
-        write.write_all(data.make_contiguous()).await?;
+        write.write_u8(4).await?;
+        panic!("{:?}", data.make_contiguous());
+        // write.write_all().await?;
 
+        write.write_u8(5).await?;
         let mut colors = colors.lock().unwrap().serialize();
         write.write_all(colors.make_contiguous()).await?;
         write.flush().await?;
         // println!("{data:#?}");
     }
-    debug_assert_eq!(text.write().unwrap().add_client(), client_id);
+    debug_assert_eq!(
+        text.write().unwrap().add_client(username.clone()),
+        client_id
+    );
     colors.lock().unwrap().push(Color::Green);
     debug_assert_eq!(colors.lock().unwrap().len(), client_id + 1, "Color desync");
 
     for (_, client) in sockets.write().as_mut().unwrap().iter_mut() {
-        block_on(async {
+        let username = username.clone();
+        block_on(async move {
             client
                 .write_all(
-                    S2C::<&Text>::NewClient(Color::Green)
+                    S2C::<&Text>::NewClient((username.clone(), Color::Green))
                         .serialize()
                         .make_contiguous(),
                 )
@@ -230,7 +237,7 @@ async fn handle_client(
             let action = {
                 let action = C2S::deserialize(&mut read).await?;
                 let mut binding = text.write().unwrap();
-                let lock = binding.client(client_id);
+                let lock = binding.client_mut(client_id);
                 match action {
                     C2S::Char(c) => lock.push_char(c),
                     C2S::Backspace(swaps) => drop(lock.backspace_with_swaps(swaps)),
@@ -273,7 +280,10 @@ async fn handle_client(
             for client_to_remove in to_remove {
                 info!("removed client {client_to_remove}");
 
-                text.write().unwrap().client(client_to_remove).exit_insert();
+                text.write()
+                    .unwrap()
+                    .client_mut(client_to_remove)
+                    .exit_insert();
 
                 debug!("{}", line!());
                 debug!("{socket_lock:?}");

@@ -1,9 +1,10 @@
 use crossterm::{
     cursor::{self, MoveToColumn, MoveToNextLine, RestorePosition, SavePosition},
-    style::{Color, Print, SetBackgroundColor},
+    style::{Color, Print, SetBackgroundColor, SetForegroundColor},
     terminal::{self, ClearType},
 };
 use std::io;
+use text::client;
 use utils::other::CursorPos;
 
 use crossterm::QueueableCommand;
@@ -71,17 +72,17 @@ impl Client {
                             col: relative_col,
                         });
                     } else {
+                        let curr_id = current_buffer.id;
+                        let color =
+                            current_buffer.colors[if buf < curr_id { buf } else { buf - 1 }];
+
                         out.queue(SavePosition)?
                             .queue(MoveToColumn(0))?
-                            .queue(Print("An"))?
+                            .queue(SetForegroundColor(color))?
+                            .queue(Print(&current_buffer.text.client(curr_id).username))?
+                            .queue(SetForegroundColor(Color::Reset))?
                             .queue(RestorePosition)?;
-                        next_color = Some(
-                            current_buffer.colors[if buf < current_buffer.id {
-                                buf
-                            } else {
-                                buf - 1
-                            }],
-                        );
+                        next_color = Some(color);
                     }
                 }
             }

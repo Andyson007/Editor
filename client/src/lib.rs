@@ -3,19 +3,19 @@ pub mod editor;
 pub mod errors;
 
 use btep::{prelude::S2C, Deserialize};
+use core::panic;
 use crossterm::{
-    cursor,
     event::{EnableBracketedPaste, Event, EventStream},
     execute,
     style::Color,
     terminal::{
         self, disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
     },
-    ExecutableCommand,
 };
 use editor::Client;
 use futures::{future, FutureExt, StreamExt};
 use std::{
+    error::Error,
     io::{self, Write},
     net::SocketAddrV4,
     str,
@@ -42,12 +42,14 @@ pub async fn run(
         panic!("Failed to connect to the server. Maybe the server is not running?")
     };
 
+    assert_eq!(socket.read_u8().await?, 4);
     let S2C::Full(initial_text) = S2C::<Text>::deserialize(&mut socket).await? else {
         panic!("Initial message in wrong protocol")
     };
 
+    assert_eq!(socket.read_u8().await?, 5);
     let colors = Vec::<Color>::deserialize(&mut socket).await?;
-    let mut app = Client::new_with_buffer(initial_text, colors, Some(socket));
+    let mut app = Client::new_with_buffer(username.to_string(), initial_text, colors, Some(socket));
 
     execute!(out, EnterAlternateScreen, EnableBracketedPaste)?;
     enable_raw_mode().unwrap();
