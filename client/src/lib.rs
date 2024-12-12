@@ -54,8 +54,6 @@ pub async fn run(
 
     app.redraw(&mut out)?;
 
-    out.execute(cursor::MoveTo(0, 0)).unwrap();
-
     let mut reader = EventStream::new();
     loop {
         let event = reader.next().fuse();
@@ -80,7 +78,7 @@ pub async fn run(
                     None => panic!("idk what this branch is supposed to handle"),
                 })
             },
-            x = async {
+            length = async {
                 if let Some(x) = &mut app.curr_mut().socket{
                     let mut buf = [0];
                     x.reader.peek(&mut buf).await
@@ -89,12 +87,13 @@ pub async fn run(
                     unreachable!()
                 }
             } => {
-                assert_eq!(x?, 1, "The server disconnected");
+                assert_eq!(length?, 1, "The server disconnected");
                 app.curr_mut().update().await ?;
                 Ok::<bool, io::Error>(true)
             },
         }? {
-            app.curr_mut().recalculate_cursor(terminal::size()?);
+            let size = terminal::size()?;
+            app.curr_mut().recalculate_cursor((size.0, size.1 - 1));
             app.redraw(&mut out).unwrap();
             out.flush()?;
         }
