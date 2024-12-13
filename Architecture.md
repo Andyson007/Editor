@@ -1,6 +1,6 @@
 This Editor has multiple sub crates.
 - [append_only_str](#Append_only_str). A string which can only be appended to
-- [btep][#Btep]. Responsible for serialization traits for communacition between server and client
+- [btep](#Btep). Responsible for serialization traits for communacition between server and client
 - [piece-table](#Piece-table). Uses append_only_str to create a custom piece-table implementation
 - [text](#Text). A wrapper around text making handling clients easier
 - [server](#Server). Handles the server side.
