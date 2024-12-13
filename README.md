@@ -25,6 +25,9 @@ cargo r -- client --password
 
 
 
+# Development
+Look at [Architecture](Architecture.md) to see how the project is structured
 ## Goals
 - Minimize latency between computers
 - Add collaboration tools as I go on
+
