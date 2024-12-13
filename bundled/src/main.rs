@@ -13,7 +13,7 @@ use std::{
     path::PathBuf,
 };
 use termion::input::TermRead;
-use tracing::{info, level_filters::LevelFilter, trace};
+use tracing::{level_filters::LevelFilter, trace};
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]

@@ -116,6 +116,11 @@ impl Client {
                 .queue(Print(' '))?
                 .queue(SetBackgroundColor(Color::Reset))?;
         }
+        for _ in current_relative_line..size.1 as usize {
+            out.queue(MoveToNextLine(1))?
+                .queue(MoveToColumn(2))?
+                .queue(Print(PIPE_CHAR))?;
+        }
         if let Mode::Command(ref cmd) = self.mode {
             out.queue(cursor::MoveTo(0, size.1))?
                 .queue(terminal::Clear(ClearType::CurrentLine))?
