@@ -192,31 +192,32 @@ async fn handle_client(
     let (mut read, mut write) = stream.into_split();
     {
         debug!("{client_id} Connected {:?}", username);
-        let mut data = {
+        let data = {
             let data = text.read().unwrap();
             let full = S2C::Full(&*data);
             full.serialize()
         };
         // dbg!(&data);
-        write.write_all(data.make_contiguous()).await?;
 
-        let mut colors = colors.lock().unwrap().serialize();
-        write.write_all(colors.make_contiguous()).await?;
+        write.write_all(&data).await?;
+
+        let colors = colors.lock().unwrap().serialize();
+        write.write_all(&colors).await?;
         write.flush().await?;
         // println!("{data:#?}");
     }
-    debug_assert_eq!(text.write().unwrap().add_client(), client_id);
+    debug_assert_eq!(
+        text.write().unwrap().add_client(&username),
+        client_id
+    );
     colors.lock().unwrap().push(Color::Green);
     debug_assert_eq!(colors.lock().unwrap().len(), client_id + 1, "Color desync");
 
     for (_, client) in sockets.write().as_mut().unwrap().iter_mut() {
-        block_on(async {
+        let username = username.clone();
+        block_on(async move {
             client
-                .write_all(
-                    S2C::<&Text>::NewClient(Color::Green)
-                        .serialize()
-                        .make_contiguous(),
-                )
+                .write_all(&S2C::<&Text>::NewClient((username.clone(), Color::Green)).serialize())
                 .await?;
 
             client.flush().await?;
@@ -230,7 +231,7 @@ async fn handle_client(
             let action = {
                 let action = C2S::deserialize(&mut read).await?;
                 let mut binding = text.write().unwrap();
-                let lock = binding.client(client_id);
+                let lock = binding.client_mut(client_id);
                 match action {
                     C2S::Char(c) => lock.push_char(c),
                     C2S::Backspace(swaps) => drop(lock.backspace_with_swaps(swaps)),
@@ -253,11 +254,7 @@ async fn handle_client(
                     continue;
                 }
                 let result = block_on(
-                    client.write_all(
-                        S2C::Update::<&Text>((client_id, action))
-                            .serialize()
-                            .make_contiguous(),
-                    ),
+                    client.write_all(&S2C::Update::<&Text>((client_id, action)).serialize()),
                 );
                 match result {
                     Ok(()) => block_on(client.flush())?,
@@ -273,7 +270,10 @@ async fn handle_client(
             for client_to_remove in to_remove {
                 info!("removed client {client_to_remove}");
 
-                text.write().unwrap().client(client_to_remove).exit_insert();
+                text.write()
+                    .unwrap()
+                    .client_mut(client_to_remove)
+                    .exit_insert();
 
                 debug!("{}", line!());
                 debug!("{socket_lock:?}");
@@ -281,13 +281,9 @@ async fn handle_client(
                     if *clientnr == client_to_remove {
                         continue;
                     }
-                    let result = block_on(
-                        client.write_all(
-                            S2C::Update::<&Text>((client_to_remove, C2S::ExitInsert))
-                                .serialize()
-                                .make_contiguous(),
-                        ),
-                    );
+                    let result = block_on(client.write_all(
+                        &S2C::Update::<&Text>((client_to_remove, C2S::ExitInsert)).serialize(),
+                    ));
                     match result {
                         Ok(()) => block_on(client.flush())?,
                         Err(_) => {

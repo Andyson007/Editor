@@ -1,6 +1,6 @@
 //! mdoule for client updates sendt to the server
 
-use std::{collections::VecDeque, io};
+use std::io;
 
 use tokio::io::AsyncReadExt;
 use utils::other::CursorPos;
@@ -55,7 +55,7 @@ pub enum C2S {
 // }
 
 impl Serialize for C2S {
-    fn serialize(&self) -> VecDeque<u8> {
+    fn serialize(&self) -> Vec<u8> {
         match self {
             Self::Char(c) => std::iter::once(1).chain(c.serialize()).collect(),
             Self::EnterInsert(a) => std::iter::once(2).chain(a.serialize()).collect(),

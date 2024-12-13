@@ -13,7 +13,8 @@ pub mod prelude {
     pub use crate::s2c::*;
 }
 
-use std::{collections::VecDeque, io, mem};
+use core::str;
+use std::{io, mem};
 
 use crossterm::style::Color;
 use tokio::io::{AsyncRead, AsyncReadExt};
@@ -22,7 +23,7 @@ use utils::other::CursorPos;
 /// A trait allow for serialization into the Btep™ format
 pub trait Serialize {
     /// The method provide by `Serialize`.
-    fn serialize(&self) -> VecDeque<u8>;
+    fn serialize(&self) -> Vec<u8>;
 }
 
 /// `Deserialize` allows for deserialization and is supposed to be the opposite of `Serialize`.
@@ -35,20 +36,20 @@ pub trait Deserialize {
 }
 
 impl Serialize for usize {
-    fn serialize(&self) -> VecDeque<u8> {
+    fn serialize(&self) -> Vec<u8> {
         (*self as u64).to_be_bytes().into()
     }
 }
 
 impl Serialize for char {
-    fn serialize(&self) -> VecDeque<u8> {
+    fn serialize(&self) -> Vec<u8> {
         (*self as u32).to_be_bytes().into()
     }
 }
 
 impl Serialize for CursorPos {
-    fn serialize(&self) -> VecDeque<u8> {
-        let mut ret = VecDeque::with_capacity(const { mem::size_of::<u64>() * 2 });
+    fn serialize(&self) -> Vec<u8> {
+        let mut ret = Vec::with_capacity(const { mem::size_of::<u64>() * 2 });
         ret.extend(self.row.serialize());
         ret.extend(self.col.serialize());
         ret
@@ -70,7 +71,7 @@ impl Deserialize for CursorPos {
 }
 
 impl Serialize for Color {
-    fn serialize(&self) -> VecDeque<u8> {
+    fn serialize(&self) -> Vec<u8> {
         [match self {
             Self::Reset => 0,
             Self::Black => 1,
@@ -136,8 +137,8 @@ impl<T> Serialize for Vec<T>
 where
     T: Serialize,
 {
-    fn serialize(&self) -> VecDeque<u8> {
-        let mut ret = VecDeque::new();
+    fn serialize(&self) -> Vec<u8> {
+        let mut ret = Vec::new();
         ret.extend((self.len() as u64).to_be_bytes());
         for elem in self {
             ret.extend(elem.serialize());
@@ -156,6 +157,7 @@ where
         R: AsyncReadExt + Unpin + Send,
     {
         let size = data.read_u64().await? as usize;
+        println!("{size}");
         let mut ret = Self::with_capacity(size);
         for _ in 0..size {
             ret.push(T::deserialize(data).await?);
@@ -168,12 +170,40 @@ impl<T> Serialize for [T]
 where
     T: Serialize,
 {
-    fn serialize(&self) -> VecDeque<u8> {
-        let mut ret = VecDeque::new();
+    fn serialize(&self) -> Vec<u8> {
+        let mut ret = Vec::new();
         ret.extend((self.len() as u64).to_be_bytes());
         for elem in self {
             ret.extend(elem.serialize());
         }
         ret
+    }
+}
+
+impl Serialize for &str {
+    fn serialize(&self) -> Vec<u8> {
+        let mut ret = Vec::new();
+        ret.extend((self.len() as u64).to_be_bytes());
+        ret.extend(self.as_bytes());
+        ret
+    }
+}
+
+impl Serialize for String {
+    fn serialize(&self) -> Vec<u8> {
+        self.as_str().serialize()
+    }
+}
+
+impl Deserialize for String {
+    async fn deserialize<T>(data: &mut T) -> io::Result<Self>
+    where
+        Self: Sized,
+        T: AsyncReadExt + Unpin + Send,
+    {
+        let len = data.read_u64().await? as usize;
+        let mut buf = vec![0; len];
+        data.read_exact(&mut buf).await?;
+        Ok(String::from_utf8(buf).expect("Invalid utf was sent"))
     }
 }

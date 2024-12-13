@@ -1,6 +1,6 @@
 use crossterm::{
-    cursor,
-    style::{Color, Print, SetBackgroundColor},
+    cursor::{self, MoveToColumn, MoveToNextLine, RestorePosition, SavePosition},
+    style::{Color, Print, SetBackgroundColor, SetForegroundColor},
     terminal::{self, ClearType},
 };
 use std::io;
@@ -9,6 +9,8 @@ use utils::other::CursorPos;
 use crossterm::QueueableCommand;
 
 use super::{Client, Mode};
+
+const PIPE_CHAR: char = '│';
 
 impl Client {
     /// draws the current client to the screen
@@ -28,23 +30,26 @@ impl Client {
         let mut next_color = None;
         let mut self_pos = None;
         let mut relative_col = 0;
-        out.queue(cursor::MoveTo(0, 0))?;
+        out.queue(cursor::MoveTo(2, 0))?.queue(Print(PIPE_CHAR))?;
         'outer: for buf in current_buffer.text.bufs() {
             let read_lock = buf.read();
             for c in read_lock.text.chars() {
                 if c == '\n' {
                     relative_col = 0;
-                    if current_line >= size.1 as usize + current_buffer.line_offset - 1 {
+                    if current_line >= size.1 as usize + current_buffer.line_offset {
                         break 'outer;
                     };
                     if current_line >= current_buffer.line_offset {
                         if let Some(x) = next_color.take() {
                             out.queue(SetBackgroundColor(x))?
-                                .queue(Print(" \r\n"))?
+                                .queue(Print(" "))?
+                                .queue(MoveToNextLine(1))?
                                 .queue(SetBackgroundColor(Color::Reset))?;
                         } else {
-                            out.queue(Print("\r\n"))?;
+                            out.queue(MoveToNextLine(1))?;
                         }
+
+                        out.queue(MoveToColumn(2))?.queue(Print(PIPE_CHAR))?;
                     }
                     current_line += 1;
                 } else if current_line + 1 >= current_buffer.line_offset {
@@ -66,13 +71,23 @@ impl Client {
                             col: relative_col,
                         });
                     } else {
-                        next_color = Some(
-                            current_buffer.colors[if buf < current_buffer.id {
-                                buf
-                            } else {
-                                buf - 1
-                            }],
-                        );
+                        let color = current_buffer.colors[if buf < current_buffer.id {
+                            buf
+                        } else {
+                            buf - 1
+                        }];
+
+                        let username = &current_buffer.text.client(buf).username;
+                        out.queue(SavePosition)?
+                            .queue(MoveToColumn(0))?
+                            .queue(SetForegroundColor(color))?
+                            .queue(Print(match username.len() {
+                                ..2 => username,
+                                2.. => &username[0..2],
+                            }))?
+                            .queue(SetForegroundColor(Color::Reset))?
+                            .queue(RestorePosition)?;
+                        next_color = Some(color);
                     }
                 }
             }
@@ -100,12 +115,12 @@ impl Client {
             }
             if let Some(CursorPos { row, col }) = self_pos {
                 out.queue(cursor::MoveTo(
-                    u16::try_from(col).unwrap(),
+                    u16::try_from(col).unwrap() + 3,
                     u16::try_from(row).unwrap(),
                 ))?;
             } else {
                 out.queue(cursor::MoveTo(
-                    u16::try_from(current_buffer.cursor().col).unwrap(),
+                    u16::try_from(current_buffer.cursor().col + 3).unwrap(),
                     u16::try_from(current_buffer.cursor().row - current_buffer.line_offset)
                         .unwrap(),
                 ))?;

@@ -1,10 +1,6 @@
 //! Communication from the server to the client
 use crossterm::style::Color;
-use std::{
-    collections::VecDeque,
-    io,
-    mem,
-};
+use std::{io, mem};
 use tokio::io::AsyncReadExt;
 use {crate::c2s::C2S, crate::Deserialize, crate::Serialize};
 
@@ -16,28 +12,29 @@ pub enum S2C<T> {
     Full(T),
     /// A client has made an update to their buffer
     Update((usize, C2S)),
-    /// A client has connected
-    NewClient(Color),
+    /// A client has connected with a username and a color
+    NewClient((String, Color)),
 }
 
 impl<T> Serialize for S2C<T>
 where
     T: Serialize,
 {
-    fn serialize(&self) -> VecDeque<u8> {
-        let mut ret = VecDeque::new();
+    fn serialize(&self) -> Vec<u8> {
+        let mut ret = Vec::new();
         match self {
             Self::Full(x) => {
-                ret.push_front(0);
+                ret.push(0);
                 ret.extend(x.serialize());
             }
             Self::Update((id, action)) => {
-                ret.push_front(1);
+                ret.push(1);
                 ret.extend((*id as u64).to_be_bytes());
                 ret.extend(action.serialize());
             }
-            Self::NewClient(color) => {
-                ret.push_front(2);
+            Self::NewClient((username, color)) => {
+                ret.push(2);
+                ret.extend(username.serialize());
                 ret.extend(color.serialize());
             }
         };
@@ -64,7 +61,9 @@ where
                 Self::Update((id, action))
             }
             2 => {
-                Self::NewClient(<Color as Deserialize>::deserialize(data).await?)
+                let username = String::deserialize(data).await?;
+                let color = <Color as Deserialize>::deserialize(data).await?;
+                Self::NewClient((username, color))
             }
             x => panic!("An invalid specifier was found ({x})"),
         })

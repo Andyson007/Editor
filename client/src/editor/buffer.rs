@@ -37,8 +37,13 @@ pub struct Socket {
 impl Buffer {
     /// Creates a new appstate
     #[must_use]
-    pub fn new(mut text: Text, colors: Vec<Color>, socket: Option<TcpStream>) -> Self {
-        let id = text.add_client();
+    pub fn new(
+        username: String,
+        mut text: Text,
+        colors: Vec<Color>,
+        socket: Option<TcpStream>,
+    ) -> Self {
+        let id = text.add_client(&username);
         Self {
             text,
             id,
@@ -66,7 +71,7 @@ impl Buffer {
     pub(super) async fn save(&mut self) -> tokio::io::Result<()> {
         if let Some(Socket { ref mut writer, .. }) = self.socket {
             writer
-                .write_all(C2S::Save.serialize().make_contiguous())
+                .write_all(&C2S::Save.serialize())
                 .await?;
 
             writer.flush().await?;
@@ -87,7 +92,7 @@ impl Buffer {
         match S2C::<Text>::deserialize(reader).await? {
             S2C::Full(_) => unreachable!("A full buffer shouldn't be sent"),
             S2C::Update((client_id, action)) => {
-                let client = self.text.client(client_id);
+                let client = self.text.client_mut(client_id);
                 match action {
                     C2S::Char(c) => {
                         client.push_char(c);
@@ -104,8 +109,8 @@ impl Buffer {
                 };
                 Ok(true)
             }
-            S2C::NewClient(color) => {
-                self.text.add_client();
+            S2C::NewClient((username, color)) => {
+                self.text.add_client(&username);
                 self.colors.push(color);
                 Ok(false)
             }

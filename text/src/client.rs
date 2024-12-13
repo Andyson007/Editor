@@ -22,6 +22,7 @@ pub struct Client {
     pub bufnr: usize,
     /// None -> You are currently not in insert mode
     pub data: Option<Insertdata>,
+    pub username: String,
 }
 
 /// Stores data related to being in insert mode
@@ -39,13 +40,15 @@ pub struct Insertdata {
 impl Client {
     /// Creates a new client.
     /// takes a buffer to write to as an input
-    pub const fn new(
+    pub fn new(
+        username: &str,
         piece: Arc<RwLock<Piece>>,
         buffer: Arc<RwLock<AppendOnlyStr>>,
         bufnr: usize,
         id_counter: Arc<RwLock<AutoIncrementing>>,
     ) -> Self {
         Self {
+            username: username.to_string(),
             piece,
             buffer,
             bufnr,
