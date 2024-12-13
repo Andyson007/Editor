@@ -1,7 +1,7 @@
 use std::io;
 
 use btep::{c2s::C2S, s2c::S2C, Deserialize, Serialize};
-use crossterm::style::Color;
+use crossterm::{style::Color, terminal};
 use text::Text;
 use tokio::{
     io::AsyncWriteExt,
@@ -70,9 +70,7 @@ impl Buffer {
     /// save the current buffer
     pub(super) async fn save(&mut self) -> tokio::io::Result<()> {
         if let Some(Socket { ref mut writer, .. }) = self.socket {
-            writer
-                .write_all(&C2S::Save.serialize())
-                .await?;
+            writer.write_all(&C2S::Save.serialize()).await?;
 
             writer.flush().await?;
         }
@@ -117,11 +115,40 @@ impl Buffer {
         }
     }
 
-    pub fn recalculate_cursor(&mut self, (_cols, rows): (u16, u16)) {
+    pub fn recalculate_cursor(&mut self, (_cols, rows): (u16, u16)) -> io::Result<()> {
+        let size = terminal::size()?;
+
+        let mut current_line = 0;
+        let mut relative_col = 0;
+        let mut cursor_offset = 0;
+        'outer: for buf in self.text.bufs() {
+            let read_lock = buf.read();
+            for c in read_lock.text.chars() {
+                if c == '\n' {
+                    relative_col = 0;
+                    if current_line >= size.1 as usize + self.line_offset {
+                        break 'outer;
+                    };
+                    current_line += 1;
+                } else if current_line >= self.line_offset {
+                    if relative_col >= size.0 as usize - 3 {
+                        relative_col = 0;
+                        current_line += 1;
+                        if self.cursor().row - self.line_offset >= current_line {
+                            cursor_offset += 1;
+                        }
+                    } else {
+                        relative_col += 1;
+                    }
+                }
+            }
+        }
         if self.line_offset > self.cursorpos.row {
             self.line_offset = self.cursorpos.row;
-        } else if self.line_offset + usize::from(rows) <= self.cursorpos.row {
-            self.line_offset = self.cursorpos.row - usize::from(rows) + 1;
+        } else if self.line_offset + usize::from(rows) <= self.cursorpos.row + cursor_offset {
+            self.line_offset +=
+                self.cursorpos.row + cursor_offset - self.line_offset - usize::from(rows) + 1;
         }
+        Ok(())
     }
 }
