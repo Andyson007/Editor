@@ -30,6 +30,7 @@ impl Client {
         let mut next_color = None;
         let mut self_pos = None;
         let mut relative_col = 0;
+        let mut cursor_offset = 0;
         out.queue(cursor::MoveTo(2, 0))?.queue(Print(PIPE_CHAR))?;
         'outer: for buf in current_buffer.text.bufs() {
             let read_lock = buf.read();
@@ -53,13 +54,32 @@ impl Client {
                     }
                     current_line += 1;
                 } else if current_line + 1 >= current_buffer.line_offset {
-                    relative_col += 1;
-                    if let Some(x) = next_color.take() {
-                        out.queue(SetBackgroundColor(x))?
-                            .queue(Print(c))?
-                            .queue(SetBackgroundColor(Color::Reset))?;
+                    if relative_col >= size.0 as usize - 3 {
+                        relative_col = 0;
+                        current_line += 1;
+                        if current_buffer.cursor().row - current_buffer.line_offset >= current_line
+                        {
+                            cursor_offset += 1;
+                        }
+                        if let Some(x) = next_color.take() {
+                            out.queue(SetBackgroundColor(x))?
+                                .queue(Print(" "))?
+                                .queue(MoveToNextLine(1))?
+                                .queue(SetBackgroundColor(Color::Reset))?;
+                        } else {
+                            out.queue(MoveToNextLine(1))?;
+                        }
+
+                        out.queue(MoveToColumn(2))?.queue(Print(PIPE_CHAR))?;
                     } else {
-                        out.queue(Print(c))?;
+                        relative_col += 1;
+                        if let Some(x) = next_color.take() {
+                            out.queue(SetBackgroundColor(x))?
+                                .queue(Print(c))?
+                                .queue(SetBackgroundColor(Color::Reset))?;
+                        } else {
+                            out.queue(Print(c))?;
+                        }
                     }
                 }
             }
@@ -121,8 +141,10 @@ impl Client {
             } else {
                 out.queue(cursor::MoveTo(
                     u16::try_from(current_buffer.cursor().col + 3).unwrap(),
-                    u16::try_from(current_buffer.cursor().row - current_buffer.line_offset)
-                        .unwrap(),
+                    u16::try_from(
+                        current_buffer.cursor().row - current_buffer.line_offset + cursor_offset,
+                    )
+                    .unwrap(),
                 ))?;
             }
         }
