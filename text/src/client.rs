@@ -40,15 +40,15 @@ pub struct Insertdata {
 impl Client {
     /// Creates a new client.
     /// takes a buffer to write to as an input
-    pub const fn new(
-        username: String,
+    pub fn new(
+        username: &str,
         piece: Arc<RwLock<Piece>>,
         buffer: Arc<RwLock<AppendOnlyStr>>,
         bufnr: usize,
         id_counter: Arc<RwLock<AutoIncrementing>>,
     ) -> Self {
         Self {
-            username,
+            username: username.to_string(),
             piece,
             buffer,
             bufnr,

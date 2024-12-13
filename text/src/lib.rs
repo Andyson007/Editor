@@ -153,7 +153,7 @@ impl Text {
     /// Creates a `Client` with an attached buffer
     /// # Panics
     /// probably only when failing to lock the buffers
-    pub fn add_client(&mut self, username: String) -> usize {
+    pub fn add_client(&mut self, username: &str) -> usize {
         let buf = Arc::new(RwLock::new(AppendOnlyStr::new()));
         let counter = Arc::new(RwLock::new(AutoIncrementing::new()));
         self.table
@@ -193,7 +193,8 @@ impl Text {
         self.table.read().unwrap().bufs()
     }
 
-    /// returns a mutable reference to a given client
+    /// returns an immutable reference to a given client
+    #[must_use]
     pub fn client(&self, idx: usize) -> &Client {
         &self.clients[idx]
     }
@@ -223,7 +224,7 @@ mod test {
     #[test]
     fn insert() {
         let mut text = Text::new();
-        text.add_client();
+        text.add_client("aoeu");
 
         text.clients[0].enter_insert((0, 0).into());
         text.clients[0].push_str("andy");
@@ -236,8 +237,8 @@ mod test {
     #[test]
     fn two_clients_non_overlapping() {
         let mut text = Text::new();
-        let client = text.add_client();
-        let client2 = text.add_client();
+        let client = text.add_client("a");
+        let client2 = text.add_client("a");
 
         text.client_mut(client).enter_insert((0, 0).into());
         text.client_mut(client).push_str("andy");
@@ -253,13 +254,13 @@ mod test {
     #[test]
     fn multiple_clients_lines() {
         let mut text = Text::new();
-        text.add_client();
-        text.add_client();
+        text.add_client("");
+        text.add_client("");
 
         text.client_mut(0).enter_insert((0, 0).into());
         text.client_mut(0).push_str("andy");
 
-        text.add_client();
+        text.add_client("");
 
         text.client_mut(1).enter_insert((0, 2).into());
         text.client_mut(2).enter_insert((0, 4).into());
@@ -276,7 +277,7 @@ mod test {
     #[test]
     fn multiple_inserts_single_client() {
         let mut text = Text::new();
-        text.add_client();
+        text.add_client("");
 
         text.client_mut(0).enter_insert((0, 0).into());
         text.client_mut(0).push_str("Hello");
@@ -295,7 +296,7 @@ mod test {
     #[test]
     fn backspace() {
         let mut text = Text::new();
-        text.add_client();
+        text.add_client("");
 
         text.client_mut(0).enter_insert((0, 0).into());
         text.client_mut(0).push_str("Hello");
@@ -332,7 +333,7 @@ mod test {
     #[test]
     fn backspace_typing() {
         let mut text = Text::new();
-        text.add_client();
+        text.add_client("");
         text.clients[0].enter_insert((0, 0).into());
         text.clients[0].enter_insert((0, 0).into());
         text.clients[0].push_char('t');
@@ -366,8 +367,8 @@ mod test {
     #[test]
     fn backspace_swap() {
         let mut text = Text::new();
-        text.add_client();
-        text.add_client();
+        text.add_client("");
+        text.add_client("");
         text.clients[0].enter_insert((0, 0).into());
         text.clients[0].push_char('t');
         text.clients[1].enter_insert((0, 1).into());
@@ -385,13 +386,10 @@ mod test {
     #[test]
     fn blocked_backspace() {
         let mut text = Text::new();
-        text.add_client();
-        text.add_client();
+        text.add_client("");
+        text.add_client("");
         text.clients[0].enter_insert((0, 0).into());
-        // println!("{} {:#?}", line!(), text.client(0));
         text.clients[0].push_char('t');
-        // println!("---------------------------------");
-        // println!("{} {:#?}", line!(), text.client(0));
         text.clients[0].push_char('e');
 
         println!(
@@ -408,15 +406,10 @@ mod test {
             text.client_mut(0).data.as_ref().map(|x| x.slice.read().buf)
         );
         text.clients[1].push_char('x');
-        // println!("{} {:?}", line!(), text.bufs().collect::<Vec<_>>());
         text.clients[0].backspace();
-        // println!("{} {:?}", line!(), text.bufs().collect::<Vec<_>>());
         text.clients[0].backspace();
-        // println!("{} {:?}", line!(), text.bufs().collect::<Vec<_>>());
         text.clients[0].push_char('t');
-        // println!("{} {:?}", line!(), text.bufs().collect::<Vec<_>>());
         text.clients[0].push_char('e');
-        // println!("{} {:?}", line!(), text.bufs().collect::<Vec<_>>());
 
         let mut iter = text.lines();
         assert_eq!(iter.next(), Some("txte".to_string()));

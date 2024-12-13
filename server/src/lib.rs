@@ -207,7 +207,7 @@ async fn handle_client(
         // println!("{data:#?}");
     }
     debug_assert_eq!(
-        text.write().unwrap().add_client(username.clone()),
+        text.write().unwrap().add_client(&username),
         client_id
     );
     colors.lock().unwrap().push(Color::Green);

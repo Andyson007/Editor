@@ -43,7 +43,7 @@ impl Buffer {
         colors: Vec<Color>,
         socket: Option<TcpStream>,
     ) -> Self {
-        let id = text.add_client(username);
+        let id = text.add_client(&username);
         Self {
             text,
             id,
@@ -110,7 +110,7 @@ impl Buffer {
                 Ok(true)
             }
             S2C::NewClient((username, color)) => {
-                self.text.add_client(username);
+                self.text.add_client(&username);
                 self.colors.push(color);
                 Ok(false)
             }
