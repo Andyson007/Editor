@@ -8,6 +8,10 @@ This Editor has multiple sub crates.
 - [utils](#Utils). Utilities
 - [bundled](#Bundled). Bundles together the server and client to create a single binary.
 
+You can also find more information with 
+```bush
+cargo doc --no-deps --open --document-private-items
+```
 
 # Append_only_str
 A string type which can only be appended to.
