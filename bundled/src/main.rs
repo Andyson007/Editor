@@ -13,7 +13,7 @@ use std::{
     path::PathBuf,
 };
 use termion::input::TermRead;
-use tracing::{info, level_filters::LevelFilter};
+use tracing::{info, level_filters::LevelFilter, trace};
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -90,7 +90,7 @@ struct ClientArgs {
     /// When not present no password will be assumed. A password might be required however if the
     /// target server is running with security enabled.
     /// A prompt will appear if you don't specify the password with the flag
-    #[arg(long, short = 'p')]
+    #[arg(long)]
     #[allow(clippy::option_option)]
     password: Option<Option<String>>,
     /// IP-address the server should be hosted on
@@ -98,7 +98,12 @@ struct ClientArgs {
     /// 0.0.0.0 in order to host on the local network
     #[arg(short = 'i', default_value = "127.0.0.1", conflicts_with = "address")]
     ip: Ipv4Addr,
-    #[arg(default_value = "3012", conflicts_with = "address")]
+    #[arg(
+        short = 'p',
+        long = "port",
+        default_value = "3012",
+        conflicts_with = "address"
+    )]
     port: u16,
     /// Sets the address to host on. This has to be exclive from both ip and port (e.g. 10.0.0.10:5000)
     #[arg(short = 'a')]
@@ -136,7 +141,7 @@ fn main() -> color_eyre::Result<()> {
                 .with_level(true)
                 .with_max_level(verbosity.unwrap_or(LevelFilter::OFF))
                 .init();
-            info!("{cli:?}");
+            trace!("{cli:?}");
             let address = address.unwrap_or(SocketAddrV4::new(*ip, *port));
             server::run(
                 (!disable_auto_save).then_some(*save_interval),
@@ -176,6 +181,7 @@ fn main() -> color_eyre::Result<()> {
                 })
             });
             let address = address.unwrap_or(SocketAddrV4::new(*ip, *port));
+            println!("{address}");
             client::run(address, username.as_str(), password.as_deref())?;
         }
     };
