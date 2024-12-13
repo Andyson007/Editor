@@ -69,7 +69,7 @@ struct ServerArgs {
     /// Sets the port to listen on
     #[arg(short = 'p', long, default_value = "3012", conflicts_with = "address")]
     port: u16,
-    /// Sets the address to host on. This has to be exclive from both ip and port
+    /// Sets the address to host on. This has to be exclive from both ip and port (e.g. 0.0.0.0:5000)
     #[arg(short = 'a', long)]
     address: Option<SocketAddrV4>,
     #[cfg(feature = "security")]
@@ -100,6 +100,7 @@ struct ClientArgs {
     ip: Ipv4Addr,
     #[arg(default_value = "3012", conflicts_with = "address")]
     port: u16,
+    /// Sets the address to host on. This has to be exclive from both ip and port (e.g. 10.0.0.10:5000)
     #[arg(short = 'a')]
     address: Option<SocketAddrV4>,
 }
