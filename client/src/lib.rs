@@ -93,7 +93,7 @@ pub async fn run(
         }? {
             let size = terminal::size()?;
             app.curr_mut().recalculate_cursor((size.0, size.1 - 1))?;
-            app.redraw(&mut out).unwrap();
+            app.redraw(&mut out)?;
             out.flush()?;
         }
     }
