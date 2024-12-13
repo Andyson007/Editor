@@ -53,7 +53,7 @@ impl Client {
                         out.queue(MoveToColumn(2))?.queue(Print(PIPE_CHAR))?;
                     }
                     current_line += 1;
-                } else if current_line + 1 >= current_buffer.line_offset {
+                } else if current_line >= current_buffer.line_offset {
                     if relative_col >= size.0 as usize - 3 {
                         relative_col = 0;
                         current_line += 1;
@@ -61,14 +61,7 @@ impl Client {
                         {
                             cursor_offset += 1;
                         }
-                        if let Some(x) = next_color.take() {
-                            out.queue(SetBackgroundColor(x))?
-                                .queue(Print(" "))?
-                                .queue(MoveToNextLine(1))?
-                                .queue(SetBackgroundColor(Color::Reset))?;
-                        } else {
-                            out.queue(MoveToNextLine(1))?;
-                        }
+                        out.queue(MoveToNextLine(1))?;
 
                         out.queue(MoveToColumn(2))?.queue(Print(PIPE_CHAR))?;
                     } else {
