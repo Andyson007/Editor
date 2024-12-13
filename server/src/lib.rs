@@ -192,20 +192,17 @@ async fn handle_client(
     let (mut read, mut write) = stream.into_split();
     {
         debug!("{client_id} Connected {:?}", username);
-        let mut data = {
+        let data = {
             let data = text.read().unwrap();
             let full = S2C::Full(&*data);
             full.serialize()
         };
         // dbg!(&data);
 
-        write.write_u8(4).await?;
         write.write_all(&data).await?;
 
-        write.write_u8(5).await?;
         let colors = colors.lock().unwrap().serialize();
         write.write_all(&colors).await?;
-        write.write_u8(6).await?;
         write.flush().await?;
         // println!("{data:#?}");
     }

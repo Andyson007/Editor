@@ -2,7 +2,6 @@
 #![feature(linked_list_cursors)]
 #![feature(async_iterator)]
 use std::{
-    collections::VecDeque,
     io::{self, Read},
     iter,
     str::FromStr,

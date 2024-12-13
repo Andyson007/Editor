@@ -1,6 +1,6 @@
 //! Communication from the server to the client
 use crossterm::style::Color;
-use std::{collections::VecDeque, io, mem};
+use std::{io, mem};
 use tokio::io::AsyncReadExt;
 use {crate::c2s::C2S, crate::Deserialize, crate::Serialize};
 

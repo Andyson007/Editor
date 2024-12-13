@@ -2,7 +2,6 @@
 #![feature(linked_list_cursors)]
 
 use std::{
-    collections::VecDeque,
     io::{self, Read},
     sync::{Arc, RwLock},
 };

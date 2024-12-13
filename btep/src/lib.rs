@@ -14,7 +14,7 @@ pub mod prelude {
 }
 
 use core::str;
-use std::{collections::VecDeque, io, mem};
+use std::{io, mem};
 
 use crossterm::style::Color;
 use tokio::io::{AsyncRead, AsyncReadExt};

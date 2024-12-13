@@ -4,7 +4,6 @@ use crossterm::{
     terminal::{self, ClearType},
 };
 use std::io;
-use text::client;
 use utils::other::CursorPos;
 
 use crossterm::QueueableCommand;
