@@ -3,6 +3,7 @@ The scope of this project is to create a vim-inspired editor for collaboration w
 
 # How to use
 You can run the a server for this client using 
+You might have to open up a port for this to be acceble from other computers
 ```sh
 cargo r -- server
 ```
@@ -21,6 +22,7 @@ to connect with a client you will have to run
 ```sh
 cargo r -- client --password
 ```
+
 
 
 ## Goals
