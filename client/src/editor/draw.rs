@@ -26,7 +26,7 @@ impl Client {
 
         out.queue(terminal::Clear(ClearType::All))?;
         let size = crossterm::terminal::size()?;
-        let mut current_line = 0;
+        let mut current_relative_line = 0;
         let mut next_color = None;
         let mut self_pos = None;
         let mut relative_col = 0;
@@ -37,10 +37,10 @@ impl Client {
             for c in read_lock.text.chars() {
                 if c == '\n' {
                     relative_col = 0;
-                    if current_line >= size.1 as usize + current_buffer.line_offset {
+                    if current_relative_line >= size.1 as usize + current_buffer.line_offset {
                         break 'outer;
                     };
-                    if current_line >= current_buffer.line_offset {
+                    if current_relative_line >= current_buffer.line_offset {
                         if let Some(x) = next_color.take() {
                             out.queue(SetBackgroundColor(x))?
                                 .queue(Print(" "))?
@@ -52,12 +52,13 @@ impl Client {
 
                         out.queue(MoveToColumn(2))?.queue(Print(PIPE_CHAR))?;
                     }
-                    current_line += 1;
-                } else if current_line >= current_buffer.line_offset {
+                    current_relative_line += 1;
+                } else if current_relative_line >= current_buffer.line_offset {
                     if relative_col >= size.0 as usize - 3 {
                         relative_col = 0;
-                        current_line += 1;
-                        if current_buffer.cursor().row - current_buffer.line_offset >= current_line
+                        current_relative_line += 1;
+                        if current_buffer.cursor().row - current_buffer.line_offset
+                            >= current_relative_line - cursor_offset
                         {
                             cursor_offset += 1;
                         }
@@ -80,7 +81,7 @@ impl Client {
                 if occupied {
                     if buf == current_buffer.id {
                         self_pos = Some(CursorPos {
-                            row: current_line - current_buffer.line_offset,
+                            row: current_relative_line - current_buffer.line_offset,
                             col: relative_col,
                         });
                     } else {
