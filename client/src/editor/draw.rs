@@ -71,14 +71,20 @@ impl Client {
                             col: relative_col,
                         });
                     } else {
-                        let curr_id = current_buffer.id;
-                        let color =
-                            current_buffer.colors[if buf < curr_id { buf } else { buf - 1 }];
+                        let color = current_buffer.colors[if buf < current_buffer.id {
+                            buf
+                        } else {
+                            buf - 1
+                        }];
 
+                        let username = &current_buffer.text.client(buf).username;
                         out.queue(SavePosition)?
                             .queue(MoveToColumn(0))?
                             .queue(SetForegroundColor(color))?
-                            .queue(Print(&current_buffer.text.client(curr_id).username))?
+                            .queue(Print(match username.len() {
+                                ..2 => username,
+                                2.. => &username[0..2],
+                            }))?
                             .queue(SetForegroundColor(Color::Reset))?
                             .queue(RestorePosition)?;
                         next_color = Some(color);
