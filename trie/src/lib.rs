@@ -1,8 +1,6 @@
-use std::{
-    collections::{hash_map::Entry, HashMap},
-    hash::Hash,
-};
+use std::{collections::HashMap, hash::Hash};
 
+#[derive(Debug)]
 pub struct Trie<K, V>
 where
     K: Hash,
@@ -80,6 +78,7 @@ where
     }
 }
 
+#[derive(Debug)]
 pub struct TrieChild<K, V>
 where
     K: Hash,

@@ -3,9 +3,9 @@
 //! to the queue for sending to the server, but *not*
 //! actually sending them
 
-use futures::FutureExt;
-use std::{cmp, io, mem};
-use tokio::{io::AsyncWriteExt, net::TcpStream};
+use core::panic;
+use std::{cmp, io, mem, time::Duration};
+use tokio::{io::AsyncWriteExt, net::TcpStream, time};
 
 use btep::{c2s::C2S, Serialize};
 use buffer::Buffer;
@@ -24,7 +24,7 @@ pub struct Client {
     /// All the buffers the client is connected to
     pub buffers: Vec<Buffer>,
     /// The buffer that the client should currently be showing
-    current_buffer: usize,
+    pub current_buffer: usize,
     /// Stores the current editing mode. This is
     /// effectively the same as Vims insert/Normal mode
     pub(crate) modeinfo: ModeInfo,
@@ -113,21 +113,30 @@ impl Client {
         false
     }
 
-    /// Handles a keyevent. This method handles every `mode`
-    pub async fn handle_keyevent(&mut self, input: &KeyEvent) -> io::Result<bool> {
-        match self.modeinfo.mode {
-            Mode::Normal => self.handle_normal_keyevent(input).await?,
-            Mode::Insert => self.handle_insert_keyevent(input).await?,
-            Mode::Command(_) => {
-                if self.handle_command_keyevent(input).await? {
-                    return Ok(true);
+    pub async fn execute_keyevents(&mut self) -> io::Result<bool> {
+        let keymap = mem::take(&mut self.modeinfo.keymap);
+        for key in &keymap {
+            match self.modeinfo.mode {
+                Mode::Normal => self.handle_normal_keyevent(key).await?,
+                Mode::Insert => self.handle_insert_keyevent(key).await?,
+                Mode::Command(_) => {
+                    if self.handle_command_keyevent(key).await? {
+                        return Ok(true);
+                    }
                 }
-            }
-        };
+            };
+        }
         if let Some(buffer::Socket { ref mut writer, .. }) = self.curr_mut().socket {
             writer.flush().await?;
         }
         Ok(false)
+    }
+
+    /// Handles a keyevent. This method handles every `mode`
+    pub async fn handle_keyevent(&mut self, input: &KeyEvent) -> io::Result<()> {
+        self.modeinfo.timer = Some(time::sleep(Duration::from_secs(1)));
+        self.modeinfo.keymap.push(*input);
+        Ok(())
     }
 
     fn take_cmd(&mut self) -> Option<String> {
@@ -374,9 +383,10 @@ impl Client {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Default)]
 pub struct ModeInfo {
-    pub(crate) keymap: String,
+    pub(crate) keymap: Vec<KeyEvent>,
+    pub(crate) timer: Option<tokio::time::Sleep>,
     pub(crate) mode: Mode,
 }
 

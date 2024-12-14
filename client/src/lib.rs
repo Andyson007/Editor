@@ -23,7 +23,7 @@ use text::Text;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::TcpStream,
-    time::{self, Duration},
+    time,
 };
 
 /// Runs a the client side of the editor
@@ -63,10 +63,8 @@ pub async fn run(
                     Some(Ok(event)) => {
                         match event {
                             Event::Key(event) => {
-                                if app.handle_keyevent(&event).await? {
-                                    break;
-                                }
-                                true
+                                app.handle_keyevent(&event).await?;
+                                false
                             }
                             Event::Mouse(_event) => todo!("No mouse support sorry"),
                             Event::Paste(_data) => todo!("No paste support sorry"),
@@ -79,7 +77,7 @@ pub async fn run(
                 })
             },
             length = async {
-                if let Some(x) = &mut app.curr_mut().socket{
+                if let Some(x) = &mut app.buffers[app.current_buffer].socket{
                     let mut buf = [0];
                     x.reader.peek(&mut buf).await
                 } else {
@@ -91,6 +89,19 @@ pub async fn run(
                 app.curr_mut().update().await ?;
                 Ok::<bool, io::Error>(true)
             },
+            _ = async {
+                if let Some(timer) = app.modeinfo.timer.as_ref() {
+                    time::sleep_until(timer.deadline()).await;
+                } else {
+                    future::pending::<()>().await;
+                    unreachable!()
+                }
+            } => {
+                if app.execute_keyevents().await? {
+                    break
+                }
+                Ok(true)
+            }
         }? {
             let size = terminal::size()?;
             app.curr_mut().recalculate_cursor((size.0, size.1 - 1))?;

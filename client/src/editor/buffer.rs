@@ -1,7 +1,7 @@
 use std::io;
 
 use btep::{c2s::C2S, s2c::S2C, Deserialize, Serialize};
-use crossterm::{style::Color, terminal};
+use crossterm::{event::KeyEvent, style::Color, terminal};
 use text::Text;
 use tokio::{
     io::AsyncWriteExt,
@@ -10,6 +10,7 @@ use tokio::{
         TcpStream,
     },
 };
+use trie::Trie;
 use utils::other::CursorPos;
 
 #[derive(Debug)]
@@ -26,6 +27,7 @@ pub struct Buffer {
     pub(crate) line_offset: usize,
     pub(crate) socket: Option<Socket>,
     pub(crate) colors: Vec<Color>,
+    pub(crate) bindings: Trie<KeyEvent, ()>,
 }
 
 #[derive(Debug)]
@@ -45,6 +47,7 @@ impl Buffer {
     ) -> Self {
         let id = text.add_client(&username);
         Self {
+            bindings: Trie::default(),
             text,
             id,
             cursorpos: CursorPos::default(),
