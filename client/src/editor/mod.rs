@@ -183,7 +183,6 @@ impl Client {
     /// # Panics
     /// This function may panic if this client isn't in insert mode when this function is called
     async fn handle_insert_keyevent(&mut self, input: &KeyEvent) -> io::Result<()> {
-        let curr_id = self.curr().id;
         if matches!(
             input,
             KeyEvent {
@@ -193,48 +192,11 @@ impl Client {
                 ..
             }
         ) {
-            self.mode = Mode::Normal;
-            self.curr_mut().text.client_mut(curr_id).exit_insert();
-
-            if let Some(buffer::Socket { ref mut writer, .. }) = self.curr_mut().socket {
-                writer
-                    .write_all(&C2S::ExitInsert.serialize())
-                    .await
-                    .unwrap();
-            }
-
-            return Ok(());
+            return self.exit_insert().await;
         }
 
         match input.code {
-            KeyCode::Backspace => 'backspace: {
-                if self.curr_mut().cursorpos == (CursorPos { row: 0, col: 0 }) {
-                    break 'backspace;
-                }
-                let prev_line_len = (self.curr_mut().cursorpos.row != 0).then(|| {
-                    self.curr_mut()
-                        .text
-                        .lines()
-                        .nth(self.curr_mut().cursorpos.row - 1)
-                        .unwrap()
-                        .len()
-                });
-
-                let (deleted, swaps) = self.curr_mut().text.client_mut(curr_id).backspace();
-                if let Some(buffer::Socket { ref mut writer, .. }) = self.curr_mut().socket {
-                    writer
-                        .write_all(&C2S::Backspace(swaps).serialize())
-                        .await?;
-                }
-                if deleted.is_some() {
-                    if self.curr_mut().cursorpos.col == 0 {
-                        self.curr_mut().cursorpos.row -= 1;
-                        self.curr_mut().cursorpos.col = prev_line_len.unwrap();
-                    } else {
-                        self.curr_mut().cursorpos.col -= 1;
-                    }
-                }
-            }
+            KeyCode::Backspace => self.backspace().await?,
             KeyCode::Enter => {
                 self.type_char('\n').await?;
             }
@@ -242,15 +204,7 @@ impl Client {
                 self.type_char(c).await?;
             }
             KeyCode::Esc => {
-                self.mode = Mode::Normal;
-                self.curr_mut().text.client_mut(curr_id).exit_insert();
-
-                if let Some(buffer::Socket { ref mut writer, .. }) = self.curr_mut().socket {
-                    writer
-                        .write_all(&C2S::ExitInsert.serialize())
-                        .await
-                        .unwrap();
-                }
+                self.exit_insert().await?;
             }
             KeyCode::Home => todo!(),
             KeyCode::End => todo!(),
@@ -288,10 +242,52 @@ impl Client {
             _ => self.curr_mut().cursorpos.col += 1,
         }
         if let Some(buffer::Socket { ref mut writer, .. }) = self.curr_mut().socket {
-            writer
-                .write_all(&C2S::Char(c).serialize())
-                .await?
+            writer.write_all(&C2S::Char(c).serialize()).await?
         }
+        Ok(())
+    }
+
+    async fn exit_insert(&mut self) -> io::Result<()> {
+        let curr_id = self.curr().id;
+        self.mode = Mode::Normal;
+        self.curr_mut().text.client_mut(curr_id).exit_insert();
+
+        if let Some(buffer::Socket { ref mut writer, .. }) = self.curr_mut().socket {
+            writer.write_all(&C2S::ExitInsert.serialize()).await?
+        }
+        Ok(())
+    }
+
+    async fn backspace(&mut self) -> io::Result<()> {
+        if self.curr_mut().cursorpos == (CursorPos { row: 0, col: 0 }) {
+            return Ok(());
+        }
+
+        let curr_id = self.curr().id;
+
+        let prev_line_len = (self.curr_mut().cursorpos.row != 0).then(|| {
+            self.curr_mut()
+                .text
+                .lines()
+                .nth(self.curr_mut().cursorpos.row - 1)
+                .unwrap()
+                .len()
+        });
+
+        let (deleted, swaps) = self.curr_mut().text.client_mut(curr_id).backspace();
+        if let Some(buffer::Socket { ref mut writer, .. }) = self.curr_mut().socket {
+            writer.write_all(&C2S::Backspace(swaps).serialize()).await?;
+        }
+
+        if deleted.is_some() {
+            if self.curr_mut().cursorpos.col == 0 {
+                self.curr_mut().cursorpos.row -= 1;
+                self.curr_mut().cursorpos.col = prev_line_len.unwrap();
+            } else {
+                self.curr_mut().cursorpos.col -= 1;
+            }
+        }
+
         Ok(())
     }
 
@@ -368,9 +364,7 @@ impl Client {
         let curr_id = self.curr_mut().id;
         let (_offset, _id) = self.curr_mut().text.client_mut(curr_id).enter_insert(pos);
         if let Some(buffer::Socket { ref mut writer, .. }) = self.curr_mut().socket {
-            writer
-                .write_all(&C2S::EnterInsert(pos).serialize())
-                .await?;
+            writer.write_all(&C2S::EnterInsert(pos).serialize()).await?;
         }
         self.mode = Mode::Insert;
         Ok(())
