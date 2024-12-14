@@ -31,7 +31,7 @@ where
         prev
     }
 
-    pub fn get<I>(&mut self, key: I) -> Option<&V>
+    pub fn get<I>(&self, key: I) -> Option<&V>
     where
         K: Eq,
         I: IntoIterator<Item = K>,
@@ -43,6 +43,20 @@ where
             curr = curr.nodes.get(&elem)?;
         }
         curr.value.as_ref()
+    }
+
+    pub fn get_mut<I>(&mut self, key: I) -> Option<&mut V>
+    where
+        K: Eq,
+        I: IntoIterator<Item = K>,
+    {
+        let mut iter = key.into_iter();
+        let next = iter.next()?;
+        let mut curr = self.nodes.get_mut(&next)?;
+        for elem in iter {
+            curr = curr.nodes.get_mut(&elem)?;
+        }
+        curr.value.as_mut()
     }
 }
 
@@ -86,5 +100,13 @@ mod test {
         let mut trie = Trie::new();
         assert_eq!(trie.insert([1, 2, 3], ()), None);
         assert_eq!(trie.insert([1, 2, 3], ()), Some(()));
+    }
+
+    #[test]
+    fn no_intermediate() {
+        let mut trie = Trie::new();
+        assert_eq!(trie.insert([1, 2, 3], ()), None);
+        assert_eq!(trie.get([1, 2, 3]), Some(&()));
+        assert_eq!(trie.get([1, 2]), None);
     }
 }
