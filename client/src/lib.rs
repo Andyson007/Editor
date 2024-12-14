@@ -23,6 +23,7 @@ use text::Text;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::TcpStream,
+    time::{self, Duration},
 };
 
 /// Runs a the client side of the editor

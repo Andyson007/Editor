@@ -3,6 +3,7 @@
 //! to the queue for sending to the server, but *not*
 //! actually sending them
 
+use futures::FutureExt;
 use std::{cmp, io, mem};
 use tokio::{io::AsyncWriteExt, net::TcpStream};
 
@@ -26,7 +27,7 @@ pub struct Client {
     current_buffer: usize,
     /// Stores the current editing mode. This is
     /// effectively the same as Vims insert/Normal mode
-    pub(crate) mode: Mode,
+    pub(crate) modeinfo: ModeInfo,
     /// Stores a message that should be rendered to the user
     pub(crate) info: Option<String>,
 }
@@ -39,7 +40,7 @@ impl Client {
         Self {
             buffers: Vec::from([buf]),
             current_buffer: 0,
-            mode: Mode::Normal,
+            modeinfo: ModeInfo::default(),
             info: Some("Press Escape then :help to view help".to_string()),
         }
     }
@@ -56,7 +57,7 @@ impl Client {
         Self {
             buffers: Vec::from([buf]),
             current_buffer: 0,
-            mode: Mode::Normal,
+            modeinfo: ModeInfo::default(),
             info: Some("Press Escape then :help to view help".to_string()),
         }
     }
@@ -114,7 +115,7 @@ impl Client {
 
     /// Handles a keyevent. This method handles every `mode`
     pub async fn handle_keyevent(&mut self, input: &KeyEvent) -> io::Result<bool> {
-        match self.mode {
+        match self.modeinfo.mode {
             Mode::Normal => self.handle_normal_keyevent(input).await?,
             Mode::Insert => self.handle_insert_keyevent(input).await?,
             Mode::Command(_) => {
@@ -128,29 +129,31 @@ impl Client {
         }
         Ok(false)
     }
-    fn take_mode(&mut self) -> Option<String> {
-        if let Mode::Command(cmd) = mem::replace(&mut self.mode, Mode::Normal) {
-            Some(cmd)
-        } else {
-            None
-        }
+
+    fn take_cmd(&mut self) -> Option<String> {
+        let Mode::Command(cmd) = &self.modeinfo.mode else {
+            return None;
+        };
+        let cmd = cmd.clone();
+        self.modeinfo.set_mode(Mode::Normal);
+        Some(cmd.clone())
     }
 
     async fn handle_command_keyevent(&mut self, input: &KeyEvent) -> io::Result<bool> {
-        let Mode::Command(ref mut cmd) = self.mode else {
+        let Mode::Command(ref mut cmd) = self.modeinfo.mode else {
             panic!("function incorrectly called");
         };
         match input.code {
             KeyCode::Backspace => drop(cmd.pop()),
             KeyCode::Enter => {
-                let cmd = self.take_mode().unwrap();
+                let cmd = self.take_cmd().unwrap();
                 if self.execute_commad(&cmd).await? {
                     return Ok(true);
                 }
-                self.mode = Mode::Normal;
+                self.modeinfo.set_mode(Mode::Insert);
             }
             KeyCode::Char(c) => cmd.push(c),
-            KeyCode::Esc => self.mode = Mode::Normal,
+            KeyCode::Esc => self.modeinfo.set_mode(Mode::Normal),
             KeyCode::Left
             | KeyCode::Right
             | KeyCode::Up
@@ -249,7 +252,7 @@ impl Client {
 
     async fn exit_insert(&mut self) -> io::Result<()> {
         let curr_id = self.curr().id;
-        self.mode = Mode::Normal;
+        self.modeinfo.set_mode(Mode::Normal);
         self.curr_mut().text.client_mut(curr_id).exit_insert();
 
         if let Some(buffer::Socket { ref mut writer, .. }) = self.curr_mut().socket {
@@ -315,7 +318,7 @@ impl Client {
                 self.enter_insert(pos).await?;
                 self.type_char('\n').await?;
             }
-            KeyCode::Char(':') => self.mode = Mode::Command(String::new()),
+            KeyCode::Char(':') => self.modeinfo.set_mode(Mode::Command(String::new())),
             KeyCode::Left | KeyCode::Char('h') => {
                 self.curr_mut().cursorpos.col = self.curr_mut().cursorpos.col.saturating_sub(1);
             }
@@ -366,8 +369,21 @@ impl Client {
         if let Some(buffer::Socket { ref mut writer, .. }) = self.curr_mut().socket {
             writer.write_all(&C2S::EnterInsert(pos).serialize()).await?;
         }
-        self.mode = Mode::Insert;
+        self.modeinfo.set_mode(Mode::Insert);
         Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct ModeInfo {
+    pub(crate) keymap: String,
+    pub(crate) mode: Mode,
+}
+
+impl ModeInfo {
+    pub fn set_mode(&mut self, mode: Mode) {
+        self.keymap.clear();
+        self.mode = mode;
     }
 }
 
