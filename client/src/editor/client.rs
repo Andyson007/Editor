@@ -13,7 +13,7 @@ use utils::other::CursorPos;
 
 use super::buffer::Buffer;
 /// Represents a single client.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Client {
     /// All the buffers the client is connected to
     pub buffers: Vec<Buffer>,
@@ -110,7 +110,7 @@ impl Client {
         Some(cmd.clone())
     }
 
-    pub(crate) async fn handle_command_keyevent(&mut self, input: &KeyEvent) -> io::Result<bool> {
+    pub(crate) async fn handle_command_keyevent(&mut self, input: KeyEvent) -> io::Result<bool> {
         let Mode::Command(ref mut cmd) = self.modeinfo.mode else {
             panic!("function incorrectly called");
         };
@@ -156,7 +156,7 @@ impl Client {
     /// This function does not flush the output stream
     /// # Panics
     /// This function may panic if this client isn't in insert mode when this function is called
-    pub(crate) async fn handle_insert_keyevent(&mut self, input: &KeyEvent) -> io::Result<()> {
+    pub(crate) async fn handle_insert_keyevent(&mut self, input: KeyEvent) -> io::Result<()> {
         if matches!(
             input,
             KeyEvent {
@@ -266,7 +266,7 @@ impl Client {
     }
 
     /// handles a keypress as if were performed in `Normal` mode
-    pub(crate) async fn handle_normal_keyevent(&mut self, input: &KeyEvent) -> io::Result<()> {
+    pub(crate) async fn handle_normal_keyevent(&mut self, input: KeyEvent) -> io::Result<()> {
         match input.code {
             KeyCode::Char('i') => {
                 let pos = self.curr_mut().cursorpos;

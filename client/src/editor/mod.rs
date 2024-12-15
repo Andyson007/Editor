@@ -42,17 +42,16 @@ impl App {
 
     pub async fn execute_keyevents(&mut self) -> io::Result<bool> {
         let keymap = mem::take(&mut self.client.modeinfo.keymap);
-
         let mode = self.client.modeinfo.mode.clone();
         let binding = self.bindings[&mode].get(keymap.iter().copied());
 
         let Some((node, _)) = binding else {
             for key in &keymap {
                 match self.client.modeinfo.mode {
-                    Mode::Normal => self.client.handle_normal_keyevent(key).await?,
-                    Mode::Insert => self.client.handle_insert_keyevent(key).await?,
+                    Mode::Normal => self.client.handle_normal_keyevent(*key).await?,
+                    Mode::Insert => self.client.handle_insert_keyevent(*key).await?,
                     Mode::Command(_) => {
-                        if self.client.handle_command_keyevent(key).await? {
+                        if self.client.handle_command_keyevent(*key).await? {
                             return Ok(true);
                         }
                     }
@@ -60,7 +59,8 @@ impl App {
             }
             return Ok(false);
         };
-        node(&mut self.client);
+        drop(keymap);
+        node(&mut self.client)?;
         if let Some(buffer::Socket { ref mut writer, .. }) = self.client.curr_mut().socket {
             writer.flush().await?;
         }

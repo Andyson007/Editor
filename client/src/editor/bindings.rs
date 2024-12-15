@@ -1,28 +1,41 @@
-use std::ops::{Index, IndexMut};
+use std::{
+    future::Future,
+    io,
+    ops::{Index, IndexMut},
+    pin::Pin,
+};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use futures::executor::block_on;
 use trie::Trie;
 
 use super::client::{Client, Mode};
 
+type Action = Box<dyn Fn(&mut Client) -> io::Result<()>>;
+
 pub(crate) struct Bindings {
-    insert: Trie<KeyEvent, Box<dyn Fn(&mut Client)>>,
-    normal: Trie<KeyEvent, Box<dyn Fn(&mut Client)>>,
-    command: Trie<KeyEvent, Box<dyn Fn(&mut Client)>>,
+    insert: Trie<KeyEvent, Action>,
+    normal: Trie<KeyEvent, Action>,
+    command: Trie<KeyEvent, Action>,
 }
 
 impl Default for Bindings {
     fn default() -> Self {
         Self {
-            insert: Default::default(),
-            normal: {
-                let mut trie: Trie<KeyEvent, Box<dyn Fn(&mut Client)>> = Trie::new();
+            normal: Default::default(),
+            insert: {
+                let mut trie: Trie<KeyEvent, Action> = Trie::new();
                 trie.insert(
                     [
-                        KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE),
-                        KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE),
+                        KeyEvent::new(KeyCode::Char('u'), KeyModifiers::NONE),
+                        KeyEvent::new(KeyCode::Char('h'), KeyModifiers::NONE),
                     ],
-                    Box::new(|client: &mut Client| panic!()),
+                    Box::new(|client: &mut Client| {
+                        block_on(client.handle_insert_keyevent(KeyEvent::new(
+                            KeyCode::Esc,
+                            KeyModifiers::NONE,
+                        )))
+                    }),
                 );
                 trie
             },
@@ -31,8 +44,8 @@ impl Default for Bindings {
     }
 }
 
-impl Index<&Mode> for Bindings {
-    type Output = Trie<KeyEvent, Box<dyn Fn(&mut Client)>>;
+impl<'a> Index<&Mode> for Bindings {
+    type Output = Trie<KeyEvent, Action>;
 
     fn index(&self, mode: &Mode) -> &Self::Output {
         match mode {

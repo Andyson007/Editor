@@ -3,7 +3,6 @@ pub mod editor;
 pub mod errors;
 
 use btep::{prelude::S2C, Deserialize};
-use editor::App;
 use core::panic;
 use crossterm::{
     event::{EnableBracketedPaste, Event, EventStream},
@@ -13,6 +12,7 @@ use crossterm::{
         self, disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
     },
 };
+use editor::App;
 use futures::{future, FutureExt, StreamExt};
 use std::{
     io::{self, Write},
@@ -86,7 +86,7 @@ pub async fn run(
                 }
             } => {
                 assert_eq!(length?, 1, "The server disconnected");
-                app.client.curr_mut().update().await ?;
+                app.client.curr_mut().update().await?;
                 Ok::<bool, io::Error>(true)
             },
             _ = async {
