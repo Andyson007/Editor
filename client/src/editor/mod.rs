@@ -41,41 +41,55 @@ impl App {
     }
 
     pub async fn execute_keyevents(&mut self) -> io::Result<bool> {
-        let keymap = mem::take(&mut self.client.modeinfo.keymap);
-        let mode = self.client.modeinfo.mode.clone();
-        let binding = self.bindings[&mode].get(keymap.iter().copied());
-
-        let Some((node, _)) = binding else {
-            for key in &keymap {
-                match self.client.modeinfo.mode {
-                    Mode::Normal => self.client.handle_normal_keyevent(*key).await?,
-                    Mode::Insert => self.client.handle_insert_keyevent(*key).await?,
-                    Mode::Command(_) => {
-                        if self.client.handle_command_keyevent(*key).await? {
-                            return Ok(true);
-                        }
-                    }
-                };
-            }
-            return Ok(false);
-        };
-        drop(keymap);
-        node(&mut self.client)?;
+        self.client.modeinfo.timer = None;
+        while !self.client.modeinfo.keymap.is_empty() {
+            self.execute_top_keyevent().await?;
+        }
         if let Some(buffer::Socket { ref mut writer, .. }) = self.client.curr_mut().socket {
             writer.flush().await?;
         }
         Ok(false)
     }
 
-    /// Handles a keyevent. This method handles every `mode`
+    /// executes the longest command from the current keymap
+    /// # Note
+    /// does not flush the socket
+    async fn execute_top_keyevent(&mut self) -> io::Result<bool> {
+        if self.client.modeinfo.keymap.is_empty() {
+            return Ok(false);
+        }
+        let modeinfo = &self.client.modeinfo;
+        for i in (1..self.client.modeinfo.keymap.len()).rev() {
+            let binding = self.bindings[&modeinfo.mode].get(modeinfo.keymap[0..i].iter().copied());
+            if let Some((node, _)) = binding {
+                node(&mut self.client)?;
+                self.client.modeinfo.keymap.drain(0..i);
+                return Ok(true);
+            };
+        }
+        panic!(
+            "There aren't any keybinds available for {:?}",
+            self.client.modeinfo.keymap
+        );
+    }
+
     pub async fn handle_keyevent(&mut self, input: &KeyEvent) -> io::Result<()> {
         self.client.modeinfo.keymap.push(*input);
-        if self.bindings[&self.client.modeinfo.mode]
+        let should_flush = !self.bindings[&self.client.modeinfo.mode]
+            .exists_child(self.client.modeinfo.keymap.iter().copied());
+
+        while !self.bindings[&self.client.modeinfo.mode]
             .exists_child(self.client.modeinfo.keymap.iter().copied())
         {
+            self.execute_top_keyevent().await?;
+        }
+        if should_flush {
+            if let Some(buffer::Socket { ref mut writer, .. }) = self.client.curr_mut().socket {
+                writer.flush().await?;
+            }
+        }
+        if !self.client.modeinfo.keymap.is_empty() {
             self.client.modeinfo.timer = Some(time::sleep(Duration::from_secs(1)));
-        } else {
-            self.client.modeinfo.timer = Some(time::sleep(Duration::ZERO));
         }
         Ok(())
     }

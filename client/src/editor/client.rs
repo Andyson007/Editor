@@ -62,7 +62,7 @@ impl Client {
     }
 
     /// Executed a command written in command mode
-    async fn execute_commad(&mut self, cmd: &str) -> io::Result<bool> {
+    async fn execute_command(&mut self, cmd: &str) -> io::Result<bool> {
         match cmd {
             "q" => return Ok(self.close_current_buffer()),
             "w" => self.curr_mut().save().await?,
@@ -118,7 +118,7 @@ impl Client {
             KeyCode::Backspace => drop(cmd.pop()),
             KeyCode::Enter => {
                 let cmd = self.take_cmd().unwrap();
-                if self.execute_commad(&cmd).await? {
+                if self.execute_command(&cmd).await? {
                     return Ok(true);
                 }
                 self.modeinfo.set_mode(Mode::Insert);
@@ -180,23 +180,25 @@ impl Client {
             KeyCode::Esc => {
                 self.exit_insert().await?;
             }
-            KeyCode::Home => todo!(),
-            KeyCode::End => todo!(),
-            KeyCode::PageUp | KeyCode::PageDown => todo!(),
-            KeyCode::Tab | KeyCode::BackTab => todo!(),
-            KeyCode::Delete => todo!(),
-            KeyCode::Insert => todo!(),
-            KeyCode::F(_) => todo!(),
-            KeyCode::Null => todo!(),
-            KeyCode::CapsLock => todo!(),
-            KeyCode::ScrollLock
+            KeyCode::Home
+            | KeyCode::End
+            | KeyCode::PageUp
+            | KeyCode::PageDown
+            | KeyCode::Tab
+            | KeyCode::BackTab
+            | KeyCode::Delete
+            | KeyCode::Insert
+            | KeyCode::F(_)
+            | KeyCode::Null
+            | KeyCode::CapsLock
+            | KeyCode::ScrollLock
             | KeyCode::NumLock
             | KeyCode::PrintScreen
             | KeyCode::Pause
             | KeyCode::Menu
             | KeyCode::KeypadBegin
-            | KeyCode::Media(_) => todo!(),
-            KeyCode::Modifier(_) => todo!(),
+            | KeyCode::Media(_)
+            | KeyCode::Modifier(_) => todo!(),
             KeyCode::Left | KeyCode::Right | KeyCode::Up | KeyCode::Down => (),
         };
         Ok(())

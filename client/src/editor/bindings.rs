@@ -1,8 +1,6 @@
 use std::{
-    future::Future,
     io,
     ops::{Index, IndexMut},
-    pin::Pin,
 };
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -44,7 +42,7 @@ impl Default for Bindings {
     }
 }
 
-impl<'a> Index<&Mode> for Bindings {
+impl Index<&Mode> for Bindings {
     type Output = Trie<KeyEvent, Action>;
 
     fn index(&self, mode: &Mode) -> &Self::Output {
