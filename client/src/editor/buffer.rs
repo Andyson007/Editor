@@ -1,14 +1,7 @@
-use std::{
-    io,
-    ops::{Index, IndexMut},
-};
+use std::io;
 
 use btep::{c2s::C2S, s2c::S2C, Deserialize, Serialize};
-use crossterm::{
-    event::{KeyCode, KeyEvent, KeyEventState, KeyModifiers},
-    style::Color,
-    terminal,
-};
+use crossterm::{style::Color, terminal};
 use text::Text;
 use tokio::{
     io::AsyncWriteExt,
@@ -17,10 +10,7 @@ use tokio::{
         TcpStream,
     },
 };
-use trie::Trie;
 use utils::other::CursorPos;
-
-use super::Mode;
 
 /// The main state for the entire editor. The entireity of the
 /// view presented to the user can be rebuild from this
@@ -35,36 +25,6 @@ pub struct Buffer {
     pub(crate) line_offset: usize,
     pub(crate) socket: Option<Socket>,
     pub(crate) colors: Vec<Color>,
-    pub(crate) bindings: Bindings,
-}
-
-#[derive(Default)]
-pub(crate) struct Bindings {
-    insert: Trie<KeyEvent, Box<dyn FnMut()>>,
-    normal: Trie<KeyEvent, Box<dyn FnMut()>>,
-    command: Trie<KeyEvent, Box<dyn FnMut()>>,
-}
-
-impl Index<&Mode> for Bindings {
-    type Output = Trie<KeyEvent, Box<dyn FnMut()>>;
-
-    fn index(&self, mode: &Mode) -> &Self::Output {
-        match mode {
-            Mode::Normal => &self.normal,
-            Mode::Insert => &self.insert,
-            Mode::Command(_) => &self.command,
-        }
-    }
-}
-
-impl IndexMut<&Mode> for Bindings {
-    fn index_mut(&mut self, mode: &Mode) -> &mut Self::Output {
-        match mode {
-            Mode::Normal => &mut self.normal,
-            Mode::Insert => &mut self.insert,
-            Mode::Command(_) => &mut self.command,
-        }
-    }
 }
 
 #[derive(Debug)]
@@ -84,22 +44,6 @@ impl Buffer {
     ) -> Self {
         let id = text.add_client(&username);
         Self {
-            bindings: Bindings {
-                normal: {
-                    let mut ret: Trie<KeyEvent, Box<dyn FnMut()>> = Trie::new();
-                    ret.insert(
-                        [KeyEvent {
-                            code: KeyCode::Char('j'),
-                            modifiers: KeyModifiers::NONE,
-                            kind: crossterm::event::KeyEventKind::Press,
-                            state: KeyEventState::NONE,
-                        }],
-                        Box::new(|| panic!()),
-                    );
-                    ret
-                },
-                ..Default::default()
-            },
             text,
             id,
             cursorpos: CursorPos::default(),

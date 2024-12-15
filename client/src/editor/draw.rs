@@ -8,7 +8,7 @@ use utils::other::CursorPos;
 
 use crossterm::QueueableCommand;
 
-use super::{Client, Mode};
+use super::{client::Mode, Client};
 
 const PIPE_CHAR: char = '│';
 
