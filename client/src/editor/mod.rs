@@ -115,17 +115,25 @@ impl Client {
 
     pub async fn execute_keyevents(&mut self) -> io::Result<bool> {
         let keymap = mem::take(&mut self.modeinfo.keymap);
-        for key in &keymap {
-            match self.modeinfo.mode {
-                Mode::Normal => self.handle_normal_keyevent(key).await?,
-                Mode::Insert => self.handle_insert_keyevent(key).await?,
-                Mode::Command(_) => {
-                    if self.handle_command_keyevent(key).await? {
-                        return Ok(true);
+
+        let mode = self.modeinfo.mode.clone();
+        let mut binding = self.curr_mut().bindings[&mode].get_mut(keymap.iter().copied());
+
+        let Some((node, _)) = binding.as_mut() else {
+            for key in &keymap {
+                match self.modeinfo.mode {
+                    Mode::Normal => self.handle_normal_keyevent(key).await?,
+                    Mode::Insert => self.handle_insert_keyevent(key).await?,
+                    Mode::Command(_) => {
+                        if self.handle_command_keyevent(key).await? {
+                            return Ok(true);
+                        }
                     }
-                }
-            };
-        }
+                };
+            }
+            return Ok(false);
+        };
+        node();
         if let Some(buffer::Socket { ref mut writer, .. }) = self.curr_mut().socket {
             writer.flush().await?;
         }
@@ -134,8 +142,14 @@ impl Client {
 
     /// Handles a keyevent. This method handles every `mode`
     pub async fn handle_keyevent(&mut self, input: &KeyEvent) -> io::Result<()> {
-        self.modeinfo.timer = Some(time::sleep(Duration::from_secs(1)));
         self.modeinfo.keymap.push(*input);
+        if self.curr().bindings[&self.modeinfo.mode]
+            .exists_child(self.modeinfo.keymap.iter().copied())
+        {
+            self.modeinfo.timer = Some(time::sleep(Duration::from_secs(1)));
+        } else {
+            self.modeinfo.timer = Some(time::sleep(Duration::ZERO));
+        }
         Ok(())
     }
 

@@ -65,6 +65,30 @@ where
         let is_leaf = curr.nodes.is_empty();
         curr.value.as_mut().map(|x| (x, is_leaf))
     }
+
+    /// Checks whether there is a child of this node.
+    // NOTE: This function assumes that there are "null" nodes
+    // null nodes being nodes which are leaves, but don't contain a value
+    pub fn exists_child<I>(&self, key: I) -> bool
+    where
+        I: IntoIterator<Item = K>,
+        K: Eq,
+    {
+        let mut iter = key.into_iter();
+        let Some(next) = iter.next() else {
+            return !self.nodes.is_empty();
+        };
+        let Some(mut curr) = self.nodes.get(&next) else {
+            return false;
+        };
+        for elem in iter {
+            let Some(binding) = curr.nodes.get(&elem) else {
+                return false;
+            };
+            curr = binding;
+        }
+        !curr.nodes.is_empty()
+    }
 }
 
 impl<K, V> Default for Trie<K, V>
