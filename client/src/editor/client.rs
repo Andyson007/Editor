@@ -131,9 +131,9 @@ impl Client {
         Ok(())
     }
 
-    pub(crate) async fn backspace(&mut self) -> io::Result<()> {
+    pub(crate) async fn backspace(&mut self) -> io::Result<Option<char>> {
         if self.curr_mut().cursorpos == (CursorPos { row: 0, col: 0 }) {
-            return Ok(());
+            return Ok(None);
         }
 
         let curr_id = self.curr().id;
@@ -161,7 +161,7 @@ impl Client {
             }
         }
 
-        Ok(())
+        Ok(deleted)
     }
 
     pub(crate) fn move_left(&mut self) {

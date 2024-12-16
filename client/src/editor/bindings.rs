@@ -117,7 +117,27 @@ impl Default for Bindings {
                 );
                 trie.insert(
                     [KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE)],
-                    Box::new(move |client: &mut Client| block_on(client.backspace())),
+                    Box::new(move |client: &mut Client| block_on(client.backspace()).map(|_| ())),
+                );
+                trie.insert(
+                    [
+                        KeyEvent::new(KeyCode::Char('u'), KeyModifiers::NONE),
+                        KeyEvent::new(KeyCode::Char('h'), KeyModifiers::NONE),
+                    ],
+                    Box::new(move |client: &mut Client| block_on(client.exit_insert())),
+                );
+                trie.insert(
+                    [KeyEvent::new(KeyCode::Char('w'), KeyModifiers::CONTROL)],
+                    Box::new(move |client: &mut Client| {
+                        block_on(async {
+                            while client
+                                .backspace()
+                                .await?
+                                .is_some_and(|x| !x.is_whitespace())
+                            {}
+                            Ok(())
+                        })
+                    }),
                 );
                 trie
             },
