@@ -89,6 +89,21 @@ where
         }
         !curr.nodes.is_empty()
     }
+
+    /// Removes a key from the trie and returns it
+    pub fn remove<I>(&mut self, key: I) -> Option<V>
+    where
+        I: IntoIterator<Item = K>,
+        K: Eq,
+    {
+        let mut iter = key.into_iter();
+        let next = iter.next()?;
+        let ret = self.nodes.get_mut(&next)?.remove(iter);
+        if self.nodes.get(&next)?.nodes.is_empty() && self.nodes.get(&next)?.value.is_none() {
+            self.nodes.remove(&next);
+        }
+        ret
+    }
 }
 
 impl<K, V> Default for Trie<K, V>
@@ -113,7 +128,7 @@ where
 
 impl<K, V> Default for TrieChild<K, V>
 where
-    K: Hash + Eq,
+    K: Hash,
 {
     fn default() -> Self {
         Self {
@@ -134,6 +149,27 @@ where
             trie.insert(key, value);
         }
         trie
+    }
+}
+impl<K, V> TrieChild<K, V>
+where
+    K: Hash,
+{
+    pub fn remove<I>(&mut self, key: I) -> Option<V>
+    where
+        I: IntoIterator<Item = K>,
+        K: Eq,
+    {
+        let mut iter = key.into_iter();
+        if let Some(x) = iter.next() {
+            let ret = self.nodes.get_mut(&x)?.remove(iter);
+            if self.nodes.get(&x)?.nodes.is_empty() && self.nodes.get(&x)?.value.is_none() {
+                self.nodes.remove(&x);
+            }
+            ret
+        } else {
+            self.value.take()
+        }
     }
 }
 
@@ -163,5 +199,14 @@ mod test {
         assert_eq!(trie.get([1, 2, 3]), (Some((&(), true))));
         assert_eq!(trie.insert([1, 2, 3, 4], ()), (None, true));
         assert_eq!(trie.get([1, 2, 3]), (Some((&(), false))));
+    }
+
+    #[test]
+    fn remove() {
+        let mut trie = Trie::new();
+        assert_eq!(trie.insert([1, 2, 3], ()), (None, true));
+        assert_eq!(trie.insert([1, 2, 3, 4], ()), (None, true));
+        assert_eq!(trie.remove([1, 2]), None);
+        assert_eq!(trie.remove([1, 2, 3]), Some(()));
     }
 }
