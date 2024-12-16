@@ -275,8 +275,6 @@ async fn handle_client(
                     .client_mut(client_to_remove)
                     .exit_insert();
 
-                debug!("{}", line!());
-                debug!("{socket_lock:?}");
                 for (clientnr, client) in socket_lock.iter_mut() {
                     if *clientnr == client_to_remove {
                         continue;

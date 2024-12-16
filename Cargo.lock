@@ -271,6 +271,7 @@ dependencies = [
  "futures",
  "text",
  "tokio",
+ "trie",
  "tungstenite",
  "utils",
 ]
@@ -1995,6 +1996,10 @@ dependencies = [
  "tracing-core",
  "tracing-log",
 ]
+
+[[package]]
+name = "trie"
+version = "0.1.0"
 
 [[package]]
 name = "tungstenite"

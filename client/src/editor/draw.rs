@@ -8,7 +8,7 @@ use utils::other::CursorPos;
 
 use crossterm::QueueableCommand;
 
-use super::{Client, Mode};
+use super::{client::Mode, Client};
 
 const PIPE_CHAR: char = '│';
 
@@ -121,7 +121,7 @@ impl Client {
                 .queue(MoveToColumn(2))?
                 .queue(Print(PIPE_CHAR))?;
         }
-        if let Mode::Command(ref cmd) = self.mode {
+        if let Mode::Command(ref cmd) = self.modeinfo.mode {
             out.queue(cursor::MoveTo(0, size.1))?
                 .queue(terminal::Clear(ClearType::CurrentLine))?
                 .queue(Print(":"))?

@@ -12,9 +12,9 @@ use tokio::{
 };
 use utils::other::CursorPos;
 
-#[derive(Debug)]
 /// The main state for the entire editor. The entireity of the
 /// view presented to the user can be rebuild from this
+#[derive(Debug)]
 pub struct Buffer {
     /// The rope stores the entire file being edited.
     pub text: Text,
