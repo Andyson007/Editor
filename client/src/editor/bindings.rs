@@ -1,12 +1,12 @@
-use core::panic;
 use std::{
-    cmp, io,
+    io,
     ops::{Index, IndexMut},
 };
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use futures::executor::block_on;
 use trie::Trie;
+use utils::other::CursorPos;
 
 use super::client::{Client, Mode};
 
@@ -33,6 +33,25 @@ impl Default for Bindings {
                     [KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE)],
                     Box::new(move |client: &mut Client| {
                         block_on(client.enter_insert(client.curr().cursorpos + (0, 1)))
+                    }),
+                );
+                trie.insert(
+                    [KeyEvent::new(KeyCode::Char('o'), KeyModifiers::NONE)],
+                    Box::new(move |client: &mut Client| {
+                        block_on(async {
+                            let pos = CursorPos {
+                                row: client.curr().cursorpos.row,
+                                col: client
+                                    .curr()
+                                    .text
+                                    .lines()
+                                    .nth(client.curr_mut().cursorpos.row)
+                                    .map_or(0, |x| x.chars().count()),
+                            };
+                            client.enter_insert(pos).await?;
+                            client.type_char('\n').await?;
+                            Ok(())
+                        })
                     }),
                 );
                 trie.insert(

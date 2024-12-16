@@ -3,10 +3,10 @@
 //! to the queue for sending to the server, but *not*
 //! actually sending them
 
-use std::{io, mem, time::Duration};
+use std::{io, time::Duration};
 
 use bindings::Bindings;
-use client::{Client, Mode};
+use client::Client;
 use crossterm::{event::KeyEvent, style::Color};
 use text::Text;
 use tokio::{io::AsyncWriteExt, net::TcpStream, time};
@@ -69,8 +69,7 @@ impl App {
         }
         panic!(
             "There aren't any keybinds available for {:?} when in {:?} mode",
-            self.client.modeinfo.keymap,
-            self.client.modeinfo.mode
+            self.client.modeinfo.keymap, self.client.modeinfo.mode
         );
     }
 
