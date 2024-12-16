@@ -1,5 +1,6 @@
+use core::panic;
 use std::{
-    io,
+    cmp, io,
     ops::{Index, IndexMut},
 };
 
@@ -20,24 +21,129 @@ pub(crate) struct Bindings {
 impl Default for Bindings {
     fn default() -> Self {
         Self {
-            normal: Default::default(),
-            insert: {
+            normal: {
                 let mut trie: Trie<KeyEvent, Action> = Trie::new();
                 trie.insert(
-                    [
-                        KeyEvent::new(KeyCode::Char('u'), KeyModifiers::NONE),
-                        KeyEvent::new(KeyCode::Char('h'), KeyModifiers::NONE),
-                    ],
-                    Box::new(|client: &mut Client| {
-                        block_on(client.handle_insert_keyevent(KeyEvent::new(
-                            KeyCode::Esc,
-                            KeyModifiers::NONE,
-                        )))
+                    [KeyEvent::new(KeyCode::Char('i'), KeyModifiers::NONE)],
+                    Box::new(move |client: &mut Client| {
+                        block_on(client.enter_insert(client.curr().cursorpos))
                     }),
+                );
+                trie.insert(
+                    [KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE)],
+                    Box::new(move |client: &mut Client| {
+                        block_on(client.enter_insert(client.curr().cursorpos + (0, 1)))
+                    }),
+                );
+                trie.insert(
+                    [KeyEvent::new(KeyCode::Char(':'), KeyModifiers::NONE)],
+                    Box::new(move |client: &mut Client| {
+                        client.modeinfo.set_mode(Mode::Command(String::new()));
+                        Ok(())
+                    }),
+                );
+                for x in [KeyCode::Char('h'), KeyCode::Left] {
+                    trie.insert(
+                        [KeyEvent::new(x, KeyModifiers::NONE)],
+                        Box::new(move |client: &mut Client| {
+                            client.move_left();
+                            Ok(())
+                        }),
+                    );
+                }
+                for x in [KeyCode::Char('j'), KeyCode::Down] {
+                    trie.insert(
+                        [KeyEvent::new(x, KeyModifiers::NONE)],
+                        Box::new(move |client: &mut Client| {
+                            client.move_down();
+                            Ok(())
+                        }),
+                    );
+                }
+                for x in [KeyCode::Char('k'), KeyCode::Up] {
+                    trie.insert(
+                        [KeyEvent::new(x, KeyModifiers::NONE)],
+                        Box::new(move |client: &mut Client| {
+                            client.move_up();
+                            Ok(())
+                        }),
+                    );
+                }
+                for x in [KeyCode::Char('l'), KeyCode::Right] {
+                    trie.insert(
+                        [KeyEvent::new(x, KeyModifiers::NONE)],
+                        Box::new(move |client: &mut Client| {
+                            client.move_right();
+                            Ok(())
+                        }),
+                    );
+                }
+                trie
+            },
+            insert: {
+                let mut trie: Trie<KeyEvent, Action> = Trie::new();
+                for c in (32..255).map(char::from_u32).map(Option::unwrap) {
+                    trie.insert(
+                        [KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE)],
+                        Box::new(move |client: &mut Client| block_on(client.type_char(c))),
+                    );
+                }
+                trie.insert(
+                    [KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)],
+                    Box::new(move |client: &mut Client| block_on(client.type_char('\n'))),
+                );
+                trie.insert(
+                    [KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)],
+                    Box::new(move |client: &mut Client| block_on(client.exit_insert())),
+                );
+                trie.insert(
+                    [KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE)],
+                    Box::new(move |client: &mut Client| block_on(client.backspace())),
                 );
                 trie
             },
-            command: Default::default(),
+            command: {
+                let mut trie: Trie<KeyEvent, Action> = Trie::new();
+                trie.insert(
+                    [KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE)],
+                    Box::new(move |client: &mut Client| {
+                        let Mode::Command(ref mut x) = client.modeinfo.mode else {
+                            unreachable!()
+                        };
+                        if x.pop().is_none() {
+                            client.modeinfo.mode = Mode::Normal;
+                        };
+                        Ok(())
+                    }),
+                );
+                trie.insert(
+                    [KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)],
+                    Box::new(move |client: &mut Client| {
+                        let Mode::Command(ref x) = client.modeinfo.mode else {
+                            unreachable!()
+                        };
+                        let x = x.clone();
+                        if block_on(client.execute_command(&x))? {
+                            return Ok(());
+                        }
+                        client.modeinfo.set_mode(Mode::Normal);
+                        Ok(())
+                    }),
+                );
+                for c in ('a'..='z').chain('A'..='Z') {
+                    trie.insert(
+                        [KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE)],
+                        Box::new(move |client: &mut Client| {
+                            let Mode::Command(ref mut x) = client.modeinfo.mode else {
+                                unreachable!()
+                            };
+                            x.push(c);
+                            Ok(())
+                        }),
+                    );
+                }
+                trie
+            },
         }
     }
 }

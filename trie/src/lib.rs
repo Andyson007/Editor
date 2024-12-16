@@ -123,6 +123,20 @@ where
     }
 }
 
+impl<I, K, V, const N: usize> From<[(I, V); N]> for Trie<K, V>
+where
+    I: IntoIterator<Item = K>,
+    K: Hash + Eq,
+{
+    fn from(elements: [(I, V); N]) -> Self {
+        let mut trie = Self::new();
+        for (key, value) in elements {
+            trie.insert(key, value);
+        }
+        trie
+    }
+}
+
 #[cfg(test)]
 mod test {
     use crate::Trie;

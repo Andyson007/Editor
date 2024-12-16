@@ -63,8 +63,7 @@ pub async fn run(
                     Some(Ok(event)) => {
                         match event {
                             Event::Key(event) => {
-                                app.handle_keyevent(&event).await?;
-                                false
+                                app.handle_keyevent(&event).await?
                             }
                             Event::Mouse(_event) => todo!("No mouse support sorry"),
                             Event::Paste(_data) => todo!("No paste support sorry"),
@@ -97,14 +96,18 @@ pub async fn run(
                     unreachable!()
                 }
             } => {
-                if app.execute_keyevents().await? {
-                    break
-                }
+                app.execute_keyevents().await?;
+
                 Ok(true)
             }
         }? {
+            if app.client.buffers.is_empty() {
+                break;
+            }
             let size = terminal::size()?;
-            app.client.curr_mut().recalculate_cursor((size.0, size.1 - 1))?;
+            app.client
+                .curr_mut()
+                .recalculate_cursor((size.0, size.1 - 1))?;
             app.client.redraw(&mut out)?;
             out.flush()?;
         }

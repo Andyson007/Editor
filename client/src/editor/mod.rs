@@ -59,7 +59,7 @@ impl App {
             return Ok(false);
         }
         let modeinfo = &self.client.modeinfo;
-        for i in (1..self.client.modeinfo.keymap.len()).rev() {
+        for i in (1..=self.client.modeinfo.keymap.len()).rev() {
             let binding = self.bindings[&modeinfo.mode].get(modeinfo.keymap[0..i].iter().copied());
             if let Some((node, _)) = binding {
                 node(&mut self.client)?;
@@ -68,20 +68,19 @@ impl App {
             };
         }
         panic!(
-            "There aren't any keybinds available for {:?}",
-            self.client.modeinfo.keymap
+            "There aren't any keybinds available for {:?} when in {:?} mode",
+            self.client.modeinfo.keymap,
+            self.client.modeinfo.mode
         );
     }
 
-    pub async fn handle_keyevent(&mut self, input: &KeyEvent) -> io::Result<()> {
+    pub async fn handle_keyevent(&mut self, input: &KeyEvent) -> io::Result<bool> {
         self.client.modeinfo.keymap.push(*input);
-        let should_flush = !self.bindings[&self.client.modeinfo.mode]
-            .exists_child(self.client.modeinfo.keymap.iter().copied());
-
+        let mut should_flush = false;
         while !self.bindings[&self.client.modeinfo.mode]
             .exists_child(self.client.modeinfo.keymap.iter().copied())
         {
-            self.execute_top_keyevent().await?;
+            should_flush = self.execute_top_keyevent().await?;
         }
         if should_flush {
             if let Some(buffer::Socket { ref mut writer, .. }) = self.client.curr_mut().socket {
@@ -91,6 +90,6 @@ impl App {
         if !self.client.modeinfo.keymap.is_empty() {
             self.client.modeinfo.timer = Some(time::sleep(Duration::from_secs(1)));
         }
-        Ok(())
+        Ok(should_flush)
     }
 }

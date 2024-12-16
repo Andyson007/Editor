@@ -62,7 +62,7 @@ impl Client {
     }
 
     /// Executed a command written in command mode
-    async fn execute_command(&mut self, cmd: &str) -> io::Result<bool> {
+    pub(crate) async fn execute_command(&mut self, cmd: &str) -> io::Result<bool> {
         match cmd {
             "q" => return Ok(self.close_current_buffer()),
             "w" => self.curr_mut().save().await?,
@@ -207,7 +207,7 @@ impl Client {
     /// types a char in insert mode
     /// This function handles sending the request *without* flushing the stream.
     /// Cursor movement is also handled
-    async fn type_char(&mut self, c: char) -> io::Result<()> {
+    pub(crate) async fn type_char(&mut self, c: char) -> io::Result<()> {
         let curr_id = self.curr().id;
         self.curr_mut().text.client_mut(curr_id).push_char(c);
         match c {
@@ -223,7 +223,7 @@ impl Client {
         Ok(())
     }
 
-    async fn exit_insert(&mut self) -> io::Result<()> {
+    pub(crate) async fn exit_insert(&mut self) -> io::Result<()> {
         let curr_id = self.curr().id;
         self.modeinfo.set_mode(Mode::Normal);
         self.curr_mut().text.client_mut(curr_id).exit_insert();
@@ -234,7 +234,7 @@ impl Client {
         Ok(())
     }
 
-    async fn backspace(&mut self) -> io::Result<()> {
+    pub(crate) async fn backspace(&mut self) -> io::Result<()> {
         if self.curr_mut().cursorpos == (CursorPos { row: 0, col: 0 }) {
             return Ok(());
         }
@@ -292,51 +292,59 @@ impl Client {
                 self.type_char('\n').await?;
             }
             KeyCode::Char(':') => self.modeinfo.set_mode(Mode::Command(String::new())),
-            KeyCode::Left | KeyCode::Char('h') => {
-                self.curr_mut().cursorpos.col = self.curr_mut().cursorpos.col.saturating_sub(1);
-            }
-            KeyCode::Right | KeyCode::Char('l') => {
-                self.curr_mut().cursorpos.col = cmp::min(
-                    self.curr_mut().cursorpos.col + 1,
-                    self.curr_mut()
-                        .text
-                        .lines()
-                        .nth(self.curr_mut().cursorpos.row)
-                        .map_or(0, |x| x.chars().count().saturating_sub(1)),
-                );
-            }
-            KeyCode::Up | KeyCode::Char('k') => {
-                self.curr_mut().cursorpos.row = self.curr_mut().cursorpos.row.saturating_sub(1);
-                self.curr_mut().cursorpos.col = cmp::min(
-                    self.curr_mut().cursorpos.col,
-                    self.curr_mut()
-                        .text
-                        .lines()
-                        .nth(self.curr_mut().cursorpos.row)
-                        .map_or(0, |x| x.chars().count().saturating_sub(1)),
-                );
-            }
-            KeyCode::Down | KeyCode::Char('j') => {
-                self.curr_mut().cursorpos.row = cmp::min(
-                    self.curr_mut().cursorpos.row + 1,
-                    self.curr_mut().text.lines().count().saturating_sub(1),
-                );
-                self.curr_mut().cursorpos.col = cmp::min(
-                    self.curr_mut().cursorpos.col,
-                    self.curr_mut()
-                        .text
-                        .lines()
-                        .nth(self.curr_mut().cursorpos.row)
-                        .map_or(0, |x| x.chars().count().saturating_sub(2)),
-                );
-            }
+            KeyCode::Left | KeyCode::Char('h') => {}
+            KeyCode::Right | KeyCode::Char('l') => {}
+            KeyCode::Up | KeyCode::Char('k') => {}
+            KeyCode::Down | KeyCode::Char('j') => {}
             _ => (),
         };
         Ok(())
     }
 
+    pub(crate) fn move_left(&mut self) {
+        self.curr_mut().cursorpos.col = self.curr_mut().cursorpos.col.saturating_sub(1);
+    }
+
+    pub(crate) fn move_up(&mut self) {
+        self.curr_mut().cursorpos.row = self.curr_mut().cursorpos.row.saturating_sub(1);
+        self.curr_mut().cursorpos.col = cmp::min(
+            self.curr_mut().cursorpos.col,
+            self.curr_mut()
+                .text
+                .lines()
+                .nth(self.curr_mut().cursorpos.row)
+                .map_or(0, |x| x.chars().count().saturating_sub(1)),
+        );
+    }
+
+    pub(crate) fn move_down(&mut self) {
+        self.curr_mut().cursorpos.row = cmp::min(
+            self.curr_mut().cursorpos.row + 1,
+            self.curr_mut().text.lines().count().saturating_sub(1),
+        );
+        self.curr_mut().cursorpos.col = cmp::min(
+            self.curr_mut().cursorpos.col,
+            self.curr_mut()
+                .text
+                .lines()
+                .nth(self.curr_mut().cursorpos.row)
+                .map_or(0, |x| x.chars().count().saturating_sub(2)),
+        );
+    }
+
+    pub(crate) fn move_right(&mut self) {
+        self.curr_mut().cursorpos.col = cmp::min(
+            self.curr_mut().cursorpos.col + 1,
+            self.curr_mut()
+                .text
+                .lines()
+                .nth(self.curr_mut().cursorpos.row)
+                .map_or(0, |x| x.chars().count().saturating_sub(1)),
+        );
+    }
+
     /// Note this does not flush the writer
-    async fn enter_insert(&mut self, pos: CursorPos) -> io::Result<()> {
+    pub(crate) async fn enter_insert(&mut self, pos: CursorPos) -> io::Result<()> {
         let curr_id = self.curr_mut().id;
         let (_offset, _id) = self.curr_mut().text.client_mut(curr_id).enter_insert(pos);
         if let Some(buffer::Socket { ref mut writer, .. }) = self.curr_mut().socket {
@@ -356,7 +364,6 @@ pub struct ModeInfo {
 
 impl ModeInfo {
     pub fn set_mode(&mut self, mode: Mode) {
-        self.keymap.clear();
         self.mode = mode;
     }
 }
