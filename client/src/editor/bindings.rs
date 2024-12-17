@@ -130,11 +130,23 @@ impl Default for Bindings {
                     [KeyEvent::new(KeyCode::Char('w'), KeyModifiers::CONTROL)],
                     Box::new(move |client: &mut Client| {
                         block_on(async {
-                            while client
-                                .backspace()
-                                .await?
-                                .is_some_and(|x| !x.is_whitespace())
-                            {}
+                            let Some(first_del) = client.backspace().await? else {
+                                return Ok(());
+                            };
+
+                            if first_del == '\n' {
+                                return Ok(());
+                            } else if first_del == ' ' {
+                                while client.backspace().await?.is_some_and(|x| x == ' ') {}
+                            }
+
+                            while let Some(deleted) = client.backspace().await? {
+                                if deleted.is_whitespace() {
+                                    client.type_char(deleted).await?;
+                                    break;
+                                }
+                            }
+
                             Ok(())
                         })
                     }),

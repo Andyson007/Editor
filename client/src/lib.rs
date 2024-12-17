@@ -21,7 +21,7 @@ use std::{
 };
 use text::Text;
 use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
+    io::{AsyncReadExt, AsyncWriteExt, Interest},
     net::TcpStream,
     time,
 };
