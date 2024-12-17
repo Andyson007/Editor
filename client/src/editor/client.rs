@@ -1,13 +1,9 @@
 use crate::editor::buffer;
-use core::panic;
 use std::{cmp, io};
 use tokio::{io::AsyncWriteExt, net::TcpStream};
 
 use btep::{c2s::C2S, Serialize};
-use crossterm::{
-    event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers},
-    style::Color,
-};
+use crossterm::{event::KeyEvent, style::Color};
 use text::Text;
 use utils::other::CursorPos;
 
@@ -128,14 +124,21 @@ impl Client {
         if let Some(buffer::Socket { ref mut writer, .. }) = self.curr_mut().socket {
             writer.write_all(&C2S::ExitInsert.serialize()).await?
         }
+        let curr_line_len = self
+            .curr()
+            .text
+            .lines()
+            .nth(self.curr().cursorpos.row)
+            .unwrap()
+            .len();
+
+        if self.curr().cursorpos.col == curr_line_len {
+            self.curr_mut().cursorpos.col -= 1;
+        }
         Ok(())
     }
 
     pub(crate) async fn backspace(&mut self) -> io::Result<Option<char>> {
-        if self.curr_mut().cursorpos == (CursorPos { row: 0, col: 0 }) {
-            return Ok(None);
-        }
-
         let curr_id = self.curr().id;
 
         let prev_line_len = (self.curr_mut().cursorpos.row != 0).then(|| {

@@ -1,5 +1,5 @@
 use std::{
-    io,
+    cmp, io,
     ops::{Index, IndexMut},
 };
 
@@ -30,9 +30,45 @@ impl Default for Bindings {
                     }),
                 );
                 trie.insert(
+                    [KeyEvent::new(KeyCode::Char('I'), KeyModifiers::NONE)],
+                    Box::new(move |client: &mut Client| {
+                        client.curr_mut().cursorpos.col = 0;
+                        block_on(client.enter_insert(client.curr().cursorpos))
+                    }),
+                );
+                trie.insert(
                     [KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE)],
                     Box::new(move |client: &mut Client| {
-                        block_on(client.enter_insert(client.curr().cursorpos + (0, 1)))
+                        block_on(async {
+                            client.curr_mut().cursorpos.col = cmp::min(
+                                client
+                                    .curr()
+                                    .text
+                                    .lines()
+                                    .nth(client.curr().cursorpos.row)
+                                    .unwrap()
+                                    .len(),
+                                client.curr().cursorpos.col + 1,
+                            );
+                            client.enter_insert(client.curr().cursorpos).await?;
+                            Ok(())
+                        })
+                    }),
+                );
+                trie.insert(
+                    [KeyEvent::new(KeyCode::Char('A'), KeyModifiers::NONE)],
+                    Box::new(move |client: &mut Client| {
+                        block_on(async {
+                            client.curr_mut().cursorpos.col = client
+                                .curr()
+                                .text
+                                .lines()
+                                .nth(client.curr().cursorpos.row)
+                                .unwrap()
+                                .len();
+                            client.enter_insert(client.curr().cursorpos).await?;
+                            Ok(())
+                        })
                     }),
                 );
                 trie.insert(
@@ -117,7 +153,12 @@ impl Default for Bindings {
                 );
                 trie.insert(
                     [KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE)],
-                    Box::new(move |client: &mut Client| block_on(client.backspace()).map(|_| ())),
+                    Box::new(move |client: &mut Client| {
+                        block_on(async {
+                            client.backspace().await?;
+                            Ok(())
+                        })
+                    }),
                 );
                 trie.insert(
                     [

@@ -1,6 +1,6 @@
 //! Creates handly utility structs
 
-use std::ops::Add;
+use std::ops::{Add, AddAssign, SubAssign};
 /// A simple wrapper around a usize which increments after each access
 #[derive(Debug, Default)]
 pub struct AutoIncrementing {
@@ -60,6 +60,21 @@ impl Add<(isize, isize)> for CursorPos {
         }
     }
 }
+
+impl AddAssign for CursorPos {
+    fn add_assign(&mut self, rhs: Self) {
+        self.row += rhs.row;
+        self.col += rhs.col;
+    }
+}
+
+impl SubAssign for CursorPos {
+    fn sub_assign(&mut self, rhs: Self) {
+        self.row -= rhs.row;
+        self.col -= rhs.col;
+    }
+}
+
 
 impl From<CursorPos> for (usize, usize) {
     fn from(pos: CursorPos) -> Self {
