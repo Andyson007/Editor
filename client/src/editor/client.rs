@@ -124,6 +124,17 @@ impl Client {
         if let Some(buffer::Socket { ref mut writer, .. }) = self.curr_mut().socket {
             writer.write_all(&C2S::ExitInsert.serialize()).await?
         }
+        let curr_line_len = self
+            .curr()
+            .text
+            .lines()
+            .nth(self.curr().cursorpos.row)
+            .unwrap()
+            .len();
+
+        if self.curr().cursorpos.col == curr_line_len {
+            self.curr_mut().cursorpos.col -= 1;
+        }
         Ok(())
     }
 
