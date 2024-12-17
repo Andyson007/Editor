@@ -32,7 +32,11 @@ impl Default for Bindings {
                 trie.insert(
                     [KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE)],
                     Box::new(move |client: &mut Client| {
-                        block_on(client.enter_insert(client.curr().cursorpos + (0, 1)))
+                        block_on(async {
+                            client.curr_mut().cursorpos.col += 1;
+                            client.enter_insert(client.curr().cursorpos).await?;
+                            Ok(())
+                        })
                     }),
                 );
                 trie.insert(
@@ -117,7 +121,12 @@ impl Default for Bindings {
                 );
                 trie.insert(
                     [KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE)],
-                    Box::new(move |client: &mut Client| block_on(client.backspace()).map(|_| ())),
+                    Box::new(move |client: &mut Client| {
+                        block_on(async {
+                            client.backspace().await?;
+                            Ok(())
+                        })
+                    }),
                 );
                 trie.insert(
                     [

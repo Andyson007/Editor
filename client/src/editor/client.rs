@@ -1,13 +1,9 @@
 use crate::editor::buffer;
-use core::panic;
 use std::{cmp, io};
 use tokio::{io::AsyncWriteExt, net::TcpStream};
 
 use btep::{c2s::C2S, Serialize};
-use crossterm::{
-    event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers},
-    style::Color,
-};
+use crossterm::{event::KeyEvent, style::Color};
 use text::Text;
 use utils::other::CursorPos;
 
@@ -132,10 +128,6 @@ impl Client {
     }
 
     pub(crate) async fn backspace(&mut self) -> io::Result<Option<char>> {
-        if self.curr_mut().cursorpos == (CursorPos { row: 0, col: 0 }) {
-            return Ok(None);
-        }
-
         let curr_id = self.curr().id;
 
         let prev_line_len = (self.curr_mut().cursorpos.row != 0).then(|| {
