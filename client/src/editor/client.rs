@@ -133,7 +133,7 @@ impl Client {
             .len();
 
         if self.curr().cursorpos.col == curr_line_len {
-            self.curr_mut().cursorpos.col -= 1;
+            self.curr_mut().cursorpos.col = self.curr_mut().cursorpos.col.saturating_sub(1);
         }
         Ok(())
     }
