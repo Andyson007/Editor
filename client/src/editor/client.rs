@@ -68,6 +68,13 @@ impl Client {
                 Vec::new(),
                 None,
             ),
+            "bn" | "bufnext" => {
+                self.current_buffer = (self.current_buffer + 1) % self.buffers.len()
+            }
+            "bp" | "bufprev" | "bufprevious" => {
+                self.current_buffer =
+                    (self.current_buffer + self.buffers.len() + 1) % self.buffers.len()
+            }
             _ => (),
         }
         Ok(false)
