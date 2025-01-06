@@ -7,13 +7,28 @@ use {crate::c2s::C2S, crate::Deserialize, crate::Serialize};
 /// S2C or Server to Client
 /// Encodes information that originates from the server and sendt to the client
 pub enum S2C<T> {
-    /// The initial message over the websocket.
-    /// This should usually be the entireity of the file
+    /// Sends a full description of the layout of a file.
     Full(T),
+    Folder(Vec<Inhabitant>),
     /// A client has made an update to their buffer
     Update((usize, C2S)),
     /// A client has connected with a username and a color
     NewClient((String, Color)),
+}
+
+pub struct Inhabitant {
+    name: String,
+    is_folder: bool,
+    // TODO: Prob add like filesize stuff too
+}
+
+impl Serialize for Inhabitant {
+    fn serialize(&self) -> Vec<u8> {
+        let mut ret = Vec::new();
+        ret.extend(self.name.serialize());
+        ret.extend(self.is_folder.serialize());
+        ret
+    }
 }
 
 impl<T> Serialize for S2C<T>
@@ -36,6 +51,10 @@ where
                 ret.push(2);
                 ret.extend(username.serialize());
                 ret.extend(color.serialize());
+            }
+            Self::Folder(x) => {
+                ret.push(3);
+                ret.extend(x.serialize());
             }
         };
         ret

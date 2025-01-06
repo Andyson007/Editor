@@ -89,6 +89,7 @@ impl Buffer {
 
         match S2C::<Text>::deserialize(reader).await? {
             S2C::Full(_) => unreachable!("A full buffer shouldn't be sent"),
+            S2C::Folder(_) => unreachable!("A folder shouldn't be sent"),
             S2C::Update((client_id, action)) => {
                 let client = self.text.client_mut(client_id);
                 match action {

@@ -207,3 +207,19 @@ impl Deserialize for String {
         Ok(String::from_utf8(buf).expect("Invalid utf was sent"))
     }
 }
+
+impl Serialize for bool {
+    fn serialize(&self) -> Vec<u8> {
+        [if *self { 0 } else { 1 }].into()
+    }
+}
+
+impl Deserialize for bool {
+    async fn deserialize<T>(data: &mut T) -> io::Result<Self>
+    where
+        Self: Sized,
+        T: AsyncReadExt + Unpin + Send,
+    {
+        Ok(data.read_u8().await? != 0)
+    }
+}

@@ -7,7 +7,6 @@ edition = "2021"
 color-eyre = "0.6.3"
 crossterm = { version = "0.28.1", features = ["event-stream"] }
 tokio = { version = "1.41.1", features = ["macros", "rt-multi-thread", "sync"] }
-tungstenite = "0.24.0"
 btep = { path = "../btep" }
 utils = { path = "../utils" }
 text = { path = "../text" }

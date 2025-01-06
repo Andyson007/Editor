@@ -21,11 +21,11 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(username: String) -> Self {
-        Self {
-            client: Client::new(username),
+    pub async fn new(username: String, socket: TcpStream) -> io::Result<Self> {
+        Ok(Self {
+            client: Client::from_socket(username, socket).await?,
             bindings: Bindings::default(),
-        }
+        })
     }
 
     pub fn new_with_buffer(

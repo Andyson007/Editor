@@ -2,7 +2,7 @@ use crate::editor::buffer;
 use std::{cmp, io};
 use tokio::{io::AsyncWriteExt, net::TcpStream};
 
-use btep::{c2s::C2S, Serialize};
+use btep::{c2s::C2S, s2c::S2C, Deserialize, Serialize};
 use crossterm::{event::KeyEvent, style::Color};
 use text::Text;
 use utils::other::CursorPos;
@@ -25,8 +25,17 @@ pub struct Client {
 impl Client {
     /// Cretaes a new client an empty original buffer
     #[must_use]
-    pub fn new(username: String) -> Self {
-        Self::new_with_buffer(username, Text::new(), Vec::new(), None)
+    pub async fn from_socket(username: String, mut socket: TcpStream) -> io::Result<Self> {
+        let S2C::Full(initial_text) = S2C::<Text>::deserialize(&mut socket).await? else {
+            panic!("Initial message in wrong protocol")
+        };
+        let colors = Vec::<Color>::deserialize(&mut socket).await?;
+        Ok(Self::new_with_buffer(
+            username,
+            initial_text,
+            colors,
+            Some(socket),
+        ))
     }
 
     /// Cretaes a new client with a prepopulated text buffer
