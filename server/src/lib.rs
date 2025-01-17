@@ -15,7 +15,7 @@ use security::{auth_check, create_tables};
 
 use btep::{c2s::C2S, prelude::S2C, Deserialize, Serialize};
 use crossterm::style::Color;
-use futures::{executor::block_on, FutureExt};
+use futures::{executor::block_on, future::ready, FutureExt};
 use std::{
     collections::HashMap,
     fs::{self, File, OpenOptions},
@@ -65,8 +65,7 @@ pub async fn run(
         );
     }
 
-    let files: Arc<RwLock<HashMap<PathBuf, Arc<RwLock<BufferData>>>>> =
-        Arc::new(RwLock::new(HashMap::new()));
+    let files: Arc<RwLock<HashMap<PathBuf, BufferData>>> = Arc::new(RwLock::new(HashMap::new()));
 
     for client_id in 0.. {
         let (stream, _) = server.accept().await.unwrap();
@@ -74,6 +73,7 @@ pub async fn run(
             handle_connection(
                 stream,
                 Arc::clone(&files),
+                save_interval,
                 #[cfg(feature = "security")]
                 Arc::clone(&pool),
             )
@@ -88,7 +88,8 @@ pub async fn run(
 
 async fn handle_connection(
     mut stream: TcpStream,
-    files: Arc<RwLock<HashMap<PathBuf, Arc<RwLock<BufferData>>>>>,
+    files: Arc<RwLock<HashMap<PathBuf, BufferData>>>,
+    save_interval: Option<NonZeroU64>,
     #[cfg(feature = "security")] pool: Arc<SqlitePool>,
 ) -> io::Result<()> {
     debug!("new Client");
@@ -131,7 +132,7 @@ async fn handle_connection(
         }
     };
 
-    tokio::spawn(handle_client(username, stream, files));
+    tokio::spawn(handle_client(username, stream, files, save_interval));
     Ok(())
 }
 
@@ -141,7 +142,8 @@ async fn handle_connection(
 async fn handle_client(
     username: String,
     stream: TcpStream,
-    files: Arc<RwLock<HashMap<PathBuf, Arc<RwLock<BufferData>>>>>,
+    files: Arc<RwLock<HashMap<PathBuf, BufferData>>>,
+    save_interval: Option<NonZeroU64>,
 ) -> Result<!, io::Error> {
     let (mut read, mut write) = stream.into_split();
 
@@ -159,30 +161,38 @@ async fn handle_client(
                 .write(true)
                 .open(&path)
                 .unwrap();
-            Arc::new(RwLock::new(BufferData {
-                text: Text::original_from_reader(BufReader::new(file)).unwrap(),
-                colors: Vec::new(),
-                sockets: HashMap::new(),
-                notifier: Notify::new(),
-                counter: AutoIncrementing::default(),
-            }))
+            let text = Arc::new(RwLock::new(
+                Text::original_from_reader(BufReader::new(file)).unwrap(),
+            ));
+            let notifier = Arc::new(Notify::new());
+            let ret = BufferData {
+                text: Arc::clone(&text),
+                colors: Arc::new(RwLock::new(Vec::new())),
+                sockets: Arc::new(RwLock::new(HashMap::new())),
+                notifier: Arc::clone(&notifier),
+                counter: Arc::new(RwLock::new(AutoIncrementing::default())),
+            };
+
+            spawn_saver(text, save_interval, notifier, path.clone());
+            ret
         });
-        let mut entry_lock = entry.write().await;
         let data = {
-            let data = &entry_lock.text;
-            let full = S2C::Full(data);
+            let data = entry.text.write().await;
+            let full = S2C::Full(&*data);
             full.serialize()
         };
         // dbg!(&data);
 
         write.write_all(&data).await?;
 
-        write.write_all(&entry_lock.colors.serialize()).await?;
+        write
+            .write_all(&entry.colors.read().await.serialize())
+            .await?;
         write.flush().await?;
         // println!("{data:#?}");
         debug!("Connected {:?}", username);
-        entry_lock.text.add_client(&username);
-        entry_lock.colors.push(Color::Green);
+        entry.text.write().await.add_client(&username);
+        entry.colors.write().await.push(Color::Green);
     }
 
     for (_, client) in files
@@ -190,9 +200,9 @@ async fn handle_client(
         .await
         .get(&path)
         .unwrap()
+        .sockets
         .write()
         .await
-        .sockets
         .iter_mut()
     {
         let username = username.clone();
@@ -211,18 +221,18 @@ async fn handle_client(
         .await
         .get(&path)
         .unwrap()
+        .counter
         .write()
         .await
-        .counter
         .get();
     files
         .read()
         .await
         .get(&path)
         .unwrap()
+        .sockets
         .write()
         .await
-        .sockets
         .insert(self_id, write);
     loop {
         let mut to_remove = Vec::with_capacity(1);
@@ -230,7 +240,7 @@ async fn handle_client(
             let action = {
                 let action = C2S::deserialize(&mut read).await?;
                 let tmp = files.read().await;
-                let binding = &mut tmp.get(&path).unwrap().write().await.text;
+                let binding = &mut tmp.get(&path).unwrap().text.write().await;
                 let lock = binding.client_mut(self_id);
                 match action {
                     C2S::Char(c) => lock.push_char(c),
@@ -240,15 +250,7 @@ async fn handle_client(
                         lock.enter_insert(enter_insert);
                     }
                     C2S::Save => {
-                        files
-                            .read()
-                            .await
-                            .get(&path)
-                            .unwrap()
-                            .write()
-                            .await
-                            .notifier
-                            .notify_one();
+                        files.read().await.get(&path).unwrap().notifier.notify_one();
                         continue;
                     }
                     C2S::ExitInsert => lock.exit_insert(),
@@ -258,14 +260,13 @@ async fn handle_client(
             };
 
             let tmp = files.read().await;
-            let socket_lock = &mut tmp.get(&path).unwrap().write().await.sockets;
+            let socket_lock = &mut tmp.get(&path).unwrap().sockets.write().await;
             for (clientnr, client) in socket_lock.iter_mut() {
                 if *clientnr == self_id {
                     continue;
                 }
                 let result = block_on(
-                    client
-                        .write_all(&S2C::Update::<&Text>((self_id, action.clone())).serialize()),
+                    client.write_all(&S2C::Update::<&Text>((self_id, action.clone())).serialize()),
                 );
                 match result {
                     Ok(()) => block_on(client.flush())?,
@@ -278,7 +279,7 @@ async fn handle_client(
         }
         {
             let tmp = files.read().await;
-            let socket_lock = &mut tmp.get(&path).unwrap().write().await.sockets;
+            let socket_lock = &mut tmp.get(&path).unwrap().sockets.write().await;
             for client_to_remove in to_remove {
                 info!("removed client {client_to_remove}");
                 files
@@ -286,9 +287,9 @@ async fn handle_client(
                     .await
                     .get(&path)
                     .unwrap()
+                    .text
                     .write()
                     .await
-                    .text
                     .client_mut(client_to_remove)
                     .exit_insert();
 
@@ -382,9 +383,9 @@ fn spawn_saver(
 }
 
 struct BufferData {
-    text: Text,
-    colors: Vec<Color>,
-    sockets: HashMap<usize, OwnedWriteHalf>,
-    notifier: Notify,
-    counter: AutoIncrementing,
+    text: Arc<RwLock<Text>>,
+    colors: Arc<RwLock<Vec<Color>>>,
+    sockets: Arc<RwLock<HashMap<usize, OwnedWriteHalf>>>,
+    notifier: Arc<Notify>,
+    counter: Arc<RwLock<AutoIncrementing>>,
 }

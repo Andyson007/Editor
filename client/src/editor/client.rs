@@ -29,7 +29,9 @@ impl Client {
         mut socket: TcpStream,
         path: &Path,
     ) -> io::Result<Self> {
-        socket.write_all(dbg!(&C2S::Path(path.to_str().unwrap().into()).serialize())).await?;
+        socket
+            .write_all(&C2S::Path(path.to_str().unwrap().into()).serialize())
+            .await?;
         let S2C::Full(initial_text) = S2C::<Text>::deserialize(&mut socket).await? else {
             panic!("Initial message in wrong protocol")
         };

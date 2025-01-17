@@ -7,7 +7,6 @@ use core::panic;
 use crossterm::{
     event::{EnableBracketedPaste, Event, EventStream},
     execute,
-    style::Color,
     terminal::{
         self, disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
     },
@@ -15,9 +14,12 @@ use crossterm::{
 use editor::App;
 use futures::{future, FutureExt, StreamExt};
 use std::{
-    io::{self, Write}, net::SocketAddrV4, path::{Path, PathBuf}, str
+    io::{self, Write},
+    net::SocketAddrV4,
+    path::Path,
+    str,
 };
-use text::Text;
+
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::TcpStream,
