@@ -1,5 +1,5 @@
 use crate::editor::buffer;
-use std::{cmp, io};
+use std::{cmp, io, path::Path};
 use tokio::{io::AsyncWriteExt, net::TcpStream};
 
 use btep::{c2s::C2S, s2c::S2C, Deserialize, Serialize};
@@ -24,8 +24,12 @@ pub struct Client {
 
 impl Client {
     /// Cretaes a new client an empty original buffer
-    #[must_use]
-    pub async fn from_socket(username: String, mut socket: TcpStream) -> io::Result<Self> {
+    pub async fn from_socket(
+        username: String,
+        mut socket: TcpStream,
+        path: &Path,
+    ) -> io::Result<Self> {
+        socket.write_all(dbg!(&C2S::Path(path.to_str().unwrap().into()).serialize())).await?;
         let S2C::Full(initial_text) = S2C::<Text>::deserialize(&mut socket).await? else {
             panic!("Initial message in wrong protocol")
         };

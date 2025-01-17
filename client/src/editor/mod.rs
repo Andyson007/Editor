@@ -3,7 +3,7 @@
 //! to the queue for sending to the server, but *not*
 //! actually sending them
 
-use std::{io, time::Duration};
+use std::{io, path::{Path, PathBuf}, time::Duration};
 
 use bindings::Bindings;
 use client::Client;
@@ -21,9 +21,9 @@ pub struct App {
 }
 
 impl App {
-    pub async fn new(username: String, socket: TcpStream) -> io::Result<Self> {
+    pub async fn new(username: String, socket: TcpStream, path: &Path) -> io::Result<Self> {
         Ok(Self {
-            client: Client::from_socket(username, socket).await?,
+            client: Client::from_socket(username, socket, path).await?,
             bindings: Bindings::default(),
         })
     }

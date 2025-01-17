@@ -1,6 +1,6 @@
 //! mdoule for client updates sendt to the server
 
-use std::io;
+use std::{io, path::PathBuf, str::FromStr};
 
 use tokio::io::AsyncReadExt;
 use utils::other::CursorPos;
@@ -9,7 +9,7 @@ use crate::{Deserialize, Serialize};
 
 /// S2C or Server to Client
 /// Encodes information that originates from the client and sendt to the server
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub enum C2S {
     /// The client wrote a character
     Char(char),
@@ -25,6 +25,8 @@ pub enum C2S {
     ExitInsert,
     /// Force a save to happen
     Save,
+    /// A path to the file that you want to request
+    Path(PathBuf),
 }
 
 // #[derive(Clone, Copy, Debug)]
@@ -61,6 +63,9 @@ impl Serialize for C2S {
             Self::EnterInsert(a) => std::iter::once(2).chain(a.serialize()).collect(),
             Self::Save => [3].into(),
             Self::ExitInsert => [4].into(),
+            Self::Path(path) => std::iter::once(5)
+                .chain(path.to_str().unwrap().serialize())
+                .collect(),
             Self::Backspace(swaps) => std::iter::once(8)
                 .chain((*swaps as u64).to_be_bytes())
                 .collect(),
@@ -82,6 +87,7 @@ impl Deserialize for C2S {
             2 => Self::EnterInsert(CursorPos::deserialize(data).await?),
             3 => Self::Save,
             4 => Self::ExitInsert,
+            5 => Self::Path(PathBuf::from_str(&String::deserialize(data).await?).unwrap()),
             8 => Self::Backspace(data.read_u64().await? as usize),
             10 => Self::Enter,
             x => unreachable!("{x}"),

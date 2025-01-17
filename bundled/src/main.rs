@@ -10,7 +10,7 @@ use std::{
     io::{self, Write},
     net::{Ipv4Addr, SocketAddrV4},
     num::NonZeroU64,
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 use termion::input::TermRead;
 use tracing::{level_filters::LevelFilter, trace};
@@ -80,6 +80,7 @@ struct ServerArgs {
 
 #[derive(Args, Debug)]
 struct ClientArgs {
+    path: PathBuf,
     #[arg(long, short = 'u')]
     /// Supply the username inline.
     ///
@@ -161,6 +162,7 @@ fn main() -> color_eyre::Result<()> {
             ip,
             port,
             address,
+            path,
         }) => {
             let username = username.clone().unwrap_or_else(|| {
                 print!("Enter username: ");
@@ -182,7 +184,7 @@ fn main() -> color_eyre::Result<()> {
             });
             let address = address.unwrap_or(SocketAddrV4::new(*ip, *port));
             println!("{address}");
-            client::run(address, username.as_str(), password.as_deref())?;
+            client::run(address, username.as_str(), password.as_deref(), path)?;
         }
     };
     Ok(())

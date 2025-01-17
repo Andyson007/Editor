@@ -15,9 +15,7 @@ use crossterm::{
 use editor::App;
 use futures::{future, FutureExt, StreamExt};
 use std::{
-    io::{self, Write},
-    net::SocketAddrV4,
-    str,
+    io::{self, Write}, net::SocketAddrV4, path::{Path, PathBuf}, str
 };
 use text::Text;
 use tokio::{
@@ -34,6 +32,7 @@ pub async fn run(
     address: SocketAddrV4,
     username: &str,
     password: Option<&str>,
+    path: &Path,
 ) -> color_eyre::Result<()> {
     let mut out = io::stdout();
     errors::install_hooks()?;
@@ -42,7 +41,7 @@ pub async fn run(
         panic!("Failed to connect to the server. Maybe the server is not running?")
     };
 
-    let mut app = App::new(username.to_string(), socket).await?;
+    let mut app = App::new(username.to_string(), socket, path).await?;
 
     execute!(out, EnterAlternateScreen, EnableBracketedPaste)?;
     enable_raw_mode().unwrap();

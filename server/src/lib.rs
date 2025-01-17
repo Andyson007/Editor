@@ -2,21 +2,28 @@
 #![feature(never_type)]
 #[cfg(feature = "security")]
 mod security;
-use btep::{c2s::C2S, prelude::S2C, Deserialize, Serialize};
-use crossterm::style::Color;
-use futures::{executor::block_on, FutureExt};
+
 #[cfg(feature = "security")]
 use sqlx::{sqlite::SqliteConnectOptions, SqlitePool};
 #[cfg(feature = "security")]
 use std::str::FromStr;
+
+#[cfg(feature = "security")]
+pub use security::add_user;
+#[cfg(feature = "security")]
+use security::{auth_check, create_tables};
+
+use btep::{c2s::C2S, prelude::S2C, Deserialize, Serialize};
+use crossterm::style::Color;
+use futures::{executor::block_on, FutureExt};
 use std::{
     collections::HashMap,
-    fs::{File, OpenOptions},
+    fs::{self, File, OpenOptions},
     io::{self, BufReader, BufWriter, Error, Write},
     net::SocketAddrV4,
     num::NonZeroU64,
-    path::Path,
-    sync::{Arc, Mutex, RwLock},
+    path::{Path, PathBuf},
+    sync::Arc,
     time::Duration,
 };
 use text::Text;
@@ -24,14 +31,11 @@ use tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
     net::{tcp::OwnedWriteHalf, TcpListener, TcpStream},
     select,
-    sync::Notify,
+    sync::{Notify, RwLock},
     time::sleep,
 };
 
-#[cfg(feature = "security")]
-pub use security::add_user;
-#[cfg(feature = "security")]
-use security::{auth_check, create_tables};
+use utils::other::AutoIncrementing;
 
 #[allow(unused_imports)]
 use tracing::{debug, error, info, trace, warn};
@@ -53,55 +57,23 @@ pub async fn run(
         .expect("Failed to create the users table");
 
     let server = TcpListener::bind(address).await.unwrap();
-    let file = File::options()
-        .create(true)
-        .truncate(false)
-        .read(true)
-        .write(true)
-        .open(path)
-        .unwrap();
-    let text = Arc::new(RwLock::new(
-        Text::original_from_reader(BufReader::new(file)).unwrap(),
-    ));
-    let colors = Arc::new(Mutex::new(Vec::new()));
+    let is_file = fs::metadata(path).unwrap().file_type().is_file();
+    if !is_file {
+        assert!(
+            fs::metadata(path).unwrap().file_type().is_dir(),
+            "I don't handle non-file nor non-dir stuff"
+        );
+    }
 
-    let sockets = Arc::new(RwLock::new(HashMap::<usize, OwnedWriteHalf>::new()));
-    let owned_path = path.to_owned();
-    let writer_text = Arc::clone(&text);
+    let files: Arc<RwLock<HashMap<PathBuf, Arc<RwLock<BufferData>>>>> =
+        Arc::new(RwLock::new(HashMap::new()));
 
-    let save_notify = Arc::new(Notify::new());
-    let save_notify_reader = Arc::clone(&save_notify);
-    tokio::spawn(async move {
-        let text = writer_text;
-        loop {
-            if let Some(x) = save_interval {
-                select!(
-                    () = sleep(Duration::from_secs(x.get())) => (),
-                    () = save_notify_reader.notified() => {}
-                );
-            } else {
-                save_notify_reader.notified().await;
-            }
-            let file = OpenOptions::new().write(true).open(&owned_path).unwrap();
-            let mut writer = BufWriter::new(file);
-            let buf_iter = text.read().unwrap().bufs().map(|x| x.read().text.clone());
-            for elem in buf_iter {
-                writer.write_all(elem.as_bytes()).unwrap();
-            }
-            info!("Wrote to file");
-        }
-    });
     for client_id in 0.. {
-        let save_notify = Arc::clone(&save_notify);
         let (stream, _) = server.accept().await.unwrap();
         tokio::spawn(
             handle_connection(
-                client_id,
                 stream,
-                save_notify,
-                Arc::clone(&sockets),
-                Arc::clone(&text),
-                Arc::clone(&colors),
+                Arc::clone(&files),
                 #[cfg(feature = "security")]
                 Arc::clone(&pool),
             )
@@ -115,17 +87,11 @@ pub async fn run(
 }
 
 async fn handle_connection(
-    client_id: usize,
     mut stream: TcpStream,
-    save_notify: Arc<Notify>,
-    sockets: Arc<RwLock<HashMap<usize, OwnedWriteHalf>>>,
-    text: Arc<RwLock<Text>>,
-    colors: Arc<Mutex<Vec<Color>>>,
+    files: Arc<RwLock<HashMap<PathBuf, Arc<RwLock<BufferData>>>>>,
     #[cfg(feature = "security")] pool: Arc<SqlitePool>,
 ) -> io::Result<()> {
-    debug!("new Client {client_id}");
-
-    let text = text.clone();
+    debug!("new Client");
 
     #[cfg(feature = "security")]
     let pool = Arc::clone(&pool);
@@ -144,19 +110,19 @@ async fn handle_connection(
         }
         Err(x) => {
             match x {
-                UserAuthError::IoError(e) => warn!("{client_id} had an IoError: `{e:?}`"),
+                UserAuthError::IoError(e) => warn!("IoError: `{e:?}`"),
                 #[cfg(feature = "security")]
                 UserAuthError::NeedsPassword => {
-                    warn!("client {client_id} forgot to include a password");
+                    warn!("Forgotten password");
                     stream.write_u8(1).await?;
                 }
                 #[cfg(feature = "security")]
                 UserAuthError::BadPassword => {
-                    warn!("client {client_id} forgot to include a password");
+                    warn!("Bad password");
                     stream.write_u8(2).await?;
                 }
                 UserAuthError::MissingUsername => {
-                    warn!("{client_id} Forgot to supply a username");
+                    warn!("Missing username");
                     stream.write_u8(3).await?;
                 }
             }
@@ -165,15 +131,7 @@ async fn handle_connection(
         }
     };
 
-    tokio::spawn(handle_client(
-        client_id,
-        username,
-        text,
-        colors,
-        stream,
-        sockets,
-        save_notify,
-    ));
+    tokio::spawn(handle_client(username, stream, files));
     Ok(())
 }
 
@@ -181,39 +139,62 @@ async fn handle_connection(
 /// # Panics
 /// panics if sockets/text is poisoned
 async fn handle_client(
-    client_id: usize,
     username: String,
-    text: Arc<RwLock<Text>>,
-    colors: Arc<Mutex<Vec<Color>>>,
     stream: TcpStream,
-    sockets: Arc<RwLock<HashMap<usize, OwnedWriteHalf>>>,
-    save_notify: Arc<Notify>,
+    files: Arc<RwLock<HashMap<PathBuf, Arc<RwLock<BufferData>>>>>,
 ) -> Result<!, io::Error> {
     let (mut read, mut write) = stream.into_split();
+
+    let C2S::Path(path) = C2S::deserialize(&mut read).await? else {
+        panic!();
+    };
+    println!("{path:?}");
     {
-        debug!("{client_id} Connected {:?}", username);
+        let mut lock = files.write().await;
+        let entry = lock.entry(path.clone()).or_insert_with(|| {
+            let file = File::options()
+                .create(true)
+                .truncate(false)
+                .read(true)
+                .write(true)
+                .open(&path)
+                .unwrap();
+            Arc::new(RwLock::new(BufferData {
+                text: Text::original_from_reader(BufReader::new(file)).unwrap(),
+                colors: Vec::new(),
+                sockets: HashMap::new(),
+                notifier: Notify::new(),
+                counter: AutoIncrementing::default(),
+            }))
+        });
+        let mut entry_lock = entry.write().await;
         let data = {
-            let data = text.read().unwrap();
-            let full = S2C::Full(&*data);
+            let data = &entry_lock.text;
+            let full = S2C::Full(data);
             full.serialize()
         };
         // dbg!(&data);
 
         write.write_all(&data).await?;
 
-        let colors = colors.lock().unwrap().serialize();
-        write.write_all(&colors).await?;
+        write.write_all(&entry_lock.colors.serialize()).await?;
         write.flush().await?;
         // println!("{data:#?}");
+        debug!("Connected {:?}", username);
+        entry_lock.text.add_client(&username);
+        entry_lock.colors.push(Color::Green);
     }
-    debug_assert_eq!(
-        text.write().unwrap().add_client(&username),
-        client_id
-    );
-    colors.lock().unwrap().push(Color::Green);
-    debug_assert_eq!(colors.lock().unwrap().len(), client_id + 1, "Color desync");
 
-    for (_, client) in sockets.write().as_mut().unwrap().iter_mut() {
+    for (_, client) in files
+        .read()
+        .await
+        .get(&path)
+        .unwrap()
+        .write()
+        .await
+        .sockets
+        .iter_mut()
+    {
         let username = username.clone();
         block_on(async move {
             client
@@ -224,14 +205,33 @@ async fn handle_client(
             Ok::<_, io::Error>(())
         })?;
     }
-    sockets.write().unwrap().insert(client_id, write);
+
+    let self_id = files
+        .read()
+        .await
+        .get(&path)
+        .unwrap()
+        .write()
+        .await
+        .counter
+        .get();
+    files
+        .read()
+        .await
+        .get(&path)
+        .unwrap()
+        .write()
+        .await
+        .sockets
+        .insert(self_id, write);
     loop {
         let mut to_remove = Vec::with_capacity(1);
         {
             let action = {
                 let action = C2S::deserialize(&mut read).await?;
-                let mut binding = text.write().unwrap();
-                let lock = binding.client_mut(client_id);
+                let tmp = files.read().await;
+                let binding = &mut tmp.get(&path).unwrap().write().await.text;
+                let lock = binding.client_mut(self_id);
                 match action {
                     C2S::Char(c) => lock.push_char(c),
                     C2S::Backspace(swaps) => drop(lock.backspace_with_swaps(swaps)),
@@ -240,38 +240,55 @@ async fn handle_client(
                         lock.enter_insert(enter_insert);
                     }
                     C2S::Save => {
-                        save_notify.notify_one();
+                        files
+                            .read()
+                            .await
+                            .get(&path)
+                            .unwrap()
+                            .write()
+                            .await
+                            .notifier
+                            .notify_one();
                         continue;
                     }
                     C2S::ExitInsert => lock.exit_insert(),
+                    C2S::Path(_) => todo!(),
                 }
                 action
             };
 
-            let mut socket_lock = sockets.write().unwrap();
+            let tmp = files.read().await;
+            let socket_lock = &mut tmp.get(&path).unwrap().write().await.sockets;
             for (clientnr, client) in socket_lock.iter_mut() {
-                if *clientnr == client_id {
+                if *clientnr == self_id {
                     continue;
                 }
                 let result = block_on(
-                    client.write_all(&S2C::Update::<&Text>((client_id, action)).serialize()),
+                    client
+                        .write_all(&S2C::Update::<&Text>((self_id, action.clone())).serialize()),
                 );
                 match result {
                     Ok(()) => block_on(client.flush())?,
                     Err(e) => {
                         to_remove.push(*clientnr);
-                        warn!("{client_id}: {e}");
+                        warn!("{self_id}: {e}");
                     }
                 };
             }
         }
         {
-            let mut socket_lock = sockets.write().unwrap();
+            let tmp = files.read().await;
+            let socket_lock = &mut tmp.get(&path).unwrap().write().await.sockets;
             for client_to_remove in to_remove {
                 info!("removed client {client_to_remove}");
-
-                text.write()
+                files
+                    .read()
+                    .await
+                    .get(&path)
                     .unwrap()
+                    .write()
+                    .await
+                    .text
                     .client_mut(client_to_remove)
                     .exit_insert();
 
@@ -335,4 +352,39 @@ impl From<std::io::Error> for UserAuthError {
     fn from(e: std::io::Error) -> Self {
         Self::IoError(e)
     }
+}
+
+fn spawn_saver(
+    text: Arc<RwLock<Text>>,
+    save_interval: Option<NonZeroU64>,
+    save_notify: Arc<Notify>,
+    path: PathBuf,
+) {
+    tokio::spawn(async move {
+        loop {
+            if let Some(x) = save_interval {
+                select!(
+                    () = sleep(Duration::from_secs(x.get())) => (),
+                    () = save_notify.notified() => {}
+                );
+            } else {
+                save_notify.notified().await;
+            }
+            let file = OpenOptions::new().write(true).open(&path).unwrap();
+            let mut writer = BufWriter::new(file);
+            let buf_iter = text.read().await.bufs().map(|x| x.read().text.clone());
+            for elem in buf_iter {
+                writer.write_all(elem.as_bytes()).unwrap();
+            }
+            info!("Wrote to file");
+        }
+    });
+}
+
+struct BufferData {
+    text: Text,
+    colors: Vec<Color>,
+    sockets: HashMap<usize, OwnedWriteHalf>,
+    notifier: Notify,
+    counter: AutoIncrementing,
 }

@@ -1389,6 +1389,7 @@ dependencies = [
  "text",
  "tokio",
  "tracing",
+ "utils",
 ]
 
 [[package]]
