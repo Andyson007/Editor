@@ -1,6 +1,10 @@
 //! Communication from the server to the client
 use crossterm::style::Color;
-use std::{io, mem};
+use std::{
+    ffi::OsString,
+    fs::{self, DirEntry},
+    io, mem,
+};
 use tokio::io::AsyncReadExt;
 use {crate::c2s::C2S, crate::Deserialize, crate::Serialize};
 
@@ -17,7 +21,7 @@ pub enum S2C<T> {
 }
 
 pub struct Inhabitant {
-    name: String,
+    name: OsString,
     is_folder: bool,
     // TODO: Prob add like filesize stuff too
 }
@@ -25,9 +29,34 @@ pub struct Inhabitant {
 impl Serialize for Inhabitant {
     fn serialize(&self) -> Vec<u8> {
         let mut ret = Vec::new();
-        ret.extend(self.name.serialize());
+        ret.extend(self.name.to_str().unwrap().serialize());
         ret.extend(self.is_folder.serialize());
         ret
+    }
+}
+
+impl Deserialize for Inhabitant {
+    async fn deserialize<T>(data: &mut T) -> io::Result<Self>
+    where
+        Self: Sized,
+        T: AsyncReadExt + Unpin + Send,
+    {
+        let name = String::deserialize(data).await?;
+        let is_folder = bool::deserialize(data).await?;
+        Ok(Self {
+            name: name.into(),
+            is_folder,
+        })
+    }
+}
+
+impl TryFrom<DirEntry> for Inhabitant {
+    type Error = io::Error;
+    fn try_from(val: DirEntry) -> Result<Self, Self::Error> {
+        Ok(Self {
+            name: val.file_name(),
+            is_folder: fs::metadata(val.path())?.is_dir(),
+        })
     }
 }
 
@@ -84,6 +113,7 @@ where
                 let color = <Color as Deserialize>::deserialize(data).await?;
                 Self::NewClient((username, color))
             }
+            3 => Self::Folder(Vec::deserialize(data).await?),
             x => panic!("An invalid specifier was found ({x})"),
         })
     }

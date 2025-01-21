@@ -1,6 +1,10 @@
-use std::io;
+use std::{ffi::OsString, io};
 
-use btep::{c2s::C2S, s2c::S2C, Deserialize, Serialize};
+use btep::{
+    c2s::C2S,
+    s2c::{Inhabitant, S2C},
+    Deserialize, Serialize,
+};
 use crossterm::{style::Color, terminal};
 use text::Text;
 use tokio::{
@@ -16,8 +20,7 @@ use utils::other::CursorPos;
 /// view presented to the user can be rebuild from this
 #[derive(Debug)]
 pub struct Buffer {
-    /// The rope stores the entire file being edited.
-    pub text: Text,
+    pub data: BufferData,
     /// Our own id within the Text
     pub(super) id: usize,
     /// stores where the cursor is located
@@ -25,7 +28,19 @@ pub struct Buffer {
     /// stores the amount of lines that have been scrolled down
     pub(crate) line_offset: usize,
     pub(crate) socket: Option<Socket>,
-    pub(crate) colors: Vec<Color>,
+}
+
+#[derive(Debug)]
+pub enum BufferData {
+    Regular {
+        /// The rope stores the entire file being edited.
+        text: Text,
+        /// An map from id to their color in the buffer
+        colors: Vec<Color>,
+    },
+    Folder {
+        path: OsString,
+    },
 }
 
 #[derive(Debug)]
@@ -45,7 +60,7 @@ impl Buffer {
     ) -> Self {
         let id = text.add_client(&username);
         Self {
-            text,
+            data: BufferData::Regular { text, colors },
             id,
             cursorpos: CursorPos::default(),
             line_offset: 0,
@@ -56,8 +71,20 @@ impl Buffer {
                     writer,
                 }
             }),
-            colors,
         }
+    }
+
+    #[must_use]
+    pub fn new_folder(username: String, inhabitants: Vec<Inhabitant>) -> Self {
+        todo!()
+        // Self {
+        //     text: todo!(),
+        //     colors: todo!(),
+        //     id: 0, // Doesn't matter
+        //     cursorpos: CursorPos::default(),
+        //     line_offset: 0,
+        //     socket: None,
+        // }
     }
 
     /// Returns an immutable reference to the internal
@@ -91,7 +118,10 @@ impl Buffer {
             S2C::Full(_) => unreachable!("A full buffer shouldn't be sent"),
             S2C::Folder(_) => unreachable!("A folder shouldn't be sent"),
             S2C::Update((client_id, action)) => {
-                let client = self.text.client_mut(client_id);
+                let BufferData::Regular { text, .. } = &mut self.data else {
+                    panic!("Only updates in Regul mode are supported (at the moment)");
+                };
+                let client = text.client_mut(client_id);
                 match action {
                     C2S::Char(c) => {
                         client.push_char(c);
@@ -109,8 +139,11 @@ impl Buffer {
                 Ok(true)
             }
             S2C::NewClient((username, color)) => {
-                self.text.add_client(&username);
-                self.colors.push(color);
+                let BufferData::Regular { text, colors } = &mut self.data else {
+                    panic!("New clients cannot join non-regular files");
+                };
+                text.add_client(&username);
+                colors.push(color);
                 Ok(false)
             }
         }
@@ -118,11 +151,14 @@ impl Buffer {
 
     pub fn recalculate_cursor(&mut self, (_cols, rows): (u16, u16)) -> io::Result<()> {
         let size = terminal::size()?;
+        let BufferData::Regular { text, .. } = &mut self.data else {
+            todo!("Cursor locations exist in folders too")
+        };
 
         let mut current_line = 0;
         let mut relative_col = 0;
         let mut cursor_offset = 0;
-        'outer: for buf in self.text.bufs() {
+        'outer: for buf in text.bufs() {
             let read_lock = buf.read();
             for c in read_lock.text.chars() {
                 if c == '\n' {

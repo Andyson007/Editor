@@ -10,7 +10,7 @@ use std::{
     io::{self, Write},
     net::{Ipv4Addr, SocketAddrV4},
     num::NonZeroU64,
-    path::{Path, PathBuf},
+    path::PathBuf,
 };
 use termion::input::TermRead;
 use tracing::{level_filters::LevelFilter, trace};
@@ -80,6 +80,7 @@ struct ServerArgs {
 
 #[derive(Args, Debug)]
 struct ClientArgs {
+    #[arg(default_value = ".")]
     path: PathBuf,
     #[arg(long, short = 'u')]
     /// Supply the username inline.

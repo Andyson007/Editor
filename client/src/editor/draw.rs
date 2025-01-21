@@ -8,7 +8,7 @@ use utils::other::CursorPos;
 
 use crossterm::QueueableCommand;
 
-use super::{client::Mode, Client};
+use super::{buffer::BufferData, client::Mode, Client};
 
 const PIPE_CHAR: char = '│';
 
@@ -32,7 +32,10 @@ impl Client {
         let mut relative_col = 0;
         let mut cursor_offset = 0;
         out.queue(cursor::MoveTo(2, 0))?.queue(Print(PIPE_CHAR))?;
-        'outer: for buf in current_buffer.text.bufs() {
+        let BufferData::Regular { text, colors } = &current_buffer.data else {
+            todo!()
+        };
+        'outer: for buf in text.bufs() {
             let read_lock = buf.read();
             for c in read_lock.text.chars() {
                 if c == '\n' {
@@ -85,13 +88,13 @@ impl Client {
                             col: relative_col,
                         });
                     } else {
-                        let color = current_buffer.colors[if buf < current_buffer.id {
+                        let color = colors[if buf < current_buffer.id {
                             buf
                         } else {
                             buf - 1
                         }];
 
-                        let username = &current_buffer.text.client(buf).username;
+                        let username = &text.client(buf).username;
                         out.queue(SavePosition)?
                             .queue(MoveToColumn(0))?
                             .queue(SetForegroundColor(color))?

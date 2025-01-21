@@ -2,8 +2,6 @@
 pub mod editor;
 pub mod errors;
 
-use btep::{prelude::S2C, Deserialize};
-use core::panic;
 use crossterm::{
     event::{EnableBracketedPaste, Event, EventStream},
     execute,

@@ -1,5 +1,6 @@
 //! A server side for an editor meant to be used by multiple clients
 #![feature(never_type)]
+#![feature(iter_intersperse)]
 #[cfg(feature = "security")]
 mod security;
 
@@ -13,7 +14,7 @@ pub use security::add_user;
 #[cfg(feature = "security")]
 use security::{auth_check, create_tables};
 
-use btep::{c2s::C2S, prelude::S2C, Deserialize, Serialize};
+use btep::{c2s::C2S, prelude::S2C, s2c::Inhabitant, Deserialize, Serialize};
 use crossterm::style::Color;
 use futures::{executor::block_on, future::ready, FutureExt};
 use std::{
@@ -26,7 +27,7 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use text::Text;
+use text::{client, Text};
 use tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
     net::{tcp::OwnedWriteHalf, TcpListener, TcpStream},
@@ -74,6 +75,8 @@ pub async fn run(
                 stream,
                 Arc::clone(&files),
                 save_interval,
+                path.to_path_buf(),
+                !is_file,
                 #[cfg(feature = "security")]
                 Arc::clone(&pool),
             )
@@ -90,6 +93,8 @@ async fn handle_connection(
     mut stream: TcpStream,
     files: Arc<RwLock<HashMap<PathBuf, BufferData>>>,
     save_interval: Option<NonZeroU64>,
+    path: PathBuf,
+    serve_other: bool,
     #[cfg(feature = "security")] pool: Arc<SqlitePool>,
 ) -> io::Result<()> {
     debug!("new Client");
@@ -132,7 +137,14 @@ async fn handle_connection(
         }
     };
 
-    tokio::spawn(handle_client(username, stream, files, save_interval));
+    tokio::spawn(handle_client(
+        username,
+        stream,
+        files,
+        save_interval,
+        path,
+        serve_other,
+    ));
     Ok(())
 }
 
@@ -144,22 +156,51 @@ async fn handle_client(
     stream: TcpStream,
     files: Arc<RwLock<HashMap<PathBuf, BufferData>>>,
     save_interval: Option<NonZeroU64>,
-) -> Result<!, io::Error> {
+    path: PathBuf,
+    serve_other: bool,
+) -> Result<(), io::Error> {
     let (mut read, mut write) = stream.into_split();
 
-    let C2S::Path(path) = C2S::deserialize(&mut read).await? else {
-        panic!();
+    let client_path = if serve_other {
+        let C2S::Path(client_path) = C2S::deserialize(&mut read).await? else {
+            panic!();
+        };
+        if !client_path
+            .canonicalize()
+            .unwrap()
+            .starts_with(path.canonicalize().unwrap())
+        {
+            return Ok(());
+        }
+        client_path
+    } else {
+        C2S::deserialize(&mut read).await?;
+        path
     };
-    println!("{path:?}");
+    if client_path.is_dir() {
+        write
+            .write_all(
+                &S2C::Folder::<&Text>(
+                    client_path
+                        .read_dir()?
+                        .map(|x| x.map(|x| TryInto::<Inhabitant>::try_into(x).unwrap()))
+                        .collect::<Result<Vec<_>, io::Error>>()?,
+                )
+                .serialize(),
+            )
+            .await?;
+        write.flush().await?;
+        return Ok(());
+    }
     {
         let mut lock = files.write().await;
-        let entry = lock.entry(path.clone()).or_insert_with(|| {
+        let entry = lock.entry(client_path.clone()).or_insert_with(|| {
             let file = File::options()
                 .create(true)
                 .truncate(false)
                 .read(true)
                 .write(true)
-                .open(&path)
+                .open(&client_path)
                 .unwrap();
             let text = Arc::new(RwLock::new(
                 Text::original_from_reader(BufReader::new(file)).unwrap(),
@@ -173,7 +214,7 @@ async fn handle_client(
                 counter: Arc::new(RwLock::new(AutoIncrementing::default())),
             };
 
-            spawn_saver(text, save_interval, notifier, path.clone());
+            spawn_saver(text, save_interval, notifier, client_path.clone());
             ret
         });
         let data = {
@@ -198,7 +239,7 @@ async fn handle_client(
     for (_, client) in files
         .read()
         .await
-        .get(&path)
+        .get(&client_path)
         .unwrap()
         .sockets
         .write()
@@ -219,7 +260,7 @@ async fn handle_client(
     let self_id = files
         .read()
         .await
-        .get(&path)
+        .get(&client_path)
         .unwrap()
         .counter
         .write()
@@ -228,7 +269,7 @@ async fn handle_client(
     files
         .read()
         .await
-        .get(&path)
+        .get(&client_path)
         .unwrap()
         .sockets
         .write()
@@ -240,7 +281,7 @@ async fn handle_client(
             let action = {
                 let action = C2S::deserialize(&mut read).await?;
                 let tmp = files.read().await;
-                let binding = &mut tmp.get(&path).unwrap().text.write().await;
+                let binding = &mut tmp.get(&client_path).unwrap().text.write().await;
                 let lock = binding.client_mut(self_id);
                 match action {
                     C2S::Char(c) => lock.push_char(c),
@@ -250,7 +291,13 @@ async fn handle_client(
                         lock.enter_insert(enter_insert);
                     }
                     C2S::Save => {
-                        files.read().await.get(&path).unwrap().notifier.notify_one();
+                        files
+                            .read()
+                            .await
+                            .get(&client_path)
+                            .unwrap()
+                            .notifier
+                            .notify_one();
                         continue;
                     }
                     C2S::ExitInsert => lock.exit_insert(),
@@ -260,7 +307,7 @@ async fn handle_client(
             };
 
             let tmp = files.read().await;
-            let socket_lock = &mut tmp.get(&path).unwrap().sockets.write().await;
+            let socket_lock = &mut tmp.get(&client_path).unwrap().sockets.write().await;
             for (clientnr, client) in socket_lock.iter_mut() {
                 if *clientnr == self_id {
                     continue;
@@ -279,13 +326,13 @@ async fn handle_client(
         }
         {
             let tmp = files.read().await;
-            let socket_lock = &mut tmp.get(&path).unwrap().sockets.write().await;
+            let socket_lock = &mut tmp.get(&client_path).unwrap().sockets.write().await;
             for client_to_remove in to_remove {
                 info!("removed client {client_to_remove}");
                 files
                     .read()
                     .await
-                    .get(&path)
+                    .get(&client_path)
                     .unwrap()
                     .text
                     .write()

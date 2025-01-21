@@ -8,7 +8,10 @@ use futures::executor::block_on;
 use trie::Trie;
 use utils::other::CursorPos;
 
-use super::client::{Client, Mode};
+use super::{
+    buffer::BufferData,
+    client::{Client, Mode},
+};
 
 type Action = Box<dyn Fn(&mut Client) -> io::Result<()>>;
 
@@ -40,14 +43,11 @@ impl Default for Bindings {
                     [KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE)],
                     Box::new(move |client: &mut Client| {
                         block_on(async {
+                            let BufferData::Regular { text, .. } = &client.curr().data else {
+                                todo!("You can only type in regular buffers")
+                            };
                             client.curr_mut().cursorpos.col = cmp::min(
-                                client
-                                    .curr()
-                                    .text
-                                    .lines()
-                                    .nth(client.curr().cursorpos.row)
-                                    .unwrap()
-                                    .len(),
+                                text.lines().nth(client.curr().cursorpos.row).unwrap().len(),
                                 client.curr().cursorpos.col + 1,
                             );
                             client.enter_insert(client.curr().cursorpos).await?;
@@ -59,13 +59,11 @@ impl Default for Bindings {
                     [KeyEvent::new(KeyCode::Char('A'), KeyModifiers::NONE)],
                     Box::new(move |client: &mut Client| {
                         block_on(async {
-                            client.curr_mut().cursorpos.col = client
-                                .curr()
-                                .text
-                                .lines()
-                                .nth(client.curr().cursorpos.row)
-                                .unwrap()
-                                .len();
+                            let BufferData::Regular { text, .. } = &client.curr().data else {
+                                todo!("You can only type in regular buffers")
+                            };
+                            client.curr_mut().cursorpos.col =
+                                text.lines().nth(client.curr().cursorpos.row).unwrap().len();
                             client.enter_insert(client.curr().cursorpos).await?;
                             Ok(())
                         })
@@ -75,11 +73,12 @@ impl Default for Bindings {
                     [KeyEvent::new(KeyCode::Char('o'), KeyModifiers::NONE)],
                     Box::new(move |client: &mut Client| {
                         block_on(async {
+                            let BufferData::Regular { text, .. } = &client.curr().data else {
+                                todo!("You can only type in regular buffers")
+                            };
                             let pos = CursorPos {
                                 row: client.curr().cursorpos.row,
-                                col: client
-                                    .curr()
-                                    .text
+                                col: text
                                     .lines()
                                     .nth(client.curr_mut().cursorpos.row)
                                     .map_or(0, |x| x.chars().count()),
