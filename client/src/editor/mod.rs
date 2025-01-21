@@ -3,11 +3,7 @@
 //! to the queue for sending to the server, but *not*
 //! actually sending them
 
-use std::{
-    io,
-    path::{Path, PathBuf},
-    time::Duration,
-};
+use std::{io, path::Path, time::Duration};
 
 use bindings::Bindings;
 use client::Client;

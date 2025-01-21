@@ -16,7 +16,7 @@ use security::{auth_check, create_tables};
 
 use btep::{c2s::C2S, prelude::S2C, s2c::Inhabitant, Deserialize, Serialize};
 use crossterm::style::Color;
-use futures::{executor::block_on, future::ready, FutureExt};
+use futures::{executor::block_on, FutureExt};
 use std::{
     collections::HashMap,
     fs::{self, File, OpenOptions},
@@ -27,7 +27,7 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use text::{client, Text};
+use text::Text;
 use tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
     net::{tcp::OwnedWriteHalf, TcpListener, TcpStream},
@@ -165,11 +165,10 @@ async fn handle_client(
         let C2S::Path(client_path) = C2S::deserialize(&mut read).await? else {
             panic!();
         };
-        if !client_path
-            .canonicalize()
-            .unwrap()
-            .starts_with(path.canonicalize().unwrap())
-        {
+        let Ok(canonicalized) = client_path.canonicalize() else {
+            return Ok(());
+        };
+        if canonicalized.starts_with(path.canonicalize().unwrap()) {
             return Ok(());
         }
         client_path
