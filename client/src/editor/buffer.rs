@@ -146,43 +146,56 @@ impl Buffer {
         }
     }
 
+    /// Recalculates the cursor position using the size of the terminal
     pub fn recalculate_cursor(&mut self, (_cols, rows): (u16, u16)) -> io::Result<()> {
         let size = terminal::size()?;
-        let BufferData::Regular { text, .. } = &mut self.data else {
-            todo!("Cursor locations exist in folders too")
-        };
-
-        let mut current_line = 0;
-        let mut relative_col = 0;
-        let mut cursor_offset = 0;
-        'outer: for buf in text.bufs() {
-            let read_lock = buf.read();
-            for c in read_lock.text.chars() {
-                if c == '\n' {
-                    relative_col = 0;
-                    if current_line >= size.1 as usize + self.line_offset {
-                        break 'outer;
-                    };
-                    current_line += 1;
-                } else if current_line >= self.line_offset {
-                    if relative_col >= size.0 as usize - 3 {
-                        relative_col = 0;
-                        current_line += 1;
-                        if self.cursor().row - self.line_offset >= current_line {
-                            cursor_offset += 1;
+        match &mut self.data {
+            BufferData::Regular { text, .. } => {
+                if self.line_offset > self.cursorpos.row {
+                    self.line_offset = self.cursorpos.row;
+                } else {
+                    let mut current_line = 0;
+                    let mut relative_col = 0;
+                    let mut cursor_offset = 0;
+                    'outer: for buf in text.bufs() {
+                        let read_lock = buf.read();
+                        for c in read_lock.text.chars() {
+                            if c == '\n' {
+                                relative_col = 0;
+                                if current_line >= size.1 as usize + self.line_offset {
+                                    break 'outer;
+                                };
+                                current_line += 1;
+                            } else if current_line >= self.line_offset {
+                                if relative_col >= size.0 as usize - 3 {
+                                    relative_col = 0;
+                                    current_line += 1;
+                                    if self.cursor().row - self.line_offset >= current_line {
+                                        cursor_offset += 1;
+                                    }
+                                } else {
+                                    relative_col += 1;
+                                }
+                            }
                         }
-                    } else {
-                        relative_col += 1;
+                    }
+                    if self.line_offset + usize::from(rows) <= self.cursorpos.row + cursor_offset {
+                        self.line_offset += self.cursorpos.row + cursor_offset
+                            - self.line_offset
+                            - usize::from(rows)
+                            + 1;
                     }
                 }
+                Ok(())
+            }
+            BufferData::Folder { inhabitants } => {
+                if self.line_offset > self.cursorpos.row {
+                    self.line_offset = self.cursorpos.row;
+                } else {
+                    todo!()
+                }
+                Ok(())
             }
         }
-        if self.line_offset > self.cursorpos.row {
-            self.line_offset = self.cursorpos.row;
-        } else if self.line_offset + usize::from(rows) <= self.cursorpos.row + cursor_offset {
-            self.line_offset +=
-                self.cursorpos.row + cursor_offset - self.line_offset - usize::from(rows) + 1;
-        }
-        Ok(())
     }
 }

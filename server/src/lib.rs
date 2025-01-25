@@ -160,17 +160,16 @@ async fn handle_client(
     serve_other: bool,
 ) -> Result<(), io::Error> {
     let (mut read, mut write) = stream.into_split();
-
     let client_path = if serve_other {
         let C2S::Path(client_path) = C2S::deserialize(&mut read).await? else {
             panic!();
         };
-        println!("{}", line!());
-        let Ok(canonicalized) = client_path.canonicalize() else {
+        warn!("client path was invalid");
+        let Ok(canonicalized) = path.join(client_path).canonicalize() else {
             return Ok(());
         };
-        println!("{}", line!());
         if !(canonicalized.starts_with(path.canonicalize().unwrap())) {
+            trace!("client path was invalid: {canonicalized:?} vs {:?}", path.canonicalize().unwrap());
             return Ok(());
         }
         canonicalized
@@ -179,7 +178,7 @@ async fn handle_client(
         path
     };
     if client_path.is_dir() {
-        println!("is_dir");
+        trace!("serving directory");
         write
             .write_all(
                 &S2C::Folder::<&Text>(

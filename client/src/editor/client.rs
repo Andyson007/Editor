@@ -247,18 +247,22 @@ impl Client {
 
     pub(crate) fn move_down(&mut self) {
         self.curr_mut().cursorpos.row = cmp::min(self.curr_mut().cursorpos.row + 1, {
-            let BufferData::Regular { text, .. } = &mut self.curr_mut().data else {
-                todo!()
-            };
-            text.lines().count().saturating_sub(1)
+            match &self.curr().data {
+                BufferData::Regular { text, .. } => text.lines().count().saturating_sub(1),
+                BufferData::Folder { inhabitants } => inhabitants.len().saturating_sub(1),
+            }
         });
         self.curr_mut().cursorpos.col = cmp::min(self.curr_mut().cursorpos.col, {
-            let BufferData::Regular { text, .. } = &mut self.curr_mut().data else {
-                todo!()
-            };
-            text.lines()
-                .nth(self.curr_mut().cursorpos.row)
-                .map_or(0, |x| x.chars().count().saturating_sub(2))
+            match &self.curr().data {
+                BufferData::Regular { text, .. } => text
+                    .lines()
+                    .nth(self.curr_mut().cursorpos.row)
+                    .map_or(0, |x| x.chars().count().saturating_sub(2)),
+                BufferData::Folder { inhabitants } => inhabitants[self.curr().cursorpos.row]
+                    .name
+                    .len()
+                    .saturating_sub(2),
+            }
         });
     }
 
