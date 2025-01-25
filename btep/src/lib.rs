@@ -210,7 +210,7 @@ impl Deserialize for String {
 
 impl Serialize for bool {
     fn serialize(&self) -> Vec<u8> {
-        [if *self { 0 } else { 1 }].into()
+        [if *self { 1 } else { 0 }].into()
     }
 }
 

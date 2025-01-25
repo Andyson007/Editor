@@ -5,6 +5,7 @@ use btep::{
     s2c::{Inhabitant, S2C},
     Deserialize, Serialize,
 };
+use color_eyre::owo_colors::OwoColorize;
 use crossterm::{style::Color, terminal};
 use text::Text;
 use tokio::{
@@ -21,8 +22,6 @@ use utils::other::CursorPos;
 #[derive(Debug)]
 pub struct Buffer {
     pub data: BufferData,
-    /// Our own id within the Text
-    pub(super) id: usize,
     /// stores where the cursor is located
     pub(crate) cursorpos: CursorPos,
     /// stores the amount of lines that have been scrolled down
@@ -33,13 +32,15 @@ pub struct Buffer {
 #[derive(Debug)]
 pub enum BufferData {
     Regular {
+        /// Our own id within the Text
+        id: usize,
         /// The rope stores the entire file being edited.
         text: Text,
         /// An map from id to their color in the buffer
         colors: Vec<Color>,
     },
     Folder {
-        path: OsString,
+        inhabitants: Vec<Inhabitant>,
     },
 }
 
@@ -60,8 +61,7 @@ impl Buffer {
     ) -> Self {
         let id = text.add_client(&username);
         Self {
-            data: BufferData::Regular { text, colors },
-            id,
+            data: BufferData::Regular { text, colors, id },
             cursorpos: CursorPos::default(),
             line_offset: 0,
             socket: socket.map(|x| {
@@ -76,15 +76,12 @@ impl Buffer {
 
     #[must_use]
     pub fn new_folder(username: String, inhabitants: Vec<Inhabitant>) -> Self {
-        todo!()
-        // Self {
-        //     text: todo!(),
-        //     colors: todo!(),
-        //     id: 0, // Doesn't matter
-        //     cursorpos: CursorPos::default(),
-        //     line_offset: 0,
-        //     socket: None,
-        // }
+        Self {
+            data: BufferData::Folder { inhabitants },
+            cursorpos: CursorPos::default(),
+            line_offset: 0,
+            socket: None,
+        }
     }
 
     /// Returns an immutable reference to the internal
@@ -139,7 +136,7 @@ impl Buffer {
                 Ok(true)
             }
             S2C::NewClient((username, color)) => {
-                let BufferData::Regular { text, colors } = &mut self.data else {
+                let BufferData::Regular { text, colors, .. } = &mut self.data else {
                     panic!("New clients cannot join non-regular files");
                 };
                 text.add_client(&username);

@@ -20,9 +20,10 @@ pub enum S2C<T> {
     NewClient((String, Color)),
 }
 
+#[derive(Debug)]
 pub struct Inhabitant {
-    name: OsString,
-    is_folder: bool,
+    pub name: OsString,
+    pub is_folder: bool,
     // TODO: Prob add like filesize stuff too
 }
 

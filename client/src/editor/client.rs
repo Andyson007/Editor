@@ -144,8 +144,12 @@ impl Client {
     /// This function handles sending the request *without* flushing the stream.
     /// Cursor movement is also handled
     pub(crate) async fn type_char(&mut self, c: char) -> io::Result<()> {
-        let curr_id = self.curr().id;
-        let BufferData::Regular { text, .. } = &mut self.curr_mut().data else {
+        let BufferData::Regular {
+            ref mut text,
+            id: curr_id,
+            ..
+        } = self.curr_mut().data
+        else {
             todo!("You can only type in regular buffers")
         };
         text.client_mut(curr_id).push_char(c);
@@ -163,12 +167,16 @@ impl Client {
     }
 
     pub(crate) async fn exit_insert(&mut self) -> io::Result<()> {
-        let curr_id = self.curr().id;
-        self.modeinfo.set_mode(Mode::Normal);
-        let BufferData::Regular { text, .. } = &mut self.curr_mut().data else {
+        let BufferData::Regular {
+            ref mut text,
+            id: curr_id,
+            ..
+        } = self.curr_mut().data
+        else {
             unreachable!("You can only be in insert mode in regular buffers");
         };
         text.client_mut(curr_id).exit_insert();
+        self.modeinfo.set_mode(Mode::Normal);
 
         if let Some(buffer::Socket { ref mut writer, .. }) = self.curr_mut().socket {
             writer.write_all(&C2S::ExitInsert.serialize()).await?
@@ -185,10 +193,8 @@ impl Client {
     }
 
     pub(crate) async fn backspace(&mut self) -> io::Result<Option<char>> {
-        let curr_id = self.curr().id;
-
         let prev_line_len = (self.curr_mut().cursorpos.row != 0).then(|| {
-            let BufferData::Regular { text, .. } = &mut self.curr_mut().data else {
+            let BufferData::Regular { ref mut text, .. } = self.curr_mut().data else {
                 todo!()
             };
             text.lines()
@@ -197,7 +203,12 @@ impl Client {
                 .len()
         });
 
-        let BufferData::Regular { text, .. } = &mut self.curr_mut().data else {
+        let BufferData::Regular {
+            ref mut text,
+            id: curr_id,
+            ..
+        } = self.curr_mut().data
+        else {
             todo!()
         };
         let (deleted, swaps) = text.client_mut(curr_id).backspace();
@@ -264,9 +275,13 @@ impl Client {
 
     /// Note this does not flush the writer
     pub(crate) async fn enter_insert(&mut self, pos: CursorPos) -> io::Result<()> {
-        let curr_id = self.curr_mut().id;
-        let BufferData::Regular { text, .. } = &mut self.curr_mut().data else {
-            todo!()
+        let BufferData::Regular {
+            ref mut text,
+            id: curr_id,
+            ..
+        } = self.curr_mut().data
+        else {
+            unreachable!()
         };
         let (_offset, _id) = text.client_mut(curr_id).enter_insert(pos);
         if let Some(buffer::Socket { ref mut writer, .. }) = self.curr_mut().socket {

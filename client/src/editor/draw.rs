@@ -1,9 +1,11 @@
+use btep::s2c::Inhabitant;
 use crossterm::{
     cursor::{self, MoveToColumn, MoveToNextLine, RestorePosition, SavePosition},
     style::{Color, Print, SetBackgroundColor, SetForegroundColor},
     terminal::{self, ClearType},
 };
 use std::io;
+use text::Text;
 use utils::other::CursorPos;
 
 use crossterm::QueueableCommand;
@@ -22,6 +24,22 @@ impl Client {
     where
         E: QueueableCommand + io::Write,
     {
+        match &self.curr().data {
+            BufferData::Regular { text, colors, id } => self.draw_regular(out, text, colors, *id),
+            BufferData::Folder { inhabitants } => self.draw_inhabitonts(out, inhabitants),
+        }
+    }
+
+    fn draw_regular<E>(
+        &self,
+        out: &mut E,
+        text: &Text,
+        colors: &[Color],
+        id: usize,
+    ) -> io::Result<()>
+    where
+        E: QueueableCommand + io::Write,
+    {
         let current_buffer = &self.buffers[self.current_buffer];
 
         out.queue(terminal::Clear(ClearType::All))?;
@@ -32,9 +50,6 @@ impl Client {
         let mut relative_col = 0;
         let mut cursor_offset = 0;
         out.queue(cursor::MoveTo(2, 0))?.queue(Print(PIPE_CHAR))?;
-        let BufferData::Regular { text, colors } = &current_buffer.data else {
-            todo!()
-        };
         'outer: for buf in text.bufs() {
             let read_lock = buf.read();
             for c in read_lock.text.chars() {
@@ -82,17 +97,13 @@ impl Client {
             }
             if let Some((buf, occupied)) = read_lock.buf {
                 if occupied {
-                    if buf == current_buffer.id {
+                    if buf == id {
                         self_pos = Some(CursorPos {
                             row: current_relative_line - current_buffer.line_offset,
                             col: relative_col,
                         });
                     } else {
-                        let color = colors[if buf < current_buffer.id {
-                            buf
-                        } else {
-                            buf - 1
-                        }];
+                        let color = colors[if buf < id { buf } else { buf - 1 }];
 
                         let username = &text.client(buf).username;
                         out.queue(SavePosition)?
@@ -150,6 +161,32 @@ impl Client {
                 ))?;
             }
         }
+        out.flush()?;
+        Ok(())
+    }
+
+    fn draw_inhabitonts<E>(&self, out: &mut E, inhabitants: &[Inhabitant]) -> io::Result<()>
+    where
+        E: QueueableCommand + io::Write,
+    {
+        out.queue(terminal::Clear(ClearType::All))?;
+        out.queue(cursor::MoveTo(0, 0))?;
+        for inhabitant in inhabitants.iter().skip(self.curr().line_offset) {
+            if inhabitant.is_folder {
+                out.queue(SetForegroundColor(Color::DarkBlue))?;
+            }
+            out.queue(Print(inhabitant.name.to_str().unwrap()))?;
+            if inhabitant.is_folder {
+                out.queue(SetForegroundColor(Color::Reset))?;
+            }
+            out.queue(cursor::MoveToNextLine(1))?;
+        }
+
+        out.queue(cursor::MoveTo(
+            self.curr().cursorpos.col as u16,
+            self.curr().cursorpos.row as u16,
+        ))?;
+
         out.flush()?;
         Ok(())
     }

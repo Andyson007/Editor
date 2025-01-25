@@ -19,7 +19,7 @@ use crossterm::style::Color;
 use futures::{executor::block_on, FutureExt};
 use std::{
     collections::HashMap,
-    fs::{self, File, OpenOptions},
+    fs::{self, canonicalize, File, OpenOptions},
     io::{self, BufReader, BufWriter, Error, Write},
     net::SocketAddrV4,
     num::NonZeroU64,
@@ -165,18 +165,21 @@ async fn handle_client(
         let C2S::Path(client_path) = C2S::deserialize(&mut read).await? else {
             panic!();
         };
+        println!("{}", line!());
         let Ok(canonicalized) = client_path.canonicalize() else {
             return Ok(());
         };
-        if canonicalized.starts_with(path.canonicalize().unwrap()) {
+        println!("{}", line!());
+        if !(canonicalized.starts_with(path.canonicalize().unwrap())) {
             return Ok(());
         }
-        client_path
+        canonicalized
     } else {
         C2S::deserialize(&mut read).await?;
         path
     };
     if client_path.is_dir() {
+        println!("is_dir");
         write
             .write_all(
                 &S2C::Folder::<&Text>(
@@ -191,6 +194,7 @@ async fn handle_client(
         write.flush().await?;
         return Ok(());
     }
+    println!("isn't dir");
     {
         let mut lock = files.write().await;
         let entry = lock.entry(client_path.clone()).or_insert_with(|| {
