@@ -264,26 +264,30 @@ impl Client {
                 BufferTypeData::Folder { inhabitants } => inhabitants[self.curr().cursorpos.row]
                     .name
                     .len()
-                    .saturating_sub(2),
+                    .saturating_sub(1),
             }
         });
     }
 
     pub(crate) fn move_right(&mut self) {
         self.curr_mut().cursorpos.col = cmp::min(self.curr_mut().cursorpos.col + 1, {
-            let BufferTypeData::Regular { text, .. } = &mut self.curr_mut().data.buffer_type else {
-                todo!()
-            };
-            text.lines()
-                .nth(self.curr_mut().cursorpos.row)
-                .map_or(0, |x| x.chars().count().saturating_sub(1))
+            match &self.curr().data.buffer_type {
+                BufferTypeData::Regular { text, .. } => text
+                    .lines()
+                    .nth(self.curr().cursorpos.row)
+                    .map_or(0, |x| x.chars().count().saturating_sub(1)),
+                BufferTypeData::Folder { inhabitants } => inhabitants[self.curr().cursorpos.row]
+                    .name
+                    .len()
+                    .saturating_sub(1),
+            }
         });
     }
 
     /// Note this does not flush the writer
     pub(crate) async fn enter_insert(&mut self, pos: CursorPos) -> io::Result<()> {
         if !self.curr().data.modifiable {
-            return Ok(())
+            return Ok(());
         }
         let BufferTypeData::Regular {
             ref mut text,
