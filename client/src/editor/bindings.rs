@@ -9,7 +9,7 @@ use trie::Trie;
 use utils::other::CursorPos;
 
 use super::{
-    buffer::BufferData,
+    buffer::BufferTypeData,
     client::{Client, Mode},
 };
 
@@ -43,7 +43,12 @@ impl Default for Bindings {
                     [KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE)],
                     Box::new(move |client: &mut Client| {
                         block_on(async {
-                            let BufferData::Regular { text, .. } = &client.curr().data else {
+                            if !client.curr().data.modifiable {
+                                return Ok(());
+                            }
+                            let BufferTypeData::Regular { text, .. } =
+                                &client.curr().data.buffer_type
+                            else {
                                 todo!("You can only type in regular buffers")
                             };
                             client.curr_mut().cursorpos.col = cmp::min(
@@ -59,7 +64,12 @@ impl Default for Bindings {
                     [KeyEvent::new(KeyCode::Char('A'), KeyModifiers::NONE)],
                     Box::new(move |client: &mut Client| {
                         block_on(async {
-                            let BufferData::Regular { text, .. } = &client.curr().data else {
+                            if !client.curr().data.modifiable {
+                                return Ok(());
+                            }
+                            let BufferTypeData::Regular { text, .. } =
+                                &client.curr().data.buffer_type
+                            else {
                                 todo!("You can only type in regular buffers")
                             };
                             client.curr_mut().cursorpos.col =
@@ -73,7 +83,12 @@ impl Default for Bindings {
                     [KeyEvent::new(KeyCode::Char('o'), KeyModifiers::NONE)],
                     Box::new(move |client: &mut Client| {
                         block_on(async {
-                            let BufferData::Regular { text, .. } = &client.curr().data else {
+                            if !client.curr().data.modifiable {
+                                return Ok(());
+                            }
+                            let BufferTypeData::Regular { text, .. } =
+                                &client.curr().data.buffer_type
+                            else {
                                 todo!("You can only type in regular buffers")
                             };
                             let pos = CursorPos {

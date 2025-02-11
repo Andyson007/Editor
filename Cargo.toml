@@ -1,4 +1,19 @@
 [workspace]
 resolver = "2"
 
-members = ["server","client", "btep", "bundled", "piece-table", "append_only_str", "utils", "text", "trie"]
+members = [
+  "server",
+  "client",
+  "btep",
+  "bundled",
+  "piece-table",
+  "append_only_str",
+  "utils",
+  "text",
+  "trie",
+]
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1
+opt-level = "z"

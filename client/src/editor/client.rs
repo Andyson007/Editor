@@ -14,7 +14,7 @@ use utils::other::CursorPos;
 
 use crate::editor::buffer::Buffer;
 
-use super::buffer::BufferData;
+use super::buffer::BufferTypeData;
 /// Represents a single client.
 #[derive(Default)]
 pub struct Client {
@@ -49,7 +49,7 @@ impl Client {
                     Some(socket),
                 ))
             }
-            S2C::Folder(inhabitants) => Ok(Self::new_from_folder(username, inhabitants)),
+            S2C::Folder(inhabitants) => Ok(Self::new_from_folder(inhabitants)),
             _ => panic!("Initial message in wrong protocol"),
         }
     }
@@ -73,8 +73,8 @@ impl Client {
 
     /// Creates a new client prepopulated with a folder view
     #[must_use]
-    pub fn new_from_folder(username: String, inhabitants: Vec<Inhabitant>) -> Self {
-        let buf = Buffer::new_folder(username, inhabitants);
+    pub fn new_from_folder(inhabitants: Vec<Inhabitant>) -> Self {
+        let buf = Buffer::new_folder(inhabitants);
         Self {
             buffers: Vec::from([buf]),
             current_buffer: 0,
@@ -144,11 +144,11 @@ impl Client {
     /// This function handles sending the request *without* flushing the stream.
     /// Cursor movement is also handled
     pub(crate) async fn type_char(&mut self, c: char) -> io::Result<()> {
-        let BufferData::Regular {
+        let BufferTypeData::Regular {
             ref mut text,
             id: curr_id,
             ..
-        } = self.curr_mut().data
+        } = self.curr_mut().data.buffer_type
         else {
             todo!("You can only type in regular buffers")
         };
@@ -167,11 +167,11 @@ impl Client {
     }
 
     pub(crate) async fn exit_insert(&mut self) -> io::Result<()> {
-        let BufferData::Regular {
+        let BufferTypeData::Regular {
             ref mut text,
             id: curr_id,
             ..
-        } = self.curr_mut().data
+        } = self.curr_mut().data.buffer_type
         else {
             unreachable!("You can only be in insert mode in regular buffers");
         };
@@ -181,7 +181,7 @@ impl Client {
         if let Some(buffer::Socket { ref mut writer, .. }) = self.curr_mut().socket {
             writer.write_all(&C2S::ExitInsert.serialize()).await?
         }
-        let BufferData::Regular { text, .. } = &self.curr().data else {
+        let BufferTypeData::Regular { text, .. } = &self.curr().data.buffer_type else {
             todo!()
         };
         let curr_line_len = text.lines().nth(self.curr().cursorpos.row).unwrap().len();
@@ -194,7 +194,8 @@ impl Client {
 
     pub(crate) async fn backspace(&mut self) -> io::Result<Option<char>> {
         let prev_line_len = (self.curr_mut().cursorpos.row != 0).then(|| {
-            let BufferData::Regular { ref mut text, .. } = self.curr_mut().data else {
+            let BufferTypeData::Regular { ref mut text, .. } = self.curr_mut().data.buffer_type
+            else {
                 todo!()
             };
             text.lines()
@@ -203,11 +204,11 @@ impl Client {
                 .len()
         });
 
-        let BufferData::Regular {
+        let BufferTypeData::Regular {
             ref mut text,
             id: curr_id,
             ..
-        } = self.curr_mut().data
+        } = self.curr_mut().data.buffer_type
         else {
             todo!()
         };
@@ -235,30 +236,32 @@ impl Client {
     pub(crate) fn move_up(&mut self) {
         self.curr_mut().cursorpos.row = self.curr_mut().cursorpos.row.saturating_sub(1);
         self.curr_mut().cursorpos.col = cmp::min(self.curr_mut().cursorpos.col, {
-            let BufferData::Regular { text, .. } = &mut self.curr_mut().data else {
-                todo!("You can only type in regular buffers")
-            };
-
-            text.lines()
-                .nth(self.curr_mut().cursorpos.row)
-                .map_or(0, |x| x.chars().count().saturating_sub(1))
+            match &self.curr().data.buffer_type {
+                BufferTypeData::Regular { text, .. } => text
+                    .lines()
+                    .nth(self.curr().cursorpos.row)
+                    .map_or(0, |x| x.chars().count().saturating_sub(1)),
+                BufferTypeData::Folder { inhabitants } => inhabitants
+                    .get(self.curr().cursorpos.row)
+                    .map_or(0, |x| x.name.len().saturating_sub(1)),
+            }
         });
     }
 
     pub(crate) fn move_down(&mut self) {
         self.curr_mut().cursorpos.row = cmp::min(self.curr_mut().cursorpos.row + 1, {
-            match &self.curr().data {
-                BufferData::Regular { text, .. } => text.lines().count().saturating_sub(1),
-                BufferData::Folder { inhabitants } => inhabitants.len().saturating_sub(1),
+            match &self.curr().data.buffer_type {
+                BufferTypeData::Regular { text, .. } => text.lines().count().saturating_sub(1),
+                BufferTypeData::Folder { inhabitants } => inhabitants.len().saturating_sub(1),
             }
         });
         self.curr_mut().cursorpos.col = cmp::min(self.curr_mut().cursorpos.col, {
-            match &self.curr().data {
-                BufferData::Regular { text, .. } => text
+            match &self.curr().data.buffer_type {
+                BufferTypeData::Regular { text, .. } => text
                     .lines()
                     .nth(self.curr_mut().cursorpos.row)
                     .map_or(0, |x| x.chars().count().saturating_sub(2)),
-                BufferData::Folder { inhabitants } => inhabitants[self.curr().cursorpos.row]
+                BufferTypeData::Folder { inhabitants } => inhabitants[self.curr().cursorpos.row]
                     .name
                     .len()
                     .saturating_sub(2),
@@ -268,7 +271,7 @@ impl Client {
 
     pub(crate) fn move_right(&mut self) {
         self.curr_mut().cursorpos.col = cmp::min(self.curr_mut().cursorpos.col + 1, {
-            let BufferData::Regular { text, .. } = &mut self.curr_mut().data else {
+            let BufferTypeData::Regular { text, .. } = &mut self.curr_mut().data.buffer_type else {
                 todo!()
             };
             text.lines()
@@ -279,11 +282,14 @@ impl Client {
 
     /// Note this does not flush the writer
     pub(crate) async fn enter_insert(&mut self, pos: CursorPos) -> io::Result<()> {
-        let BufferData::Regular {
+        if !self.curr().data.modifiable {
+            return Ok(())
+        }
+        let BufferTypeData::Regular {
             ref mut text,
             id: curr_id,
             ..
-        } = self.curr_mut().data
+        } = self.curr_mut().data.buffer_type
         else {
             unreachable!()
         };

@@ -10,7 +10,7 @@ use utils::other::CursorPos;
 
 use crossterm::QueueableCommand;
 
-use super::{buffer::BufferData, client::Mode, Client};
+use super::{buffer::BufferTypeData, client::Mode, Client};
 
 const PIPE_CHAR: char = '│';
 
@@ -24,9 +24,11 @@ impl Client {
     where
         E: QueueableCommand + io::Write,
     {
-        match &self.curr().data {
-            BufferData::Regular { text, colors, id } => self.draw_regular(out, text, colors, *id),
-            BufferData::Folder { inhabitants } => self.draw_inhabitonts(out, inhabitants),
+        match &self.curr().data.buffer_type {
+            BufferTypeData::Regular { text, colors, id } => {
+                self.draw_regular(out, text, colors, *id)
+            }
+            BufferTypeData::Folder { inhabitants } => self.draw_inhabitonts(out, inhabitants),
         }
     }
 

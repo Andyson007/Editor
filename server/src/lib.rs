@@ -19,7 +19,7 @@ use crossterm::style::Color;
 use futures::{executor::block_on, FutureExt};
 use std::{
     collections::HashMap,
-    fs::{self, canonicalize, File, OpenOptions},
+    fs::{self, File, OpenOptions},
     io::{self, BufReader, BufWriter, Error, Write},
     net::SocketAddrV4,
     num::NonZeroU64,

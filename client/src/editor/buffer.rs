@@ -1,11 +1,11 @@
-use std::{ffi::OsString, io};
+use std::io;
 
 use btep::{
     c2s::C2S,
     s2c::{Inhabitant, S2C},
     Deserialize, Serialize,
 };
-use color_eyre::owo_colors::OwoColorize;
+
 use crossterm::{style::Color, terminal};
 use text::Text;
 use tokio::{
@@ -30,7 +30,13 @@ pub struct Buffer {
 }
 
 #[derive(Debug)]
-pub enum BufferData {
+pub struct BufferData {
+    pub buffer_type: BufferTypeData,
+    pub modifiable: bool,
+}
+
+#[derive(Debug)]
+pub enum BufferTypeData {
     Regular {
         /// Our own id within the Text
         id: usize,
@@ -61,7 +67,10 @@ impl Buffer {
     ) -> Self {
         let id = text.add_client(&username);
         Self {
-            data: BufferData::Regular { text, colors, id },
+            data: BufferData {
+                buffer_type: BufferTypeData::Regular { text, colors, id },
+                modifiable: true,
+            },
             cursorpos: CursorPos::default(),
             line_offset: 0,
             socket: socket.map(|x| {
@@ -75,9 +84,12 @@ impl Buffer {
     }
 
     #[must_use]
-    pub fn new_folder(username: String, inhabitants: Vec<Inhabitant>) -> Self {
+    pub fn new_folder(inhabitants: Vec<Inhabitant>) -> Self {
         Self {
-            data: BufferData::Folder { inhabitants },
+            data: BufferData {
+                buffer_type: BufferTypeData::Folder { inhabitants },
+                modifiable: false,
+            },
             cursorpos: CursorPos::default(),
             line_offset: 0,
             socket: None,
@@ -115,7 +127,7 @@ impl Buffer {
             S2C::Full(_) => unreachable!("A full buffer shouldn't be sent"),
             S2C::Folder(_) => unreachable!("A folder shouldn't be sent"),
             S2C::Update((client_id, action)) => {
-                let BufferData::Regular { text, .. } = &mut self.data else {
+                let BufferTypeData::Regular { text, .. } = &mut self.data.buffer_type else {
                     panic!("Only updates in Regul mode are supported (at the moment)");
                 };
                 let client = text.client_mut(client_id);
@@ -136,7 +148,8 @@ impl Buffer {
                 Ok(true)
             }
             S2C::NewClient((username, color)) => {
-                let BufferData::Regular { text, colors, .. } = &mut self.data else {
+                let BufferTypeData::Regular { text, colors, .. } = &mut self.data.buffer_type
+                else {
                     panic!("New clients cannot join non-regular files");
                 };
                 text.add_client(&username);
@@ -149,8 +162,8 @@ impl Buffer {
     /// Recalculates the cursor position using the size of the terminal
     pub fn recalculate_cursor(&mut self, (_cols, rows): (u16, u16)) -> io::Result<()> {
         let size = terminal::size()?;
-        match &mut self.data {
-            BufferData::Regular { text, .. } => {
+        match &mut self.data.buffer_type {
+            BufferTypeData::Regular { text, .. } => {
                 if self.line_offset > self.cursorpos.row {
                     self.line_offset = self.cursorpos.row;
                 } else {
@@ -188,11 +201,15 @@ impl Buffer {
                 }
                 Ok(())
             }
-            BufferData::Folder { inhabitants } => {
+            BufferTypeData::Folder { inhabitants } => {
                 if self.line_offset > self.cursorpos.row {
                     self.line_offset = self.cursorpos.row;
                 } else {
-                    todo!()
+                    let cursor_offset = || todo!();
+                    if self.line_offset + usize::from(rows) <= self.cursorpos.row {
+                        self.line_offset +=
+                            self.cursorpos.row - self.line_offset - usize::from(rows) + 1;
+                    }
                 }
                 Ok(())
             }
