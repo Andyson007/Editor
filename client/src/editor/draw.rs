@@ -28,7 +28,7 @@ impl Client {
             BufferTypeData::Regular { text, colors, id } => {
                 self.draw_regular(out, text, colors, *id)
             }
-            BufferTypeData::Folder { inhabitants } => self.draw_inhabitonts(out, inhabitants),
+            BufferTypeData::Folder { inhabitants } => self.draw_inhabitants(out, inhabitants),
         }
     }
 
@@ -167,7 +167,7 @@ impl Client {
         Ok(())
     }
 
-    fn draw_inhabitonts<E>(&self, out: &mut E, inhabitants: &[Inhabitant]) -> io::Result<()>
+    fn draw_inhabitants<E>(&self, out: &mut E, inhabitants: &[Inhabitant]) -> io::Result<()>
     where
         E: QueueableCommand + io::Write,
     {
@@ -179,6 +179,7 @@ impl Client {
             }
             out.queue(Print(inhabitant.name.to_str().unwrap()))?;
             if inhabitant.is_folder {
+            out.queue(Print('/'))?;
                 out.queue(SetForegroundColor(Color::Reset))?;
             }
             out.queue(cursor::MoveToNextLine(1))?;

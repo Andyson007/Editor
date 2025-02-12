@@ -28,20 +28,20 @@ impl Default for Bindings {
                 let mut trie: Trie<KeyEvent, Action> = Trie::new();
                 trie.insert(
                     [KeyEvent::new(KeyCode::Char('i'), KeyModifiers::NONE)],
-                    Box::new(move |client: &mut Client| {
+                    Box::new(|client: &mut Client| {
                         block_on(client.enter_insert(client.curr().cursorpos))
                     }),
                 );
                 trie.insert(
                     [KeyEvent::new(KeyCode::Char('I'), KeyModifiers::NONE)],
-                    Box::new(move |client: &mut Client| {
+                    Box::new(|client: &mut Client| {
                         client.curr_mut().cursorpos.col = 0;
                         block_on(client.enter_insert(client.curr().cursorpos))
                     }),
                 );
                 trie.insert(
                     [KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE)],
-                    Box::new(move |client: &mut Client| {
+                    Box::new(|client: &mut Client| {
                         block_on(async {
                             if !client.curr().data.modifiable {
                                 return Ok(());
@@ -62,7 +62,7 @@ impl Default for Bindings {
                 );
                 trie.insert(
                     [KeyEvent::new(KeyCode::Char('A'), KeyModifiers::NONE)],
-                    Box::new(move |client: &mut Client| {
+                    Box::new(|client: &mut Client| {
                         block_on(async {
                             if !client.curr().data.modifiable {
                                 return Ok(());
@@ -81,7 +81,7 @@ impl Default for Bindings {
                 );
                 trie.insert(
                     [KeyEvent::new(KeyCode::Char('o'), KeyModifiers::NONE)],
-                    Box::new(move |client: &mut Client| {
+                    Box::new(|client: &mut Client| {
                         block_on(async {
                             if !client.curr().data.modifiable {
                                 return Ok(());
@@ -106,7 +106,7 @@ impl Default for Bindings {
                 );
                 trie.insert(
                     [KeyEvent::new(KeyCode::Char(':'), KeyModifiers::NONE)],
-                    Box::new(move |client: &mut Client| {
+                    Box::new(|client: &mut Client| {
                         client.modeinfo.set_mode(Mode::Command(String::new()));
                         Ok(())
                     }),
@@ -114,7 +114,7 @@ impl Default for Bindings {
                 for x in [KeyCode::Char('h'), KeyCode::Left] {
                     trie.insert(
                         [KeyEvent::new(x, KeyModifiers::NONE)],
-                        Box::new(move |client: &mut Client| {
+                        Box::new(|client: &mut Client| {
                             client.move_left();
                             Ok(())
                         }),
@@ -123,7 +123,7 @@ impl Default for Bindings {
                 for x in [KeyCode::Char('j'), KeyCode::Down] {
                     trie.insert(
                         [KeyEvent::new(x, KeyModifiers::NONE)],
-                        Box::new(move |client: &mut Client| {
+                        Box::new(|client: &mut Client| {
                             client.move_down();
                             Ok(())
                         }),
@@ -132,7 +132,7 @@ impl Default for Bindings {
                 for x in [KeyCode::Char('k'), KeyCode::Up] {
                     trie.insert(
                         [KeyEvent::new(x, KeyModifiers::NONE)],
-                        Box::new(move |client: &mut Client| {
+                        Box::new(|client: &mut Client| {
                             client.move_up();
                             Ok(())
                         }),
@@ -141,12 +141,19 @@ impl Default for Bindings {
                 for x in [KeyCode::Char('l'), KeyCode::Right] {
                     trie.insert(
                         [KeyEvent::new(x, KeyModifiers::NONE)],
-                        Box::new(move |client: &mut Client| {
+                        Box::new(|client: &mut Client| {
                             client.move_right();
                             Ok(())
                         }),
                     );
                 }
+                trie.insert(
+                    [KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)],
+                    Box::new(|client: &mut Client| {
+                        client.move_right();
+                        Ok(())
+                    }),
+                );
                 trie
             },
             insert: {
@@ -159,15 +166,15 @@ impl Default for Bindings {
                 }
                 trie.insert(
                     [KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)],
-                    Box::new(move |client: &mut Client| block_on(client.type_char('\n'))),
+                    Box::new(|client: &mut Client| block_on(client.type_char('\n'))),
                 );
                 trie.insert(
                     [KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)],
-                    Box::new(move |client: &mut Client| block_on(client.exit_insert())),
+                    Box::new(|client: &mut Client| block_on(client.exit_insert())),
                 );
                 trie.insert(
                     [KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE)],
-                    Box::new(move |client: &mut Client| {
+                    Box::new(|client: &mut Client| {
                         block_on(async {
                             client.backspace().await?;
                             Ok(())
@@ -179,11 +186,11 @@ impl Default for Bindings {
                         KeyEvent::new(KeyCode::Char('u'), KeyModifiers::NONE),
                         KeyEvent::new(KeyCode::Char('h'), KeyModifiers::NONE),
                     ],
-                    Box::new(move |client: &mut Client| block_on(client.exit_insert())),
+                    Box::new(|client: &mut Client| block_on(client.exit_insert())),
                 );
                 trie.insert(
                     [KeyEvent::new(KeyCode::Char('w'), KeyModifiers::CONTROL)],
-                    Box::new(move |client: &mut Client| {
+                    Box::new(|client: &mut Client| {
                         block_on(async {
                             let Some(first_del) = client.backspace().await? else {
                                 return Ok(());
@@ -212,7 +219,7 @@ impl Default for Bindings {
                 let mut trie: Trie<KeyEvent, Action> = Trie::new();
                 trie.insert(
                     [KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE)],
-                    Box::new(move |client: &mut Client| {
+                    Box::new(|client: &mut Client| {
                         let Mode::Command(ref mut x) = client.modeinfo.mode else {
                             unreachable!()
                         };
@@ -224,7 +231,7 @@ impl Default for Bindings {
                 );
                 trie.insert(
                     [KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)],
-                    Box::new(move |client: &mut Client| {
+                    Box::new(|client: &mut Client| {
                         let Mode::Command(ref x) = client.modeinfo.mode else {
                             unreachable!()
                         };
