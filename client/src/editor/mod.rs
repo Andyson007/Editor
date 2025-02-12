@@ -3,7 +3,7 @@
 //! to the queue for sending to the server, but *not*
 //! actually sending them
 
-use std::{io, path::Path, time::Duration};
+use std::{io, net::SocketAddrV4, path::Path, time::Duration};
 
 use bindings::Bindings;
 use buffer::Buffer;
@@ -22,27 +22,39 @@ pub struct App {
 }
 
 impl App {
-    pub async fn new(username: String, socket: TcpStream, path: &Path) -> io::Result<Self> {
+    pub async fn new(
+        username: String,
+        password: Option<&str>,
+        address: SocketAddrV4,
+        path: &Path,
+    ) -> io::Result<Self> {
         Ok(Self {
-            client: Client::from_socket(username, socket, path).await?,
+            client: Client::from_path(username, password.map(ToOwned::to_owned), address, path)
+                .await?,
             bindings: Bindings::default(),
         })
     }
 
     pub fn new_with_buffer(
         username: String,
+        password: Option<String>,
         text: Text,
         colors: Vec<Color>,
         socket: Option<TcpStream>,
+        address: SocketAddrV4,
+        path: &Path,
     ) -> Self {
         Self {
             client: {
-                let buf = Buffer::new(username, text, colors, socket);
+                let buf = Buffer::new(username.clone(), text, colors, socket, Some(path));
                 Client {
                     buffers: Vec::from([buf]),
                     current_buffer: 0,
                     modeinfo: ModeInfo::default(),
                     info: Some("Prewss Escape then :help to view help".to_string()),
+                    password,
+                    username,
+                    server_addr: address,
                 }
             },
             bindings: Bindings::default(),

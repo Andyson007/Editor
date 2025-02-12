@@ -1,5 +1,6 @@
 use crate::editor::buffer;
 use std::fmt::Debug;
+use std::net::SocketAddrV4;
 use std::{cmp, io, path::Path};
 use tokio::{io::AsyncWriteExt, net::TcpStream};
 
@@ -12,8 +13,10 @@ use crate::editor::buffer::Buffer;
 
 use super::buffer::BufferTypeData;
 /// Represents a single client.
-#[derive(Default)]
 pub struct Client {
+    pub(crate) password: Option<String>,
+    pub(crate) username: String,
+    pub(crate) server_addr: SocketAddrV4,
     /// All the buffers the client is connected to
     pub buffers: Vec<Buffer>,
     /// The buffer that the client should currently be showing
@@ -27,9 +30,17 @@ pub struct Client {
 
 impl Client {
     /// Cretaes a new client an empty original buffer
-    pub async fn from_socket(username: String, socket: TcpStream, path: &Path) -> io::Result<Self> {
+    pub async fn from_path(
+        username: String,
+        password: Option<String>,
+        address: SocketAddrV4,
+        path: &Path,
+    ) -> io::Result<Self> {
         Ok(Self {
-            buffers: vec![Buffer::from_socket(socket, path, username).await?],
+            server_addr: address,
+            username: username.clone(),
+            password: password.clone(),
+            buffers: vec![Buffer::connect(address, username, password, path).await?],
             current_buffer: 0,
             modeinfo: ModeInfo::default(),
             info: Some("Press Escape then :help to view help".to_string()),
@@ -57,6 +68,7 @@ impl Client {
                 Text::original_from_str(include_str!("../../../help")),
                 Vec::new(),
                 None,
+                None,
             ),
             "bn" | "bufnext" => {
                 self.current_buffer = (self.current_buffer + 1) % self.buffers.len()
@@ -77,9 +89,10 @@ impl Client {
         text: Text,
         colors: Vec<Color>,
         socket: Option<TcpStream>,
+        path: Option<&Path>,
     ) {
         self.buffers
-            .push(Buffer::new(username, text, colors, socket));
+            .push(Buffer::new(username, text, colors, socket, path));
         self.current_buffer = self.buffers.len() - 1;
     }
 

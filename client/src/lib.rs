@@ -18,11 +18,7 @@ use std::{
     str,
 };
 
-use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
-    net::TcpStream,
-    time,
-};
+use tokio::time;
 
 /// Runs a the client side of the editor
 #[allow(clippy::missing_panics_doc)]
@@ -37,11 +33,7 @@ pub async fn run(
     let mut out = io::stdout();
     errors::install_hooks()?;
 
-    let Ok(socket) = connect_with_auth(address, username, password).await else {
-        panic!("Failed to connect to the server. Maybe the server is not running?")
-    };
-
-    let mut app = App::new(username.to_string(), socket, path).await?;
+    let mut app = App::new(username.to_string(), password, address, path).await?;
 
     execute!(out, EnterAlternateScreen, EnableBracketedPaste)?;
     enable_raw_mode().unwrap();
@@ -110,30 +102,4 @@ pub async fn run(
     disable_raw_mode().unwrap();
     execute!(io::stdout(), LeaveAlternateScreen)?;
     Ok(())
-}
-
-async fn connect_with_auth(
-    address: SocketAddrV4,
-    username: &str,
-    password: Option<&str>,
-) -> io::Result<TcpStream> {
-    let mut stream = TcpStream::connect(address).await?;
-    stream.write_all(username.as_bytes()).await?;
-    if let Some(password) = password {
-        stream.write_u8(254).await?;
-        stream.write_all(password.as_bytes()).await?;
-    }
-    stream.write_all(&[255]).await?;
-    stream.flush().await?;
-    let ret = stream.read_u8().await?;
-    match ret {
-        0 => (),
-        1 => panic!("You forgot to include a password"),
-        2 => panic!("The username, password combination you supplied isn't authorized"),
-        3 => {
-            panic!("This shouldn't be reachable, but it means that you forgot to supply a password")
-        }
-        _ => unreachable!(),
-    }
-    Ok(stream)
 }

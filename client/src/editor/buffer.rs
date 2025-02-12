@@ -1,4 +1,4 @@
-use std::{io, path::Path};
+use std::{io, net::SocketAddrV4, path::PathBuf};
 
 use btep::{
     c2s::C2S,
@@ -9,7 +9,7 @@ use btep::{
 use crossterm::{style::Color, terminal};
 use text::Text;
 use tokio::{
-    io::AsyncWriteExt,
+    io::{AsyncReadExt, AsyncWriteExt},
     net::{
         tcp::{OwnedReadHalf, OwnedWriteHalf},
         TcpStream,
@@ -27,6 +27,7 @@ pub struct Buffer {
     /// stores the amount of lines that have been scrolled down
     pub(crate) line_offset: usize,
     pub(crate) socket: Option<Socket>,
+    pub path: Option<PathBuf>,
 }
 
 #[derive(Debug)]
@@ -57,34 +58,41 @@ pub struct Socket {
 }
 
 impl Buffer {
-    pub async fn from_socket(
-        mut socket: TcpStream,
-        path: &Path,
+    pub async fn connect<S: AsRef<str>, P: Into<PathBuf>>(
+        address: SocketAddrV4,
         username: String,
+        password: Option<S>,
+        path: P,
     ) -> io::Result<Self> {
+        let Ok(mut socket) = connect_with_auth(address, &username, password).await else {
+            panic!("Failed to connect to the server. Maybe the server is not running?")
+        };
+        let path_buf = path.into();
         socket
-            .write_all(&C2S::Path(path.to_str().unwrap().into()).serialize())
+            .write_all(&C2S::Path(path_buf.clone()).serialize())
             .await?;
         match S2C::<Text>::deserialize(&mut socket).await? {
             S2C::Full(initial_text) => {
                 let colors = Vec::<Color>::deserialize(&mut socket).await?;
-                let buf = Buffer::new(username, initial_text, colors, Some(socket));
+                let buf = Buffer::new(username, initial_text, colors, Some(socket), Some(path_buf));
                 Ok(buf)
             }
-            S2C::Folder(inhabitants) => Ok(Buffer::new_folder(inhabitants)),
+            S2C::Folder(inhabitants) => Ok(Buffer::new_folder(inhabitants, path_buf)),
             _ => panic!("Initial message in wrong protocol"),
         }
     }
     /// Creates a new appstate
     #[must_use]
-    pub fn new(
+    pub fn new<P: Into<PathBuf>>(
         username: String,
         mut text: Text,
         colors: Vec<Color>,
         socket: Option<TcpStream>,
+        path: Option<P>,
     ) -> Self {
         let id = text.add_client(&username);
         Self {
+            path: path.map(|x| x.into()),
             data: BufferData {
                 buffer_type: BufferTypeData::Regular { text, colors, id },
                 modifiable: true,
@@ -102,7 +110,7 @@ impl Buffer {
     }
 
     #[must_use]
-    pub fn new_folder(inhabitants: Vec<Inhabitant>) -> Self {
+    pub fn new_folder<P: Into<PathBuf>>(inhabitants: Vec<Inhabitant>, path: P) -> Self {
         Self {
             data: BufferData {
                 buffer_type: BufferTypeData::Folder { inhabitants },
@@ -111,6 +119,7 @@ impl Buffer {
             cursorpos: CursorPos::default(),
             line_offset: 0,
             socket: None,
+            path: Some(path.into()),
         }
     }
 
@@ -233,4 +242,30 @@ impl Buffer {
             }
         }
     }
+}
+
+async fn connect_with_auth<S: AsRef<str>>(
+    address: SocketAddrV4,
+    username: &str,
+    password: Option<S>,
+) -> io::Result<TcpStream> {
+    let mut stream = TcpStream::connect(address).await?;
+    stream.write_all(username.as_bytes()).await?;
+    if let Some(password) = password {
+        stream.write_u8(254).await?;
+        stream.write_all(password.as_ref().as_bytes()).await?;
+    }
+    stream.write_all(&[255]).await?;
+    stream.flush().await?;
+    let ret = stream.read_u8().await?;
+    match ret {
+        0 => (),
+        1 => panic!("You forgot to include a password"),
+        2 => panic!("The username, password combination you supplied isn't authorized"),
+        3 => {
+            panic!("This shouldn't be reachable, but it means that you forgot to supply a password")
+        }
+        _ => unreachable!(),
+    }
+    Ok(stream)
 }

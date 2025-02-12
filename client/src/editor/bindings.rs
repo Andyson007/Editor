@@ -156,14 +156,22 @@ impl Default for Bindings {
                                     buffer_type: BufferTypeData::Folder { inhabitants },
                                     ..
                                 },
-                            cursorpos: CursorPos { col, .. },
-                            socket,
+                            cursorpos: CursorPos { row, .. },
+                            path,
                             ..
                         } = client.curr()
                         else {
                             return Ok(());
                         };
-                        // client.curr_mut() = Buffer::;
+                        *client.curr_mut() = block_on(async {
+                            Buffer::connect(
+                                client.server_addr,
+                                client.username.clone(),
+                                client.password.clone(),
+                                path.as_ref().unwrap().join(inhabitants[*row].name.clone()),
+                            )
+                            .await
+                        })?;
 
                         Ok(())
                     }),
