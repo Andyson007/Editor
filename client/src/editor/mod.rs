@@ -6,7 +6,8 @@
 use std::{io, path::Path, time::Duration};
 
 use bindings::Bindings;
-use client::Client;
+use buffer::Buffer;
+use client::{Client, ModeInfo};
 use crossterm::{event::KeyEvent, style::Color};
 use text::Text;
 use tokio::{io::AsyncWriteExt, net::TcpStream, time};
@@ -35,7 +36,15 @@ impl App {
         socket: Option<TcpStream>,
     ) -> Self {
         Self {
-            client: Client::new_with_buffer(username, text, colors, socket),
+            client: {
+                let buf = Buffer::new(username, text, colors, socket);
+                Client {
+                    buffers: Vec::from([buf]),
+                    current_buffer: 0,
+                    modeinfo: ModeInfo::default(),
+                    info: Some("Prewss Escape then :help to view help".to_string()),
+                }
+            },
             bindings: Bindings::default(),
         }
     }

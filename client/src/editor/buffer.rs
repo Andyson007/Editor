@@ -1,4 +1,4 @@
-use std::io;
+use std::{io, path::Path};
 
 use btep::{
     c2s::C2S,
@@ -57,6 +57,24 @@ pub struct Socket {
 }
 
 impl Buffer {
+    pub async fn from_socket(
+        mut socket: TcpStream,
+        path: &Path,
+        username: String,
+    ) -> io::Result<Self> {
+        socket
+            .write_all(&C2S::Path(path.to_str().unwrap().into()).serialize())
+            .await?;
+        match S2C::<Text>::deserialize(&mut socket).await? {
+            S2C::Full(initial_text) => {
+                let colors = Vec::<Color>::deserialize(&mut socket).await?;
+                let buf = Buffer::new(username, initial_text, colors, Some(socket));
+                Ok(buf)
+            }
+            S2C::Folder(inhabitants) => Ok(Buffer::new_folder(inhabitants)),
+            _ => panic!("Initial message in wrong protocol"),
+        }
+    }
     /// Creates a new appstate
     #[must_use]
     pub fn new(

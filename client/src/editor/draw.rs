@@ -179,7 +179,7 @@ impl Client {
             }
             out.queue(Print(inhabitant.name.to_str().unwrap()))?;
             if inhabitant.is_folder {
-            out.queue(Print('/'))?;
+                out.queue(Print('/'))?;
                 out.queue(SetForegroundColor(Color::Reset))?;
             }
             out.queue(cursor::MoveToNextLine(1))?;

@@ -3,11 +3,7 @@ use std::fmt::Debug;
 use std::{cmp, io, path::Path};
 use tokio::{io::AsyncWriteExt, net::TcpStream};
 
-use btep::{
-    c2s::C2S,
-    s2c::{Inhabitant, S2C},
-    Deserialize, Serialize,
-};
+use btep::{c2s::C2S, Serialize};
 use crossterm::{event::KeyEvent, style::Color};
 use text::Text;
 use utils::other::CursorPos;
@@ -31,57 +27,15 @@ pub struct Client {
 
 impl Client {
     /// Cretaes a new client an empty original buffer
-    pub async fn from_socket(
-        username: String,
-        mut socket: TcpStream,
-        path: &Path,
-    ) -> io::Result<Self> {
-        socket
-            .write_all(&C2S::Path(path.to_str().unwrap().into()).serialize())
-            .await?;
-        match S2C::<Text>::deserialize(&mut socket).await? {
-            S2C::Full(initial_text) => {
-                let colors = Vec::<Color>::deserialize(&mut socket).await?;
-                Ok(Self::new_with_buffer(
-                    username,
-                    initial_text,
-                    colors,
-                    Some(socket),
-                ))
-            }
-            S2C::Folder(inhabitants) => Ok(Self::new_from_folder(inhabitants)),
-            _ => panic!("Initial message in wrong protocol"),
-        }
-    }
-
-    /// Cretaes a new client with a prepopulated text buffer
-    #[must_use]
-    pub fn new_with_buffer(
-        username: String,
-        text: Text,
-        colors: Vec<Color>,
-        socket: Option<TcpStream>,
-    ) -> Self {
-        let buf = Buffer::new(username, text, colors, socket);
-        Self {
-            buffers: Vec::from([buf]),
-            current_buffer: 0,
-            modeinfo: ModeInfo::default(),
-            info: Some("Prewss Escape then :help to view help".to_string()),
-        }
-    }
-
-    /// Creates a new client prepopulated with a folder view
-    #[must_use]
-    pub fn new_from_folder(inhabitants: Vec<Inhabitant>) -> Self {
-        let buf = Buffer::new_folder(inhabitants);
-        Self {
-            buffers: Vec::from([buf]),
+    pub async fn from_socket(username: String, socket: TcpStream, path: &Path) -> io::Result<Self> {
+        Ok(Self {
+            buffers: vec![Buffer::from_socket(socket, path, username).await?],
             current_buffer: 0,
             modeinfo: ModeInfo::default(),
             info: Some("Press Escape then :help to view help".to_string()),
-        }
+        })
     }
+
     /// returns the current buffer that should be visible
     #[must_use]
     pub fn curr(&self) -> &Buffer {

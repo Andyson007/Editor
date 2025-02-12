@@ -9,7 +9,7 @@ use trie::Trie;
 use utils::other::CursorPos;
 
 use super::{
-    buffer::BufferTypeData,
+    buffer::{Buffer, BufferData, BufferTypeData},
     client::{Client, Mode},
 };
 
@@ -150,7 +150,21 @@ impl Default for Bindings {
                 trie.insert(
                     [KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)],
                     Box::new(|client: &mut Client| {
-                        client.move_right();
+                        let Buffer {
+                            data:
+                                BufferData {
+                                    buffer_type: BufferTypeData::Folder { inhabitants },
+                                    ..
+                                },
+                            cursorpos: CursorPos { col, .. },
+                            socket,
+                            ..
+                        } = client.curr()
+                        else {
+                            return Ok(());
+                        };
+                        // client.curr_mut() = Buffer::;
+
                         Ok(())
                     }),
                 );
