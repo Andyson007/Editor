@@ -111,6 +111,10 @@ impl Default for Bindings {
                         Ok(())
                     }),
                 );
+                trie.insert(
+                    [KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)],
+                    Box::new(|_| Ok(())),
+                );
                 for x in [KeyCode::Char('h'), KeyCode::Left] {
                     trie.insert(
                         [KeyEvent::new(x, KeyModifiers::NONE)],
