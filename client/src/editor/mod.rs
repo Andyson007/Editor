@@ -16,6 +16,8 @@ mod buffer;
 mod client;
 mod draw;
 
+pub static BUFFER_SIZE: usize = 8192;
+
 pub struct App {
     pub client: Client,
     pub(crate) bindings: Bindings,

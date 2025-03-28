@@ -9,13 +9,15 @@ use btep::{
 use crossterm::{style::Color, terminal};
 use text::Text;
 use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
+    io::{AsyncReadExt, AsyncWriteExt, BufReader},
     net::{
         tcp::{OwnedReadHalf, OwnedWriteHalf},
         TcpStream,
     },
 };
 use utils::other::CursorPos;
+
+use super::BUFFER_SIZE;
 
 /// The main state for the entire editor. The entireity of the
 /// view presented to the user can be rebuild from this
@@ -71,7 +73,9 @@ impl Buffer {
         socket
             .write_all(&C2S::Path(path_buf.clone()).serialize())
             .await?;
-        match S2C::<Text>::deserialize(&mut socket).await? {
+        match S2C::<Text>::deserialize(&mut BufReader::with_capacity(BUFFER_SIZE, &mut socket))
+            .await?
+        {
             S2C::Full(initial_text) => {
                 let colors = Vec::<Color>::deserialize(&mut socket).await?;
                 let buf = Buffer::new(username, initial_text, colors, Some(socket), Some(path_buf));
@@ -90,7 +94,7 @@ impl Buffer {
         socket: Option<TcpStream>,
         path: Option<P>,
     ) -> Self {
-        let id = text.add_client(&username);
+        let id = text.add_client(username);
         Self {
             path: path.map(|x| x.into()),
             data: BufferData {

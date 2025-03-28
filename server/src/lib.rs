@@ -164,8 +164,8 @@ async fn handle_client(
         let C2S::Path(client_path) = C2S::deserialize(&mut read).await? else {
             panic!();
         };
-        warn!("client path was invalid");
         let Ok(canonicalized) = path.join(client_path).canonicalize() else {
+            warn!("client path was invalid");
             return Ok(());
         };
         if !(canonicalized.starts_with(path.canonicalize().unwrap())) {
@@ -196,6 +196,7 @@ async fn handle_client(
         write.flush().await?;
         return Ok(());
     }
+    trace!("serving file");
     {
         let mut lock = files.write().await;
         let entry = lock.entry(client_path.clone()).or_insert_with(|| {
@@ -223,11 +224,10 @@ async fn handle_client(
             ret
         });
         let data = {
-            let data = entry.text.write().await;
+            let data = entry.text.read().await;
             let full = S2C::Full(&*data);
             full.serialize()
         };
-        // dbg!(&data);
 
         write.write_all(&data).await?;
 
@@ -235,7 +235,7 @@ async fn handle_client(
             .write_all(&entry.colors.read().await.serialize())
             .await?;
         write.flush().await?;
-        // println!("{data:#?}");
+        println!("{:?}", data);
         debug!("Connected {:?}", username);
         entry.text.write().await.add_client(&username);
         entry.colors.write().await.push(Color::Green);
