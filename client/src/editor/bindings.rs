@@ -166,7 +166,7 @@ impl Default for Bindings {
                         *client.curr_mut() = block_on(async {
                             Buffer::connect(
                                 client.server_addr,
-                                client.username.clone(),
+                                &client.username.clone(),
                                 client.password.clone(),
                                 path.as_ref().unwrap().join(inhabitants[*row].name.clone()),
                             )

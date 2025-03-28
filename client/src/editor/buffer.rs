@@ -60,11 +60,11 @@ pub struct Socket {
 impl Buffer {
     pub async fn connect<S: AsRef<str>, P: Into<PathBuf>>(
         address: SocketAddrV4,
-        username: String,
+        username: &str,
         password: Option<S>,
         path: P,
     ) -> io::Result<Self> {
-        let Ok(mut socket) = connect_with_auth(address, &username, password).await else {
+        let Ok(mut socket) = connect_with_auth(address, username, password).await else {
             panic!("Failed to connect to the server. Maybe the server is not running?")
         };
         let path_buf = path.into();
@@ -84,7 +84,7 @@ impl Buffer {
     /// Creates a new appstate
     #[must_use]
     pub fn new<P: Into<PathBuf>>(
-        username: String,
+        username: &str,
         mut text: Text,
         colors: Vec<Color>,
         socket: Option<TcpStream>,

@@ -40,7 +40,7 @@ impl Client {
             server_addr: address,
             username: username.clone(),
             password: password.clone(),
-            buffers: vec![Buffer::connect(address, username, password, path).await?],
+            buffers: vec![Buffer::connect(address, &username, password, path).await?],
             current_buffer: 0,
             modeinfo: ModeInfo::default(),
             info: Some("Press Escape then :help to view help".to_string()),
@@ -92,7 +92,7 @@ impl Client {
         path: Option<&Path>,
     ) {
         self.buffers
-            .push(Buffer::new(username, text, colors, socket, path));
+            .push(Buffer::new(&username, text, colors, socket, path));
         self.current_buffer = self.buffers.len() - 1;
     }
 

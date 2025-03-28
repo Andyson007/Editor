@@ -46,7 +46,7 @@ impl App {
     ) -> Self {
         Self {
             client: {
-                let buf = Buffer::new(username.clone(), text, colors, socket, Some(path));
+                let buf = Buffer::new(&username, text, colors, socket, Some(path));
                 Client {
                     buffers: Vec::from([buf]),
                     current_buffer: 0,

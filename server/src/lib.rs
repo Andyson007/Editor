@@ -169,7 +169,10 @@ async fn handle_client(
             return Ok(());
         };
         if !(canonicalized.starts_with(path.canonicalize().unwrap())) {
-            trace!("client path was invalid: {canonicalized:?} vs {:?}", path.canonicalize().unwrap());
+            trace!(
+                "client path was invalid: {canonicalized:?} vs {:?}",
+                path.canonicalize().unwrap()
+            );
             return Ok(());
         }
         canonicalized
@@ -193,7 +196,6 @@ async fn handle_client(
         write.flush().await?;
         return Ok(());
     }
-    println!("isn't dir");
     {
         let mut lock = files.write().await;
         let entry = lock.entry(client_path.clone()).or_insert_with(|| {
@@ -204,6 +206,7 @@ async fn handle_client(
                 .write(true)
                 .open(&client_path)
                 .unwrap();
+            info!("opened new file {client_path:?}");
             let text = Arc::new(RwLock::new(
                 Text::original_from_reader(BufReader::new(file)).unwrap(),
             ));
