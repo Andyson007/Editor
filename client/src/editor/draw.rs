@@ -85,15 +85,14 @@ impl Client {
                         out.queue(MoveToNextLine(1))?;
 
                         out.queue(MoveToColumn(2))?.queue(Print(PIPE_CHAR))?;
+                    }
+                    relative_col += 1;
+                    if let Some(x) = next_color.take() {
+                        out.queue(SetBackgroundColor(x))?
+                            .queue(Print(c))?
+                            .queue(SetBackgroundColor(Color::Reset))?;
                     } else {
-                        relative_col += 1;
-                        if let Some(x) = next_color.take() {
-                            out.queue(SetBackgroundColor(x))?
-                                .queue(Print(c))?
-                                .queue(SetBackgroundColor(Color::Reset))?;
-                        } else {
-                            out.queue(Print(c))?;
-                        }
+                        out.queue(Print(c))?;
                     }
                 }
             }
@@ -149,10 +148,12 @@ impl Client {
                     .queue(Print(info))?;
             }
             if let Some(CursorPos { row, col }) = self_pos {
-                out.queue(cursor::MoveTo(
-                    u16::try_from(col).unwrap() + 3,
-                    u16::try_from(row).unwrap(),
-                ))?;
+                let col = u16::try_from(col).unwrap();
+                if col >= size.0 - 3 {
+                    out.queue(cursor::MoveTo(3, u16::try_from(row).unwrap() + 1))?;
+                } else {
+                    out.queue(cursor::MoveTo(col + 3, u16::try_from(row).unwrap()))?;
+                }
             } else {
                 out.queue(cursor::MoveTo(
                     u16::try_from(current_buffer.cursor().col + 3).unwrap(),
