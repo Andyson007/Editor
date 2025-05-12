@@ -184,12 +184,6 @@ impl Default for Bindings {
             },
             insert: {
                 let mut trie: Trie<KeyEvent, Action> = Trie::new();
-                for c in (32..255).map(char::from_u32).map(Option::unwrap) {
-                    trie.insert(
-                        [KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE)],
-                        Box::new(move |client: &mut Client| block_on(client.type_char(c))),
-                    );
-                }
                 trie.insert(
                     [KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)],
                     Box::new(|client: &mut Client| block_on(client.type_char('\n'))),

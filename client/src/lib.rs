@@ -35,7 +35,7 @@ pub async fn run(
 
     let mut app = App::new(username.to_string(), password, address, path).await?;
 
-    execute!(out, EnterAlternateScreen, EnableBracketedPaste)?;
+    execute!(out, EnterAlternateScreen)?;
     enable_raw_mode().unwrap();
 
     app.client.redraw(&mut out)?;

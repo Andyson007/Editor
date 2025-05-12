@@ -8,7 +8,7 @@ use std::{io, net::SocketAddrV4, path::Path, time::Duration};
 use bindings::Bindings;
 use buffer::Buffer;
 use client::{Client, ModeInfo};
-use crossterm::{event::KeyEvent, style::Color};
+use crossterm::{event::{KeyCode, KeyEvent}, style::Color};
 use text::Text;
 use tokio::{io::AsyncWriteExt, net::TcpStream, time};
 mod bindings;
@@ -90,10 +90,23 @@ impl App {
                 return Ok(true);
             };
         }
-        panic!(
-            "There aren't any keybinds available for {:?} when in {:?} mode",
-            self.client.modeinfo.keymap, self.client.modeinfo.mode
-        );
+        // I know the array isn't empty
+        let fallback = self.client.modeinfo.keymap.remove(0);
+        self.handle_fallback(fallback).await
+    }
+
+    async fn handle_fallback(&mut self, ev: KeyEvent) -> io::Result<bool> {
+        Ok(match self.client.modeinfo.mode {
+            client::Mode::Normal => false,
+            client::Mode::Insert => match ev.code {
+                KeyCode::Char(c) => {
+                    self.client.type_char(c).await?;
+                    true
+                }
+                _ => false,
+            },
+            client::Mode::Command(_) => false,
+        })
     }
 
     pub async fn handle_keyevent(&mut self, input: &KeyEvent) -> io::Result<bool> {
