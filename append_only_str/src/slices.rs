@@ -165,7 +165,7 @@ impl StrSlice {
         self.byteslice.end
     }
 
-    /// Returns the length of the str as if were utf-8 encoded
+    /// Returns the (byte-)length of the str as if were utf-8 encoded
     /// You might want to count the iterators length
     /// ```
     /// # use append_only_str::AppendOnlyStr;

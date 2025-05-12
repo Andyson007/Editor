@@ -123,7 +123,15 @@ impl Piece {
         clientid: usize,
     ) -> Option<(Option<usize>, InnerTable<TableElem>)> {
         let bytes_to_row: usize = self.lines().take(pos.row).map(|x| x.len() + 1).sum();
-        let char_nr = bytes_to_row + pos.col;
+        let char_nr = bytes_to_row
+            + self
+                .lines()
+                .nth(pos.row)
+                .unwrap()
+                .chars()
+                .take(pos.col)
+                .map(char::len_utf8)
+                .sum::<usize>();
         let binding = self.piece_table.write_full().unwrap();
 
         let mut to_split = binding.write();
@@ -142,7 +150,7 @@ impl Piece {
         };
 
         let offset = if is_end {
-            // NOTE: We rely on the cursors position later
+            // NOTE: We rely on the cursors position later (post if-statement)
             cursor.move_prev();
             let current = cursor.current().unwrap();
             let buf = current.read().buf;
@@ -249,12 +257,11 @@ impl Serialize for &Piece {
 
         for piece in self.piece_table.read_full().unwrap().read().iter() {
             let piece = piece.read();
-            // NOTE: This probably shouldn't use u64::MAX, but idk about a better way
             if let Some((bufnr, occupied)) = piece.buf {
                 ret.extend([if occupied { 2 } else { 1 }]);
                 ret.extend((bufnr as u64).to_be_bytes());
             } else {
-                ret.extend([0]);
+                ret.push(0);
             }
             ret.extend((piece.id as u64).to_be_bytes());
             ret.extend((piece.text.start() as u64).to_be_bytes());

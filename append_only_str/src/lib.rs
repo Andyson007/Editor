@@ -9,6 +9,7 @@
 use std::{
     convert::Infallible,
     fmt::Display,
+    io::Read,
     num::NonZeroUsize,
     ops::{Index, RangeBounds},
     slice::SliceIndex,
@@ -220,7 +221,11 @@ impl AppendOnlyStr {
     /// always be valid
     pub fn str_slice(&self, range: impl RangeBounds<usize>) -> StrSlice {
         let byteslice = self.slice(range);
-        debug_assert!(str::from_utf8(&byteslice).is_ok());
+        debug_assert!(
+            str::from_utf8(&byteslice).is_ok(),
+            "{:?}",
+            byteslice.as_bytes()
+        );
         StrSlice { byteslice }
     }
 
