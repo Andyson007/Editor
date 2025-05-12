@@ -259,7 +259,7 @@ async fn connect_with_auth<S: AsRef<str>>(
         stream.write_u8(254).await?;
         stream.write_all(password.as_ref().as_bytes()).await?;
     }
-    stream.write_all(&[255]).await?;
+    stream.write_u8(255).await?;
     stream.flush().await?;
     let ret = stream.read_u8().await?;
     match ret {

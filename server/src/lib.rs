@@ -36,7 +36,7 @@ use tokio::{
     time::sleep,
 };
 
-use utils::other::AutoIncrementing;
+use utils::{bufread::BufReaderExt, other::AutoIncrementing};
 
 #[allow(unused_imports)]
 use tracing::{debug, error, info, trace, warn};
@@ -126,10 +126,6 @@ async fn handle_connection(
                 UserAuthError::BadPassword => {
                     warn!("Bad password");
                     stream.write_u8(2).await?;
-                }
-                UserAuthError::MissingUsername => {
-                    warn!("Missing username");
-                    stream.write_u8(3).await?;
                 }
             }
             stream.flush().await?;
@@ -372,16 +368,19 @@ async fn authorize<T>(
     #[cfg(feature = "security")] pool: &SqlitePool,
 ) -> Result<String, UserAuthError>
 where
-    T: AsyncRead + AsyncWrite + Unpin,
+    T: AsyncRead + AsyncReadExt + AsyncWrite + Unpin + Send,
 {
-    let mut buf = Vec::new();
-    stream.read_buf(&mut buf).await?;
-    let mut iter = buf.utf8_chunks();
-    let Some(username) = iter.next().map(|x| x.valid()) else {
-        return Err(UserAuthError::MissingUsername);
-    };
+    let mut username = String::new();
+    let delim = stream.read_valid_str(&mut username).await?;
+    #[cfg(not(feature = "security"))]
+    assert_eq!(
+        delim,
+        Some(255),
+        "Client sent wrong byte, maybe you are running with --security"
+    );
     #[cfg(feature = "security")]
     {
+        assert_eq!(delim, Some(254), "client running without security enabled");
         let Some(password) = iter.next() else {
             return Err(UserAuthError::NeedsPassword);
         };
@@ -398,7 +397,6 @@ enum UserAuthError {
     #[cfg(feature = "security")]
     NeedsPassword,
     IoError(Error),
-    MissingUsername,
 }
 
 impl From<std::io::Error> for UserAuthError {
