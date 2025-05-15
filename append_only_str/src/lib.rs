@@ -6,6 +6,7 @@
 //! [append-only-bytes](https://docs.rs/append-only-bytes/latest/append_only_bytes/index.html),
 //! This is because  it didn't have all the methods that I felt it needed. I did rediscover why the
 //! architecture was the way it was, but credit where credits due
+use core::fmt;
 use std::{
     convert::Infallible,
     fmt::Display,
@@ -40,7 +41,7 @@ pub struct AppendOnlyStr {
 impl std::fmt::Debug for AppendOnlyStr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("AppendOnlyStr")
-            .field("data", &&*self.str_slice(..))
+            .field("data", &&*self.str_slice(..).unwrap())
             .field("len", &self.len)
             .finish()
     }
@@ -48,7 +49,7 @@ impl std::fmt::Debug for AppendOnlyStr {
 
 impl Display for AppendOnlyStr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.str_slice(..).as_str())
+        write!(f, "{}", self.str_slice(..).unwrap().as_str())
     }
 }
 
@@ -206,32 +207,32 @@ impl AppendOnlyStr {
     /// Creates a slice referring to that place in memory. This slice is guaranteed to be valid
     /// after the buffer has been reallocated!
     #[must_use]
-    pub fn slice(&self, range: impl RangeBounds<usize>) -> ByteSlice {
-        let (start, end) = get_range(range, 0, self.len);
-        ByteSlice {
+    pub fn slice(&self, range: impl RangeBounds<usize>) -> Option<ByteSlice> {
+        let (start, end) = get_range(range, 0, self.len)?;
+        Some(ByteSlice {
             raw: self.rawbuf.clone(),
             start,
             end,
-        }
+        })
     }
 
     /// # Panics
     /// This function panics during debug builds to check for valid utf-8 even though they should
     /// always be valid
-    pub fn str_slice(&self, range: impl RangeBounds<usize>) -> StrSlice {
-        let byteslice = self.slice(range);
+    pub fn str_slice(&self, range: impl RangeBounds<usize> + fmt::Debug) -> Option<StrSlice> {
+        let byteslice = self.slice(range)?;
         debug_assert!(
             str::from_utf8(&byteslice).is_ok(),
             "{:?}",
             byteslice.as_bytes()
         );
-        StrSlice { byteslice }
+        Some(StrSlice { byteslice })
     }
 
     /// Creates a string slice pointing at the end of the buffer
     #[must_use]
     pub fn str_slice_end(&self) -> StrSlice {
-        self.str_slice(self.len..)
+        self.str_slice(self.len..).unwrap()
     }
 }
 

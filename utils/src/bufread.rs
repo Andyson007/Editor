@@ -27,18 +27,23 @@ where
                 Err(e) => return Err(e),
             };
             let leading = first.leading_ones() as usize;
+
             if leading > 4 {
                 return Ok(Some(first));
             }
+
+            let byte_width = if leading == 0 { 1 } else { leading };
+
             let mut buf = [0; 4];
             buf[0] = first;
-            for x in buf.iter_mut().take(leading).skip(1) {
+            for x in buf.iter_mut().take(byte_width).skip(1) {
                 *x = self.read_u8().await?;
             }
-            match str::from_utf8(&buf[..leading]) {
+            let utf_slice = &buf[..byte_width];
+            match str::from_utf8(utf_slice) {
                 Ok(x) => buffer.push_str(x),
                 // FIXME: This api should honestly be rewritter from scratch
-                Err(_) => panic!("Multiple incorrect bytes instead of one"),
+                Err(_) => panic!("Multiple incorrect bytes instead of one: {utf_slice:?}"),
             }
         }
     }

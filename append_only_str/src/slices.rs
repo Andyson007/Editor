@@ -68,13 +68,13 @@ impl ByteSlice {
 
     /// Creates a new `ByteSlice` with a range within the current range
     #[must_use]
-    pub fn subslice(&self, range: impl RangeBounds<usize>) -> Self {
-        let (start, end) = get_range(range, 0, self.len());
-        Self {
+    pub fn subslice(&self, range: impl RangeBounds<usize>) -> Option<Self> {
+        let (start, end) = get_range(range, 0, self.len())?;
+        Some(Self {
             raw: Arc::clone(&self.raw),
             start,
             end,
-        }
+        })
     }
 }
 
@@ -198,9 +198,9 @@ impl StrSlice {
 
     /// creates a subslice of self at a char index.
     /// # Errors
-    /// returns None if the index is at a char boundary
+    /// returns None if the index is at a char boundary or if an invalid range is given
     pub fn subslice(&self, range: impl RangeBounds<usize>) -> Option<Self> {
-        let (relative_start, relative_end) = get_range(range, 0, self.len());
+        let (relative_start, relative_end) = get_range(range, 0, self.len())?;
         if !self.as_str().is_char_boundary(relative_start) {
             return None;
         }
@@ -219,7 +219,7 @@ impl FromStr for StrSlice {
 
     fn from_str(str: &str) -> Result<Self, Self::Err> {
         let a = AppendOnlyStr::from_str(str).unwrap();
-        Ok(a.str_slice(..))
+        Ok(a.str_slice(..).unwrap())
     }
 }
 
@@ -243,7 +243,7 @@ pub(crate) fn get_range(
     range: impl RangeBounds<usize>,
     min_len: usize,
     max_len: usize,
-) -> (usize, usize) {
+) -> Option<(usize, usize)> {
     let start = match range.start_bound() {
         Bound::Included(&v) => v,
         Bound::Excluded(&v) => v + 1,
@@ -254,7 +254,8 @@ pub(crate) fn get_range(
         Bound::Excluded(&v) => v,
         Bound::Unbounded => max_len,
     };
-    assert!(start <= end, "start <= end: {start}, {end}");
-    assert!(end <= max_len, "end <= max_len: {end} {max_len}");
-    (start, end)
+    if start > end || end > max_len {
+        return None;
+    }
+    Some((start, end))
 }

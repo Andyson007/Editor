@@ -60,7 +60,7 @@ impl Piece {
             piece_table: std::iter::once(TableElem {
                 id: 0,
                 buf: None,
-                text: original.str_slice(..),
+                text: original.str_slice(..).unwrap(),
             })
             .collect(),
             buffers: Buffers {
@@ -84,7 +84,7 @@ impl Piece {
             piece_table: iter::once(TableElem {
                 buf: None,
                 id: 0,
-                text: original.str_slice(..),
+                text: original.str_slice(..).unwrap(),
             })
             .collect(),
             buffers: Buffers {
@@ -103,7 +103,7 @@ impl Piece {
             piece_table: iter::once(TableElem {
                 buf: None,
                 id: 0,
-                text: original.str_slice(..),
+                text: original.str_slice(..).unwrap(),
             })
             .collect(),
             buffers: Buffers {
@@ -167,7 +167,7 @@ impl Piece {
             cursor.insert_after(InnerTable::new(
                 TableElem {
                     buf,
-                    text: curr.str_slice(curr.len()..),
+                    text: curr.str_slice(curr.len()..).unwrap(),
                     id: self.buffers.clients[clientid].0.write().unwrap().get()
                         * self.buffers.clients.len()
                         + clientid,
@@ -206,7 +206,7 @@ impl Piece {
         cursor.insert_before(InnerTable::new(
             TableElem {
                 buf: Some((clientid, true)),
-                text: curr.str_slice(curr.len()..),
+                text: curr.str_slice(curr.len()..).unwrap(),
                 id: self.buffers.clients[clientid].0.write().unwrap().get()
                     * self.buffers.clients.len()
                     + clientid,
@@ -247,14 +247,14 @@ impl Serialize for &Piece {
     fn serialize(&self) -> Vec<u8> {
         let mut ret = Vec::new();
         ret.extend((self.buffers.original.0.peek() as u64).to_be_bytes());
-        ret.extend(self.buffers.original.1.str_slice(..).as_str().bytes());
+        ret.extend(self.buffers.original.1.str_slice(..).unwrap().as_str().bytes());
         for client in &self.buffers.clients {
             // 0xfe is used here because its not representable by utf8, and makes stuff easier to
             // parse. This is useful because the alternative is the specify the strings length,
             // which would take up at least as many bytes
             ret.push(0xfe);
             ret.extend((client.0.read().unwrap().peek() as u64).to_be_bytes());
-            ret.extend(client.1.read().unwrap().str_slice(..).as_str().bytes());
+            ret.extend(client.1.read().unwrap().str_slice(..).unwrap().as_str().bytes());
         }
         // Might be useless, but it's a single byte
         ret.push(0xff);
@@ -327,8 +327,9 @@ impl Deserialize for Piece {
                         .read()
                         .unwrap()
                         .str_slice(start..end)
+                        .unwrap()
                 } else {
-                    original_buffer.str_slice(start..end)
+                    original_buffer.str_slice(start..end).unwrap()
                 },
                 id,
             });

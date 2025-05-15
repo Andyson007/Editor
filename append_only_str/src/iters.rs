@@ -41,7 +41,7 @@ impl AppendOnlyStr {
     /// outlive this `StrSlice`
     #[must_use]
     pub fn owned_chars(&self) -> Chars {
-        self.str_slice(..).owned_chars()
+        self.str_slice(..).unwrap().owned_chars()
     }
 
     /// Iterates over the chars using the build in Chars iterator from the standard library

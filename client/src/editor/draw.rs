@@ -143,9 +143,12 @@ impl Client {
                 .queue(Print(cmd))?;
         } else {
             if let Some(ref info) = self.info {
-                out.queue(cursor::MoveTo(size.0 - info.len() as u16, size.1))?
-                    .queue(terminal::Clear(ClearType::CurrentLine))?
-                    .queue(Print(info))?;
+                out.queue(cursor::MoveTo(
+                    size.0.saturating_sub(info.len() as u16),
+                    size.1,
+                ))?
+                .queue(terminal::Clear(ClearType::CurrentLine))?
+                .queue(Print(info))?;
             }
             if let Some(CursorPos { row, col }) = self_pos {
                 let col = u16::try_from(col).unwrap();

@@ -243,7 +243,7 @@ impl Client {
 
         self.buffer.write().unwrap().push_str(to_push);
         let a = &mut slice.write().unwrap().text;
-        *a = self.buffer.read().unwrap().str_slice(a.start()..);
+        *a = self.buffer.read().unwrap().str_slice(a.start()..).unwrap();
     }
 
     /// Allows for insertion.
@@ -271,7 +271,8 @@ impl Client {
             .buffer
             .read()
             .unwrap()
-            .str_slice(self.buffer.read().unwrap().len()..);
+            .str_slice(self.buffer.read().unwrap().len()..)
+            .unwrap();
         self.data = Some(Insertdata {
             slice: inner_table,
             has_deleted: false,
