@@ -18,6 +18,24 @@ impl Iterator for Chars {
     }
 }
 
+pub struct Bytes<'a> {
+    bytes: &'a [u8],
+}
+
+impl Iterator for Bytes<'_> {
+    type Item = u8;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.bytes.is_empty() {
+            None
+        } else {
+            let ret = self.bytes[0];
+            self.bytes = &self.bytes[1..];
+            Some(ret)
+        }
+    }
+}
+
 impl AppendOnlyStr {
     /// Creates an iterator over the chars in this `StrSlice`. This allows for the iterator to
     /// outlive this `StrSlice`
@@ -29,6 +47,12 @@ impl AppendOnlyStr {
     /// Iterates over the chars using the build in Chars iterator from the standard library
     pub fn chars(&self) -> str::Chars {
         self.get_str().chars()
+    }
+
+    pub fn bytes(&self) -> Bytes<'_> {
+        Bytes {
+            bytes: self.get_byte_slice(),
+        }
     }
 }
 

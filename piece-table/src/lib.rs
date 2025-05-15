@@ -122,7 +122,11 @@ impl Piece {
         pos: CursorPos,
         clientid: usize,
     ) -> Option<(Option<usize>, InnerTable<TableElem>)> {
-        let bytes_to_row: usize = self.lines().take(pos.row).map(|x| x.len() + 1).sum();
+        let bytes_to_row: usize = self
+            .lines()
+            .take(pos.row)
+            .map(|x| x.len() + '\n'.len_utf8())
+            .sum();
         let char_nr = bytes_to_row
             + self
                 .lines()
@@ -176,6 +180,7 @@ impl Piece {
                 let current = cursor.current().unwrap().read();
                 (current.buf, current.text.clone())
             };
+            // byte offset within the current buffer
             let offset = char_nr - (curr_pos - current.len());
 
             let current = cursor.current().unwrap();
@@ -277,9 +282,6 @@ impl Deserialize for Piece {
         T: AsyncReadExt + Unpin + Send,
         Self: Sized,
     {
-        // `take_while_ref` requires a peekable wrapper
-        // #[allow(clippy::unused_peekable)]
-        // let mut iter = data.bytes().peekable();
         let mut str_buf = String::new();
         let original_start = data.read_u64().await?;
         let mut separator = data.read_valid_str(&mut str_buf).await?;

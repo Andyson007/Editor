@@ -19,7 +19,7 @@ pub mod client;
 /// the piece table
 #[derive(Debug)]
 pub struct Text {
-    pub(crate) table: Arc<RwLock<Piece>>,
+    pub table: Arc<RwLock<Piece>>,
     clients: Vec<Client>,
 }
 

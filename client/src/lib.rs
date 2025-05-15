@@ -3,7 +3,7 @@ pub mod editor;
 pub mod errors;
 
 use crossterm::{
-    event::{EnableBracketedPaste, Event, EventStream},
+    event::{Event, EventStream},
     execute,
     terminal::{
         self, disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,

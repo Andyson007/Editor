@@ -35,9 +35,10 @@ where
             for x in buf.iter_mut().take(leading).skip(1) {
                 *x = self.read_u8().await?;
             }
-            match str::from_utf8(&buf[..=leading]) {
+            match str::from_utf8(&buf[..leading]) {
                 Ok(x) => buffer.push_str(x),
-                Err(_) => return Ok(Some(first)),
+                // FIXME: This api should honestly be rewritter from scratch
+                Err(_) => panic!("Multiple incorrect bytes instead of one"),
             }
         }
     }

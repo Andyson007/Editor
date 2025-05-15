@@ -232,11 +232,11 @@ impl Buffer {
                 }
                 Ok(())
             }
-            BufferTypeData::Folder { inhabitants } => {
+            BufferTypeData::Folder { inhabitants: _ } => {
                 if self.line_offset > self.cursorpos.row {
                     self.line_offset = self.cursorpos.row;
                 } else {
-                    let cursor_offset = || todo!();
+                    let _cursor_offset = || todo!();
                     if self.line_offset + usize::from(rows) <= self.cursorpos.row {
                         self.line_offset +=
                             self.cursorpos.row - self.line_offset - usize::from(rows) + 1;

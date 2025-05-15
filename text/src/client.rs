@@ -15,7 +15,7 @@ pub struct Client {
     /// The full piece table we are editing inside of
     pub piece: Arc<RwLock<Piece>>,
     /// The current buffer we are editing
-    pub(crate) buffer: Arc<RwLock<AppendOnlyStr>>,
+    pub buffer: Arc<RwLock<AppendOnlyStr>>,
     /// A conuter used to generate unique ids
     pub(crate) id_counter: Arc<RwLock<AutoIncrementing>>,
     /// The id of the buffer this client is editing

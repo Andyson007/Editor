@@ -9,7 +9,6 @@
 use std::{
     convert::Infallible,
     fmt::Display,
-    io::Read,
     num::NonZeroUsize,
     ops::{Index, RangeBounds},
     slice::SliceIndex,

@@ -231,7 +231,6 @@ async fn handle_client(
             .write_all(&entry.colors.read().await.serialize())
             .await?;
         write.flush().await?;
-        println!("{:?}", data);
         debug!("Connected {:?}", username);
         entry.text.write().await.add_client(&username);
         entry.colors.write().await.push(Color::Green);

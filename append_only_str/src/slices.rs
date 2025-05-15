@@ -5,7 +5,7 @@ use std::{
     convert::Infallible,
     fmt::Display,
     ops::{Bound, Deref, RangeBounds},
-    str::{self, FromStr},
+    str::FromStr,
     sync::Arc,
 };
 
@@ -122,7 +122,7 @@ pub struct StrSlice {
 impl std::fmt::Debug for StrSlice {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("StrSlice")
-            .field("text", &str::from_utf8(&self.byteslice))
+            .field("text", &str::from_utf8(&self.byteslice).unwrap())
             .field("start", &self.byteslice.start)
             .field("end", &self.byteslice.end)
             .finish()
@@ -192,6 +192,7 @@ impl StrSlice {
     pub fn as_str(&self) -> &str {
         // Safety:
         // We know that the byteslice is utf at all times
+        debug_assert!(str::from_utf8(self.byteslice.as_bytes()).is_ok());
         unsafe { str::from_utf8_unchecked(self.byteslice.as_bytes()) }
     }
 
@@ -253,7 +254,7 @@ pub(crate) fn get_range(
         Bound::Excluded(&v) => v,
         Bound::Unbounded => max_len,
     };
-    assert!(start <= end, "{start}, {end}");
-    assert!(end <= max_len, "{end}, {max_len}");
+    assert!(start <= end, "start <= end: {start}, {end}");
+    assert!(end <= max_len, "end <= max_len: {end} {max_len}");
     (start, end)
 }
