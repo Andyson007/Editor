@@ -27,6 +27,9 @@ where
                 Err(e) => return Err(e),
             };
             let leading = first.leading_ones() as usize;
+            if leading == 1 {
+                return Ok(Some(first));
+            }
 
             if leading > 4 {
                 return Ok(Some(first));
