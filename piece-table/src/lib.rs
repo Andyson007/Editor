@@ -2,7 +2,7 @@
 #![feature(linked_list_cursors)]
 #![feature(async_iterator)]
 use std::{
-    io::{self, Read},
+    io::{self, read_to_string, Read},
     iter,
     str::FromStr,
     sync::{Arc, RwLock},
@@ -122,6 +122,8 @@ impl Piece {
         pos: CursorPos,
         clientid: usize,
     ) -> Option<(Option<usize>, InnerTable<TableElem>)> {
+        // FIXME:
+        // Rather than this we should store the amount of lines in each `TableElem`
         let bytes_to_row: usize = self
             .lines()
             .take(pos.row)
@@ -154,9 +156,7 @@ impl Piece {
         };
 
         let offset = if is_end {
-            // NOTE: We rely on the cursors position later (post if-statement)
-            cursor.move_prev();
-            let current = cursor.current().unwrap();
+            let current = cursor.peek_prev().unwrap();
             let buf = current.read().buf;
             let curr = if let Some((buf, _)) = current.read().buf {
                 &*self.buffers.clients[buf].1.read().unwrap()
@@ -164,7 +164,7 @@ impl Piece {
                 &self.buffers.original.1
             };
 
-            cursor.insert_after(InnerTable::new(
+            cursor.insert_before(InnerTable::new(
                 TableElem {
                     buf,
                     text: curr.str_slice(curr.len()..).unwrap(),
