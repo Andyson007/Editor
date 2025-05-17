@@ -8,7 +8,10 @@ use std::{io, net::SocketAddrV4, path::Path, time::Duration};
 use bindings::Bindings;
 use buffer::Buffer;
 use client::{Client, ModeInfo};
-use crossterm::{event::{KeyCode, KeyEvent}, style::Color};
+use crossterm::{
+    event::{KeyCode, KeyEvent},
+    style::Color,
+};
 use text::Text;
 use tokio::{io::AsyncWriteExt, net::TcpStream, time};
 mod bindings;
@@ -28,11 +31,18 @@ impl App {
         username: String,
         password: Option<&str>,
         address: SocketAddrV4,
+        color: &Color,
         path: &Path,
     ) -> io::Result<Self> {
         Ok(Self {
-            client: Client::from_path(username, password.map(ToOwned::to_owned), address, path)
-                .await?,
+            client: Client::from_path(
+                username,
+                password.map(ToOwned::to_owned),
+                address,
+                color,
+                path,
+            )
+            .await?,
             bindings: Bindings::default(),
         })
     }
@@ -44,6 +54,7 @@ impl App {
         colors: Vec<Color>,
         socket: Option<TcpStream>,
         address: SocketAddrV4,
+        color: &Color,
         path: &Path,
     ) -> Self {
         Self {
@@ -56,6 +67,7 @@ impl App {
                     info: Some("Prewss Escape then :help to view help".to_string()),
                     password,
                     username,
+                    color: color.clone(),
                     server_addr: address,
                 }
             },

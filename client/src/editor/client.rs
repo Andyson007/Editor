@@ -16,6 +16,7 @@ use super::buffer::BufferTypeData;
 pub struct Client {
     pub(crate) password: Option<String>,
     pub(crate) username: String,
+    pub(crate) color: Color,
     pub(crate) server_addr: SocketAddrV4,
     /// All the buffers the client is connected to
     pub buffers: Vec<Buffer>,
@@ -34,15 +35,17 @@ impl Client {
         username: String,
         password: Option<String>,
         address: SocketAddrV4,
+        color: &Color,
         path: &Path,
     ) -> io::Result<Self> {
         Ok(Self {
             server_addr: address,
             username: username.clone(),
             password: password.clone(),
-            buffers: vec![Buffer::connect(address, &username, password, path).await?],
+            buffers: vec![Buffer::connect(address, &username, password, color, path).await?],
             current_buffer: 0,
             modeinfo: ModeInfo::default(),
+            color: color.to_owned(),
             info: Some("Press Escape then :help to view help".to_string()),
         })
     }

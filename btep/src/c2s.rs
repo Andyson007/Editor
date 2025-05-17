@@ -2,6 +2,7 @@
 
 use std::{io, path::PathBuf, str::FromStr};
 
+use crossterm::style::Color;
 use tokio::io::AsyncReadExt;
 use utils::other::CursorPos;
 
@@ -27,6 +28,8 @@ pub enum C2S {
     Save,
     /// A path to the file that you want to request
     Path(PathBuf),
+    /// Sets the desired color of the client
+    SetColor(Color),
 }
 
 // #[derive(Clone, Copy, Debug)]
@@ -70,6 +73,7 @@ impl Serialize for C2S {
                 .chain((*swaps as u64).to_be_bytes())
                 .collect(),
             Self::Enter => [10].into(),
+            Self::SetColor(color) => std::iter::once(11).chain(color.serialize()).collect(),
         }
     }
 }
@@ -90,6 +94,7 @@ impl Deserialize for C2S {
             5 => Self::Path(PathBuf::from_str(&String::deserialize(data).await?).unwrap()),
             8 => Self::Backspace(data.read_u64().await? as usize),
             10 => Self::Enter,
+            11 => Self::SetColor(Color::deserialize(data).await?),
             x => unreachable!("{x}"),
         })
     }

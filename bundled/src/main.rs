@@ -2,6 +2,7 @@
 //! This is in order to avoid multiple different cli commands being required to run the server,
 //! connect with a client etc.
 use clap::{Args, Parser, Subcommand, ValueEnum};
+use crossterm::style::Color;
 #[cfg(feature = "security")]
 use sqlx::{sqlite::SqliteConnectOptions, SqlitePool};
 #[cfg(feature = "security")]
@@ -82,6 +83,8 @@ struct ServerArgs {
 struct ClientArgs {
     #[arg(default_value = ".")]
     path: PathBuf,
+    #[arg(long, short = 'c', default_value = "green", value_parser = parse_color)]
+    color: Color,
     #[arg(long, short = 'u')]
     /// Supply the username inline.
     ///
@@ -110,6 +113,11 @@ struct ClientArgs {
     /// Sets the address to host on. This has to be exclive from both ip and port (e.g. 10.0.0.10:5000)
     #[arg(short = 'a')]
     address: Option<SocketAddrV4>,
+}
+
+fn parse_color(s: &str) -> Result<Color, String> {
+    Color::try_from(s.to_lowercase().replace(" ", "_").as_str())
+        .map_err(|()| format!("{s} is an invalid color"))
 }
 
 fn main() -> color_eyre::Result<()> {
@@ -164,6 +172,7 @@ fn main() -> color_eyre::Result<()> {
             port,
             address,
             path,
+            color,
         }) => {
             let username = username.clone().unwrap_or_else(|| {
                 print!("Enter username: ");
@@ -185,7 +194,7 @@ fn main() -> color_eyre::Result<()> {
             });
             let address = address.unwrap_or(SocketAddrV4::new(*ip, *port));
             println!("{address}");
-            client::run(address, username.as_str(), password.as_deref(), path)?;
+            client::run(address, username.as_str(), password.as_deref(), color, path)?;
         }
     };
     Ok(())

@@ -5,6 +5,7 @@ pub mod errors;
 use crossterm::{
     event::{Event, EventStream},
     execute,
+    style::Color,
     terminal::{
         self, disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
     },
@@ -28,12 +29,13 @@ pub async fn run(
     address: SocketAddrV4,
     username: &str,
     password: Option<&str>,
+    color: &Color,
     path: &Path,
 ) -> color_eyre::Result<()> {
     let mut out = io::stdout();
     errors::install_hooks()?;
 
-    let mut app = App::new(username.to_string(), password, address, path).await?;
+    let mut app = App::new(username.to_string(), password, address, color, path).await?;
 
     execute!(out, EnterAlternateScreen)?;
     enable_raw_mode().unwrap();

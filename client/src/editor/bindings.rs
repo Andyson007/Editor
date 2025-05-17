@@ -172,6 +172,7 @@ impl Default for Bindings {
                                 client.server_addr,
                                 &client.username.clone(),
                                 client.password.clone(),
+                                &client.color,
                                 path.as_ref().unwrap().join(inhabitants[*row].name.clone()),
                             )
                             .await

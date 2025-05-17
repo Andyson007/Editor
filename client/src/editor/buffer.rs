@@ -64,6 +64,7 @@ impl Buffer {
         address: SocketAddrV4,
         username: &str,
         password: Option<S>,
+        color: &Color,
         path: P,
     ) -> io::Result<Self> {
         let Ok(mut socket) = connect_with_auth(address, username, password).await else {
@@ -73,6 +74,10 @@ impl Buffer {
         socket
             .write_all(&C2S::Path(path_buf.clone()).serialize())
             .await?;
+        socket
+            .write_all(&C2S::SetColor(*color).serialize())
+            .await?;
+        socket.flush().await?;
         match S2C::<Text>::deserialize(&mut BufReader::with_capacity(BUFFER_SIZE, &mut socket))
             .await?
         {
@@ -174,7 +179,7 @@ impl Buffer {
                     }
                     C2S::EnterInsert(pos) => drop(client.enter_insert(pos)),
                     C2S::ExitInsert => client.exit_insert(),
-                    C2S::Save | C2S::Path(_) => unreachable!(),
+                    C2S::Save | C2S::Path(_) | C2S::SetColor(_) => unreachable!(),
                 };
                 Ok(true)
             }

@@ -18,6 +18,7 @@ sqlx = { version = "0.8.2", features = [
 ], optional = true }
 futures = { version = "0.3.31", optional = true }
 tokio = { version = "1.41.1", optional = true }
+crossterm = { version = "0.28.1", default-features = false }
 
 [features]
 security = ["server/security", "dep:sqlx", "dep:futures", "dep:tokio"]

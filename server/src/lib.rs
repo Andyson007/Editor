@@ -193,6 +193,10 @@ async fn handle_client(
         return Ok(());
     }
     trace!("serving file");
+    let C2S::SetColor(new_client_color) = C2S::deserialize(&mut read).await? else {
+        warn!("Client set bad color");
+        return Ok(());
+    };
     {
         let mut lock = files.write().await;
         let entry = lock.entry(client_path.clone()).or_insert_with(|| {
@@ -233,7 +237,7 @@ async fn handle_client(
         write.flush().await?;
         debug!("Connected {:?}", username);
         entry.text.write().await.add_client(&username);
-        entry.colors.write().await.push(Color::Green);
+        entry.colors.write().await.push(new_client_color);
     }
 
     for (_, client) in files
@@ -249,7 +253,7 @@ async fn handle_client(
         let username = username.clone();
         block_on(async move {
             client
-                .write_all(&S2C::<&Text>::NewClient((username.clone(), Color::Green)).serialize())
+                .write_all(&S2C::<&Text>::NewClient((username.clone(), new_client_color)).serialize())
                 .await?;
 
             client.flush().await?;
@@ -301,7 +305,7 @@ async fn handle_client(
                         continue;
                     }
                     C2S::ExitInsert => lock.exit_insert(),
-                    C2S::Path(_) => todo!(),
+                    C2S::Path(_) | C2S::SetColor(_) => panic!("Can't set pat hnor color here"),
                 }
                 action
             };
