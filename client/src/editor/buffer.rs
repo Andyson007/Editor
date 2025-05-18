@@ -74,15 +74,13 @@ impl Buffer {
         socket
             .write_all(&C2S::Path(path_buf.clone()).serialize())
             .await?;
-        socket
-            .write_all(&C2S::SetColor(*color).serialize())
-            .await?;
+        socket.write_all(&C2S::SetColor(*color).serialize()).await?;
         socket.flush().await?;
-        match S2C::<Text>::deserialize(&mut BufReader::with_capacity(BUFFER_SIZE, &mut socket))
-            .await?
-        {
+        let mut reader = BufReader::with_capacity(BUFFER_SIZE, &mut socket);
+        match S2C::<Text>::deserialize(&mut reader).await? {
             S2C::Full(initial_text) => {
-                let colors = Vec::<Color>::deserialize(&mut socket).await?;
+                let colors = Vec::<Color>::deserialize(&mut reader).await?;
+                assert!(reader.buffer().is_empty(), "Could not process everything the server sent");
                 let buf = Buffer::new(username, initial_text, colors, Some(socket), Some(path_buf));
                 Ok(buf)
             }
