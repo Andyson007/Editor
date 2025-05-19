@@ -55,8 +55,16 @@ impl Add<(isize, isize)> for CursorPos {
 
     fn add(self, (row, col): (isize, isize)) -> Self::Output {
         Self {
-            row: usize::try_from(isize::try_from(self.row).unwrap() + row).unwrap(),
-            col: usize::try_from(isize::try_from(self.col).unwrap() + col).unwrap(),
+            row: usize::try_from(
+                isize::try_from(self.row).expect("self.row (usize) could not be cast to isize")
+                    + row,
+            )
+            .expect("Cursorpos resulted in negative value"),
+            col: usize::try_from(
+                isize::try_from(self.col).expect("self.col (usize) could not be cast to isize")
+                    + col,
+            )
+            .expect("Cursorpos resulted in negative value"),
         }
     }
 }
@@ -74,7 +82,6 @@ impl SubAssign for CursorPos {
         self.col -= rhs.col;
     }
 }
-
 
 impl From<CursorPos> for (usize, usize) {
     fn from(pos: CursorPos) -> Self {

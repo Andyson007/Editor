@@ -122,7 +122,11 @@ pub struct StrSlice {
 impl std::fmt::Debug for StrSlice {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("StrSlice")
-            .field("text", &str::from_utf8(&self.byteslice).unwrap())
+            .field(
+                "text",
+                &str::from_utf8(&self.byteslice)
+                    .expect("The stored byteslice should always be valid utf-8"),
+            )
             .field("start", &self.byteslice.start)
             .field("end", &self.byteslice.end)
             .finish()
@@ -172,7 +176,7 @@ impl StrSlice {
     /// # use std::str::FromStr;
     /// # fn main() {
     ///      let mut append_str = AppendOnlyStr::from_str("test").unwrap();
-    ///      let slice = append_str.str_slice(..);
+    ///      let slice = append_str.str_slice(..).unwrap();
     ///      assert_eq!(slice.chars().count(), 4);
     /// # }
     /// ```
@@ -219,7 +223,7 @@ impl FromStr for StrSlice {
 
     fn from_str(str: &str) -> Result<Self, Self::Err> {
         let a = AppendOnlyStr::from_str(str).unwrap();
-        Ok(a.str_slice(..).unwrap())
+        Ok(a.str_slice(..).expect("A full slice should always valid"))
     }
 }
 

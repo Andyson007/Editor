@@ -41,7 +41,9 @@ impl AppendOnlyStr {
     /// outlive this `StrSlice`
     #[must_use]
     pub fn owned_chars(&self) -> Chars {
-        self.str_slice(..).unwrap().owned_chars()
+        self.str_slice(..)
+            .expect("A full str slice is always valid")
+            .owned_chars()
     }
 
     /// Iterates over the chars using the build in Chars iterator from the standard library

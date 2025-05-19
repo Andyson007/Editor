@@ -186,7 +186,10 @@ fn main() -> color_eyre::Result<()> {
                     print!("Enter password: ");
 
                     io::stdout().flush().unwrap();
-                    let Some(password) = io::stdin().read_passwd(&mut io::stdout()).unwrap() else {
+                    let Some(password) = io::stdin()
+                        .read_passwd(&mut io::stdout())
+                        .expect("Stream prematurely ended")
+                    else {
                         std::process::exit(0x82);
                     };
                     password

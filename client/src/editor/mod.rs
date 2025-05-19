@@ -67,7 +67,7 @@ impl App {
                     info: Some("Prewss Escape then :help to view help".to_string()),
                     password,
                     username,
-                    color: color.clone(),
+                    color: *color,
                     server_addr: address,
                 }
             },

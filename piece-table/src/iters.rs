@@ -72,7 +72,7 @@ impl Piece {
             ranges: self
                 .piece_table
                 .read_full()
-                .unwrap()
+                .expect("Could not get a reading lock on the table")
                 .read()
                 .clone()
                 .into_iter()
@@ -96,7 +96,7 @@ impl Piece {
     pub fn bufs(&self) -> impl Iterator<Item = InnerTable<TableElem>> {
         self.piece_table
             .read_full()
-            .unwrap()
+            .expect("Could not get a reading lock on the table")
             .read()
             .clone()
             .into_iter()
@@ -122,7 +122,7 @@ mod test {
         let piece = Piece {
             piece_table: iter::once(TableElem {
                 buf: None,
-                text: original.str_slice(..),
+                text: original.str_slice(..).unwrap(),
                 id: 0,
             })
             .collect(),
@@ -144,7 +144,7 @@ mod test {
             piece_table: iter::once(TableElem {
                 buf: None,
                 id: 0,
-                text: original.str_slice(..),
+                text: original.str_slice(..).unwrap(),
             })
             .collect(),
             buffers: Buffers {
@@ -167,7 +167,7 @@ mod test {
             piece_table: Table::from_iter(std::iter::once(TableElem {
                 buf: None,
                 id: 0,
-                text: original.str_slice(..),
+                text: original.str_slice(..).unwrap(),
             })),
             buffers: Buffers {
                 original: (AutoIncrementing::new(), original),
@@ -190,12 +190,12 @@ mod test {
             piece_table: [
                 TableElem {
                     buf: None,
-                    text: original.str_slice(..),
+                    text: original.str_slice(..).unwrap(),
                     id: 0,
                 },
                 TableElem {
                     buf: Some((0, false)),
-                    text: Arc::clone(&client1).read().unwrap().str_slice(..),
+                    text: Arc::clone(&client1).read().unwrap().str_slice(..).unwrap(),
                     id: 1,
                 },
             ]
@@ -227,21 +227,29 @@ mod test {
                 TableElem {
                     buf: None,
                     id: 0,
-                    text: original.str_slice(0..1),
+                    text: original.str_slice(0..1).unwrap(),
                 },
                 TableElem {
                     buf: Some((0, false)),
-                    text: Arc::clone(&client1).read().unwrap().str_slice(0..1),
+                    text: Arc::clone(&client1)
+                        .read()
+                        .unwrap()
+                        .str_slice(0..1)
+                        .unwrap(),
                     id: 1,
                 },
                 TableElem {
                     buf: None,
                     id: 2,
-                    text: original.str_slice(1..3),
+                    text: original.str_slice(1..3).unwrap(),
                 },
                 TableElem {
                     buf: Some((0, false)),
-                    text: Arc::clone(&client1).read().unwrap().str_slice(1..3),
+                    text: Arc::clone(&client1)
+                        .read()
+                        .unwrap()
+                        .str_slice(1..3)
+                        .unwrap(),
                     id: 3,
                 },
             ]),

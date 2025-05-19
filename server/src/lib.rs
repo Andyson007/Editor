@@ -31,7 +31,6 @@ use text::Text;
 use tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
     net::{tcp::OwnedWriteHalf, TcpListener, TcpStream},
-    select,
     sync::{Notify, RwLock},
     time::sleep,
 };
@@ -253,7 +252,9 @@ async fn handle_client(
         let username = username.clone();
         block_on(async move {
             client
-                .write_all(&S2C::<&Text>::NewClient((username.clone(), new_client_color)).serialize())
+                .write_all(
+                    &S2C::<&Text>::NewClient((username.clone(), new_client_color)).serialize(),
+                )
                 .await?;
 
             client.flush().await?;
@@ -417,7 +418,7 @@ fn spawn_saver(
     tokio::spawn(async move {
         loop {
             if let Some(x) = save_interval {
-                select!(
+                tokio::select!(
                     () = sleep(Duration::from_secs(x.get())) => (),
                     () = save_notify.notified() => {}
                 );

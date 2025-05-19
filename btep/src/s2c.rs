@@ -30,7 +30,12 @@ pub struct Inhabitant {
 impl Serialize for Inhabitant {
     fn serialize(&self) -> Vec<u8> {
         let mut ret = Vec::new();
-        ret.extend(self.name.to_str().unwrap().serialize());
+        ret.extend(
+            self.name
+                .to_str()
+                .expect("The os doesn't use utf-8 paths for some reason")
+                .serialize(),
+        );
         ret.extend(self.is_folder.serialize());
         ret
     }

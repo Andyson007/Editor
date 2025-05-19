@@ -67,7 +67,7 @@ impl Serialize for C2S {
             Self::Save => [3].into(),
             Self::ExitInsert => [4].into(),
             Self::Path(path) => std::iter::once(5)
-                .chain(path.to_str().unwrap().serialize())
+                .chain(path.to_str().expect("The os doesn't use utf-8 paths for some reason").serialize())
                 .collect(),
             Self::Backspace(swaps) => std::iter::once(8)
                 .chain((*swaps as u64).to_be_bytes())

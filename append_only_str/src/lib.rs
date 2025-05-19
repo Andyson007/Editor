@@ -11,8 +11,7 @@ use std::{
     convert::Infallible,
     fmt::Display,
     num::NonZeroUsize,
-    ops::{Index, RangeBounds},
-    slice::SliceIndex,
+    ops::RangeBounds,
     str::{self, FromStr},
     sync::Arc,
 };
@@ -41,7 +40,12 @@ pub struct AppendOnlyStr {
 impl std::fmt::Debug for AppendOnlyStr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("AppendOnlyStr")
-            .field("data", &&*self.str_slice(..).unwrap())
+            .field(
+                "data",
+                &&*self
+                    .str_slice(..)
+                    .expect("A full slice should always valid"),
+            )
             .field("len", &self.len)
             .finish()
     }
@@ -49,7 +53,13 @@ impl std::fmt::Debug for AppendOnlyStr {
 
 impl Display for AppendOnlyStr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.str_slice(..).unwrap().as_str())
+        write!(
+            f,
+            "{}",
+            self.str_slice(..)
+                .expect("A full slice should always valid")
+                .as_str()
+        )
     }
 }
 
@@ -188,19 +198,25 @@ impl AppendOnlyStr {
     fn get_str(&self) -> &str {
         // This shouldn't fail because utf-8
         // compliance is always guaranteed
-        str::from_utf8(self.get_byte_slice()).unwrap()
+        str::from_utf8(self.get_byte_slice()).expect("A full slice should always be valid")
     }
 
     #[must_use]
     fn get_byte_slice(&self) -> &[u8] {
-        //// SAFETY: ---------------------------------------------
-        //// We never make the capacity greater than the amount of
-        //// space allocated. and therefore a slice won't read
-        //// uninitialized memory
+        let ptr = self.rawbuf.ptr();
+        if ptr.is_null() {
+            return &[];
+        }
+        // SAFETY: ---------------------------------------------
+        // We never make the capacity greater than the amount of
+        // space allocated. and therefore a slice won't read
+        // uninitialized memory
+        //
+        // `ptr` is non_null
         unsafe {
-            std::ptr::slice_from_raw_parts(self.rawbuf.ptr().cast_const(), self.len)
+            std::ptr::slice_from_raw_parts(ptr.cast_const(), self.len)
                 .as_ref()
-                .unwrap()
+                .unwrap_unchecked()
         }
     }
 
@@ -232,19 +248,8 @@ impl AppendOnlyStr {
     /// Creates a string slice pointing at the end of the buffer
     #[must_use]
     pub fn str_slice_end(&self) -> StrSlice {
-        self.str_slice(self.len..).unwrap()
-    }
-}
-
-impl<Idx> Index<Idx> for AppendOnlyStr
-where
-    Idx: SliceIndex<[u8], Output = [u8]>,
-{
-    type Output = str;
-
-    fn index(&self, index: Idx) -> &Self::Output {
-        let tmp = &self.get_byte_slice()[index];
-        str::from_utf8(tmp).unwrap()
+        self.str_slice(self.len..)
+            .expect("self.len.. is a valid range")
     }
 }
 
@@ -265,11 +270,11 @@ mod test {
     fn slice_through_realloc() {
         let mut val = AppendOnlyStr::from_str("test").unwrap();
         let reference = val.slice(0..=1);
-        assert_eq!(&*reference, b"te");
+        assert_eq!(&**reference.as_ref().unwrap(), b"te");
         val.push_str("ing stuff");
         let new_ref = val.slice(..6);
-        assert_eq!(&*new_ref, &b"testin"[..6]);
-        assert_eq!(&*reference, b"te");
+        assert_eq!(&*new_ref.unwrap(), &b"testin"[..6]);
+        assert_eq!(&*reference.unwrap(), b"te");
     }
 
     #[test]

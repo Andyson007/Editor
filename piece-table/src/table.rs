@@ -22,7 +22,10 @@ where
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Table")
-            .field("inner", &*self.inner.read().unwrap())
+            .field(
+                "inner",
+                &*self.inner.read().expect("The inner table was poisoned"),
+            )
             .field("state", &self.state)
             .finish()
     }
@@ -228,13 +231,18 @@ impl<T> TableWriter<T> {
     /// # Panics
     /// - The `RwLock` is poisoned
     pub fn write(&self) -> RwLockWriteGuard<'_, LinkedList<InnerTable<T>>> {
-        self.val.write().unwrap()
+        self.val
+            .write()
+            .expect("The entire piece table is poisoned")
     }
 }
 
 impl<T> Drop for TableWriter<T> {
     fn drop(&mut self) {
-        self.state.write().unwrap().drop_full_mut();
+        self.state
+            .write()
+            .expect("The entire piece table is poisoned")
+            .drop_full_mut();
     }
 }
 
@@ -256,13 +264,16 @@ impl<T> TableReader<T> {
     /// # Panics
     /// the lock around the list has been poisoned
     pub fn read(&self) -> RwLockReadGuard<'_, LinkedList<InnerTable<T>>> {
-        self.val.read().unwrap()
+        self.val.read().expect("The entire piece table is poisoned")
     }
 }
 
 impl<T> Drop for TableReader<T> {
     fn drop(&mut self) {
-        self.state.write().unwrap().drop_full();
+        self.state
+            .write()
+            .expect("The entire piece table is poisoned")
+            .drop_full();
     }
 }
 
@@ -290,9 +301,15 @@ impl<T> TableLocker<T> {
     /// - The value you are trying to access is poisoned
     #[must_use]
     pub fn read(&self) -> TableLockReader<T> {
-        self.state.write().unwrap().lock_single();
+        self.state
+            .write()
+            .expect("The entire piece table is poisoned")
+            .lock_single();
         TableLockReader {
-            value: self.value.read().unwrap(),
+            value: self
+                .value
+                .read()
+                .expect("The entire piece table is poisoned"),
             state: Arc::clone(&self.state),
         }
     }
@@ -329,7 +346,10 @@ impl<T> Deref for TableLockReader<'_, T> {
 
 impl<T> Drop for TableLockReader<'_, T> {
     fn drop(&mut self) {
-        self.state.write().unwrap().drop_single();
+        self.state
+            .write()
+            .expect("The entire piece table is poisoned")
+            .drop_single();
     }
 }
 
@@ -359,7 +379,10 @@ impl<T> DerefMut for TableLockWriter<'_, T> {
 
 impl<T> Drop for TableLockWriter<'_, T> {
     fn drop(&mut self) {
-        self.state.write().unwrap().drop_single_mut();
+        self.state
+            .write()
+            .expect("The entire piece table is poisoned")
+            .drop_single_mut();
     }
 }
 

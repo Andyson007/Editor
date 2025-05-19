@@ -2,7 +2,7 @@
 #![feature(linked_list_cursors)]
 #![feature(async_iterator)]
 use std::{
-    io::{self, read_to_string, Read},
+    io::{self, Read},
     iter,
     str::FromStr,
     sync::{Arc, RwLock},
@@ -27,6 +27,7 @@ pub struct Buffers {
     /// The original file content together with its id generator
     pub original: (AutoIncrementing, AppendOnlyStr),
     /// The appendbuffers for each of the clients
+    #[allow(clippy::type_complexity)]
     pub clients: Vec<(Arc<RwLock<AutoIncrementing>>, Arc<RwLock<AppendOnlyStr>>)>,
 }
 
@@ -60,7 +61,9 @@ impl Piece {
             piece_table: std::iter::once(TableElem {
                 id: 0,
                 buf: None,
-                text: original.str_slice(..).unwrap(),
+                text: original
+                    .str_slice(..)
+                    .expect("A full slice is always valid"),
             })
             .collect(),
             buffers: Buffers {
@@ -84,7 +87,9 @@ impl Piece {
             piece_table: iter::once(TableElem {
                 buf: None,
                 id: 0,
-                text: original.str_slice(..).unwrap(),
+                text: original
+                    .str_slice(..)
+                    .expect("A full slice is always valid"),
             })
             .collect(),
             buffers: Buffers {
@@ -103,7 +108,9 @@ impl Piece {
             piece_table: iter::once(TableElem {
                 buf: None,
                 id: 0,
-                text: original.str_slice(..).unwrap(),
+                text: original
+                    .str_slice(..)
+                    .expect("A full slice is always valid"),
             })
             .collect(),
             buffers: Buffers {
@@ -133,16 +140,24 @@ impl Piece {
             + self
                 .lines()
                 .nth(pos.row)
-                .unwrap()
+                .unwrap_or_default()
                 .chars()
                 .take(pos.col)
                 .map(char::len_utf8)
                 .sum::<usize>();
-        let binding = self.piece_table.write_full().unwrap();
+        let binding = self
+            .piece_table
+            .write_full()
+            .expect("The entire piece table is poisoned");
 
         let mut to_split = binding.write();
         let mut cursor = to_split.cursor_front_mut();
-        let mut curr_pos = cursor.current().unwrap().read().text.len();
+        let mut curr_pos = cursor
+            .current()
+            .expect("The Linked list is empty")
+            .read()
+            .text
+            .len();
         let is_end = loop {
             if curr_pos > char_nr {
                 break false;
@@ -156,10 +171,15 @@ impl Piece {
         };
 
         let offset = if is_end {
-            let current = cursor.peek_prev().unwrap();
+            // is_end implies that current refers to the ghost node. We know that we have a
+            // non-zero amount of elements in the list
+            let current = cursor.peek_prev().expect("prev isn't ghost");
             let buf = current.read().buf;
             let curr = if let Some((buf, _)) = current.read().buf {
-                &*self.buffers.clients[buf].1.read().unwrap()
+                &*self.buffers.clients[buf]
+                    .1
+                    .read()
+                    .expect("AppendOnlyStr got poisoned")
             } else {
                 &self.buffers.original.1
             };
@@ -167,8 +187,12 @@ impl Piece {
             cursor.insert_before(InnerTable::new(
                 TableElem {
                     buf,
-                    text: curr.str_slice(curr.len()..).unwrap(),
-                    id: self.buffers.clients[clientid].0.write().unwrap().get()
+                    text: curr.str_slice_end(),
+                    id: self.buffers.clients[clientid]
+                        .0
+                        .write()
+                        .expect("Poison")
+                        .get()
                         * self.buffers.clients.len()
                         + clientid,
                 },
@@ -177,21 +201,27 @@ impl Piece {
             None
         } else {
             let (buf_of_split, current) = {
-                let current = cursor.current().unwrap().read();
+                let current = cursor
+                    .current()
+                    .expect("Cursor should not be at the ghost element")
+                    .read();
                 (current.buf, current.text.clone())
             };
             // byte offset within the current buffer
             let offset = char_nr - (curr_pos - current.len());
 
-            let current = cursor.current().unwrap();
-            let curr = current.read().text.clone();
-
             if offset != 0 {
                 cursor.insert_before(InnerTable::new(
                     TableElem {
                         buf: buf_of_split.map(|x| (x.0, false)),
-                        text: curr.subslice(..offset).unwrap(),
-                        id: self.buffers.clients[clientid].0.write().unwrap().get()
+                        text: current
+                            .subslice(..offset)
+                            .expect("offset should be on a byte boundary"),
+                        id: self.buffers.clients[clientid]
+                            .0
+                            .write()
+                            .expect("Poison")
+                            .get()
                             * self.buffers.clients.len()
                             + clientid,
                     },
@@ -199,15 +229,17 @@ impl Piece {
                 ));
             }
 
-            cursor.current().unwrap().write().unwrap().text = curr.subslice(offset..).unwrap();
+            cursor.current().expect("Current is not on a byte boundary").write().unwrap().text = current
+                .subslice(offset..)
+                .expect("offset is not on a byte boundary");
             Some(offset)
         };
         let curr = self.buffers.clients[clientid].1.read().unwrap();
         cursor.insert_before(InnerTable::new(
             TableElem {
                 buf: Some((clientid, true)),
-                text: curr.str_slice(curr.len()..).unwrap(),
-                id: self.buffers.clients[clientid].0.write().unwrap().get()
+                text: curr.str_slice_end(),
+                id: self.buffers.clients[clientid].0.write().expect("Poison").get()
                     * self.buffers.clients.len()
                     + clientid,
             },
@@ -247,14 +279,31 @@ impl Serialize for &Piece {
     fn serialize(&self) -> Vec<u8> {
         let mut ret = Vec::new();
         ret.extend((self.buffers.original.0.peek() as u64).to_be_bytes());
-        ret.extend(self.buffers.original.1.str_slice(..).unwrap().as_str().bytes());
+        ret.extend(
+            self.buffers
+                .original
+                .1
+                .str_slice(..)
+                .unwrap()
+                .as_str()
+                .bytes(),
+        );
         for client in &self.buffers.clients {
             // 0xfe is used here because its not representable by utf8, and makes stuff easier to
             // parse. This is useful because the alternative is the specify the strings length,
             // which would take up at least as many bytes
             ret.push(0xfe);
             ret.extend((client.0.read().unwrap().peek() as u64).to_be_bytes());
-            ret.extend(client.1.read().unwrap().str_slice(..).unwrap().as_str().bytes());
+            ret.extend(
+                client
+                    .1
+                    .read()
+                    .unwrap()
+                    .str_slice(..)
+                    .unwrap()
+                    .as_str()
+                    .bytes(),
+            );
         }
         // Might be useless, but it's a single byte
         ret.push(0xff);
