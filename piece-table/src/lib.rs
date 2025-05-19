@@ -229,7 +229,7 @@ impl Piece {
                 ));
             }
 
-            cursor.current().expect("Current is not on a byte boundary").write().unwrap().text = current
+            cursor.current().expect("Current is not on a utf-8 boundary").write().unwrap().text = current
                 .subslice(offset..)
                 .expect("offset is not on a byte boundary");
             Some(offset)

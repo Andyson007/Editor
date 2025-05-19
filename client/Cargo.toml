@@ -12,3 +12,6 @@ utils = { path = "../utils" }
 text = { path = "../text" }
 trie = { path = "../trie" }
 futures = "0.3.31"
+
+[features]
+security = []

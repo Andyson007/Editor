@@ -28,14 +28,22 @@ use tokio::time;
 pub async fn run(
     address: SocketAddrV4,
     username: &str,
-    password: Option<&str>,
+    #[cfg(feature = "security")] password: &str,
     color: &Color,
     path: &Path,
 ) -> color_eyre::Result<()> {
     let mut out = io::stdout();
     errors::install_hooks()?;
 
-    let mut app = App::new(username.to_string(), password, address, color, path).await?;
+    let mut app = App::new(
+        username.to_string(),
+        #[cfg(feature = "security")]
+        password,
+        address,
+        color,
+        path,
+    )
+    .await?;
 
     execute!(out, EnterAlternateScreen)?;
     enable_raw_mode().unwrap();

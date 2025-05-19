@@ -5,11 +5,7 @@ use argon2::{
 use sqlx::SqlitePool;
 use std::str;
 
-pub(crate) async fn auth_check(
-    username: &str,
-    password: &str,
-    pool: &SqlitePool,
-) -> Option<()> {
+pub(crate) async fn auth_check(username: &str, password: &str, pool: &SqlitePool) -> Option<()> {
     let phc: (String,) = sqlx::query_as("SELECT phc FROM users WHERE username=$1")
         .bind(username)
         .fetch_optional(pool)
@@ -39,7 +35,7 @@ pub(crate) async fn create_tables(pool: &SqlitePool) -> Result<(), sqlx::Error> 
 }
 
 pub async fn add_user(pool: &SqlitePool, username: &str, password: &str) {
-    create_tables(pool).await;
+    create_tables(pool).await.unwrap();
     let phc = Argon2::default()
         .hash_password(password.as_bytes(), &SaltString::generate(&mut OsRng))
         .unwrap()

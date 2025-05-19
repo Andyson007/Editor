@@ -95,6 +95,7 @@ struct ClientArgs {
     /// When not present no password will be assumed. A password might be required however if the
     /// target server is running with security enabled.
     /// A prompt will appear if you don't specify the password with the flag
+    #[cfg(feature = "security")]
     #[arg(long)]
     #[allow(clippy::option_option)]
     password: Option<Option<String>>,
@@ -167,6 +168,7 @@ fn main() -> color_eyre::Result<()> {
         }
         Commands::Client(ClientArgs {
             username,
+            #[cfg(feature = "security")]
             password,
             ip,
             port,
@@ -181,23 +183,29 @@ fn main() -> color_eyre::Result<()> {
                 io::stdin().read_line(&mut buf).unwrap();
                 buf.lines().next().unwrap().to_string()
             });
-            let password = password.as_ref().map(|x| {
-                x.clone().unwrap_or_else(|| {
-                    print!("Enter password: ");
+            #[cfg(feature = "security")]
+            let password = password.clone().flatten().unwrap_or_else(|| {
+                print!("Enter password: ");
 
-                    io::stdout().flush().unwrap();
-                    let Some(password) = io::stdin()
-                        .read_passwd(&mut io::stdout())
-                        .expect("Stream prematurely ended")
-                    else {
-                        std::process::exit(0x82);
-                    };
-                    password
-                })
+                io::stdout().flush().unwrap();
+                let Some(password) = io::stdin()
+                    .read_passwd(&mut io::stdout())
+                    .expect("Stream prematurely ended")
+                else {
+                    std::process::exit(0x82);
+                };
+                password
             });
             let address = address.unwrap_or(SocketAddrV4::new(*ip, *port));
             println!("{address}");
-            client::run(address, username.as_str(), password.as_deref(), color, path)?;
+            client::run(
+                address,
+                username.as_str(),
+                #[cfg(feature = "security")]
+                &password,
+                color,
+                path,
+            )?;
         }
     };
     Ok(())
@@ -210,7 +218,7 @@ fn add_user(pool: &SqlitePool) {
     let mut stdin = std::io::stdin();
     stdout.flush().unwrap();
     let mut username = String::new();
-    stdin.read_line(&mut username);
+    stdin.read_line(&mut username).unwrap();
     print!("Enter password: ");
 
     use std::io::Write;
@@ -225,8 +233,8 @@ fn add_user(pool: &SqlitePool) {
         .build()
         .unwrap()
         .block_on(server::add_user(
-            &pool,
-            &username.lines().next().unwrap(),
-            &password.lines().next().unwrap(),
+            pool,
+            username.lines().next().unwrap(),
+            password.lines().next().unwrap(),
         ));
 }

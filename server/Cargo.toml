@@ -14,9 +14,10 @@ sqlx = { version = "0.8.2", features = [
   "macros",
 ], optional = true }
 futures = "0.3.31"
-argon2 = { version = "0.5.3", optional = true }
+argon2 = { version = "0.5.3", optional = true, features = ["password-hash"] }
+rand_core = { version = "0.6.4", features = ["getrandom"], optional = true }
 tokio = { version = "1.41.1", features = ["time", "sync", "net"] }
 crossterm = "0.28.1"
 
 [features]
-security = ["dep:sqlx", "dep:argon2"]
+security = ["dep:sqlx", "dep:argon2", "dep:rand_core"]

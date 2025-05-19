@@ -5,9 +5,7 @@
 mod security;
 
 #[cfg(feature = "security")]
-use sqlx::{sqlite::SqliteConnectOptions, SqlitePool};
-#[cfg(feature = "security")]
-use std::str::FromStr;
+use sqlx::{SqlitePool};
 
 #[cfg(feature = "security")]
 pub use security::add_user;
@@ -116,11 +114,6 @@ async fn handle_connection(
         Err(x) => {
             match x {
                 UserAuthError::IoError(e) => warn!("IoError: `{e:?}`"),
-                #[cfg(feature = "security")]
-                UserAuthError::NeedsPassword => {
-                    warn!("Forgotten password");
-                    stream.write_u8(1).await?;
-                }
                 #[cfg(feature = "security")]
                 UserAuthError::BadPassword => {
                     warn!("Bad password");
@@ -385,10 +378,9 @@ where
     #[cfg(feature = "security")]
     {
         assert_eq!(delim, Some(254), "client running without security enabled");
-        let Some(password) = iter.next() else {
-            return Err(UserAuthError::NeedsPassword);
-        };
-        if auth_check(username, password.valid(), pool).await.is_none() {
+        let mut password = String::new();
+        stream.read_valid_str(&mut password).await.unwrap();
+        if auth_check(&username, &password, pool).await.is_none() {
             return Err(UserAuthError::BadPassword);
         };
     }
@@ -398,8 +390,6 @@ where
 enum UserAuthError {
     #[cfg(feature = "security")]
     BadPassword,
-    #[cfg(feature = "security")]
-    NeedsPassword,
     IoError(Error),
 }
 

@@ -60,14 +60,21 @@ pub struct Socket {
 }
 
 impl Buffer {
-    pub async fn connect<S: AsRef<str>, P: Into<PathBuf>>(
+    pub async fn connect<P: Into<PathBuf>>(
         address: SocketAddrV4,
         username: &str,
-        password: Option<S>,
+        #[cfg(feature = "security")] password: String,
         color: &Color,
         path: P,
     ) -> io::Result<Self> {
-        let Ok(mut socket) = connect_with_auth(address, username, password).await else {
+        let Ok(mut socket) = connect_with_auth(
+            address,
+            username,
+            #[cfg(feature = "security")]
+            password,
+        )
+        .await
+        else {
             panic!("Failed to connect to the server. Maybe the server is not running?")
         };
         let path_buf = path.into();
@@ -80,7 +87,10 @@ impl Buffer {
         match S2C::<Text>::deserialize(&mut reader).await? {
             S2C::Full(initial_text) => {
                 let colors = Vec::<Color>::deserialize(&mut reader).await?;
-                assert!(reader.buffer().is_empty(), "Could not process everything the server sent");
+                assert!(
+                    reader.buffer().is_empty(),
+                    "Could not process everything the server sent"
+                );
                 let buf = Buffer::new(username, initial_text, colors, Some(socket), Some(path_buf));
                 Ok(buf)
             }
@@ -251,16 +261,17 @@ impl Buffer {
     }
 }
 
-async fn connect_with_auth<S: AsRef<str>>(
+async fn connect_with_auth(
     address: SocketAddrV4,
     username: &str,
-    password: Option<S>,
+    #[cfg(feature = "security")] password: String,
 ) -> io::Result<TcpStream> {
     let mut stream = TcpStream::connect(address).await?;
     stream.write_all(username.as_bytes()).await?;
-    if let Some(password) = password {
+    #[cfg(feature = "security")]
+    {
         stream.write_u8(254).await?;
-        stream.write_all(password.as_ref().as_bytes()).await?;
+        stream.write_all(password.as_bytes()).await?;
     }
     stream.write_u8(255).await?;
     stream.flush().await?;

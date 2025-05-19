@@ -1386,6 +1386,7 @@ dependencies = [
  "btep",
  "crossterm",
  "futures",
+ "rand_core",
  "sqlx",
  "text",
  "tokio",

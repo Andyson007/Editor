@@ -171,6 +171,7 @@ impl Default for Bindings {
                             Buffer::connect(
                                 client.server_addr,
                                 &client.username.clone(),
+                                #[cfg(feature = "security")]
                                 client.password.clone(),
                                 &client.color,
                                 path.as_ref().unwrap().join(inhabitants[*row].name.clone()),

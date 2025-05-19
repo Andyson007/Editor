@@ -29,7 +29,7 @@ pub struct App {
 impl App {
     pub async fn new(
         username: String,
-        password: Option<&str>,
+        #[cfg(feature = "security")] password: &str,
         address: SocketAddrV4,
         color: &Color,
         path: &Path,
@@ -37,7 +37,8 @@ impl App {
         Ok(Self {
             client: Client::from_path(
                 username,
-                password.map(ToOwned::to_owned),
+                #[cfg(feature = "security")]
+                password.to_owned(),
                 address,
                 color,
                 path,
@@ -49,7 +50,7 @@ impl App {
 
     pub fn new_with_buffer(
         username: String,
-        password: Option<String>,
+        #[cfg(feature = "security")] password: String,
         text: Text,
         colors: Vec<Color>,
         socket: Option<TcpStream>,
@@ -65,6 +66,7 @@ impl App {
                     current_buffer: 0,
                     modeinfo: ModeInfo::default(),
                     info: Some("Prewss Escape then :help to view help".to_string()),
+                    #[cfg(feature = "security")]
                     password,
                     username,
                     color: *color,

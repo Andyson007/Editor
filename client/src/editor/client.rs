@@ -14,7 +14,8 @@ use crate::editor::buffer::Buffer;
 use super::buffer::BufferTypeData;
 /// Represents a single client.
 pub struct Client {
-    pub(crate) password: Option<String>,
+    #[cfg(feature = "security")]
+    pub(crate) password: String,
     pub(crate) username: String,
     pub(crate) color: Color,
     pub(crate) server_addr: SocketAddrV4,
@@ -33,7 +34,7 @@ impl Client {
     /// Cretaes a new client an empty original buffer
     pub async fn from_path(
         username: String,
-        password: Option<String>,
+        #[cfg(feature = "security")] password: String,
         address: SocketAddrV4,
         color: &Color,
         path: &Path,
@@ -41,8 +42,19 @@ impl Client {
         Ok(Self {
             server_addr: address,
             username: username.clone(),
+            #[cfg(feature = "security")]
             password: password.clone(),
-            buffers: vec![Buffer::connect(address, &username, password, color, path).await?],
+            buffers: vec![
+                Buffer::connect(
+                    address,
+                    &username,
+                    #[cfg(feature = "security")]
+                    password,
+                    color,
+                    path,
+                )
+                .await?,
+            ],
             current_buffer: 0,
             modeinfo: ModeInfo::default(),
             color: color.to_owned(),
