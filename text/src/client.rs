@@ -253,12 +253,7 @@ impl Client {
     /// # Panics
     /// probably only failed locks
     pub fn enter_insert(&mut self, pos: CursorPos) -> (Option<usize>, usize) {
-        let (offset, inner_table) = self
-            .piece
-            .write()
-            .unwrap()
-            .insert_at(pos, self.bufnr)
-            .unwrap();
+        let (offset, inner_table) = self.piece.write().unwrap().insert_at(pos, self.bufnr);
         // println!("{inner_table:?}");
         let idx = inner_table.read().id;
         // FIXME: The reason this is here is to fix a stupid bug. I should use std::pin::Pin to fix

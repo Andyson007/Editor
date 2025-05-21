@@ -10,7 +10,7 @@ clap = { version = "4.5.20", features = ["derive"] }
 color-eyre = "0.6.3"
 tracing = "0.1.40"
 tracing-subscriber = "0.3.18"
-termion = "4.0.3"
+termion = { version = "4.0.3", optional = true }
 sqlx = { version = "0.8.2", features = [
   "runtime-tokio",
   "sqlite",
@@ -21,4 +21,10 @@ tokio = { version = "1.41.1", optional = true }
 crossterm = { version = "0.28.1", default-features = false }
 
 [features]
-security = ["server/security", "dep:sqlx", "dep:futures", "dep:tokio"]
+security = [
+  "server/security",
+  "dep:sqlx",
+  "dep:futures",
+  "dep:tokio",
+  "dep:termion",
+]

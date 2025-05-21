@@ -13,6 +13,7 @@ use std::{
     num::NonZeroU64,
     path::PathBuf,
 };
+#[cfg(feature = "security")]
 use termion::input::TermRead;
 use tracing::{level_filters::LevelFilter, trace};
 

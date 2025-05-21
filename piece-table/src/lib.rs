@@ -122,24 +122,27 @@ impl Piece {
 
     /// Creates an `InnerTable` within the piece table.
     /// This allows the list to be mutated at that point.
+    /// # Returns
+    /// - The offset at which the buffer got split
+    /// - A `TableElem`
     /// # Panics
     /// Shouldn't panic
     pub fn insert_at(
         &mut self,
         pos: CursorPos,
         clientid: usize,
-    ) -> Option<(Option<usize>, InnerTable<TableElem>)> {
+    ) -> (Option<usize>, InnerTable<TableElem>) {
         // FIXME:
         // Rather than this we should store the amount of lines in each `TableElem`
-        let bytes_to_row: usize = self
-            .lines()
+        let mut row_iter = self.lines();
+        let bytes_to_row: usize = row_iter
+            .by_ref()
             .take(pos.row)
             .map(|x| x.len() + '\n'.len_utf8())
             .sum();
         let char_nr = bytes_to_row
-            + self
-                .lines()
-                .nth(pos.row)
+            + row_iter
+                .next()
                 .unwrap_or_default()
                 .chars()
                 .take(pos.col)
@@ -229,7 +232,12 @@ impl Piece {
                 ));
             }
 
-            cursor.current().expect("Current is not on a utf-8 boundary").write().unwrap().text = current
+            cursor
+                .current()
+                .expect("Current is not on a utf-8 boundary")
+                .write()
+                .unwrap()
+                .text = current
                 .subslice(offset..)
                 .expect("offset is not on a byte boundary");
             Some(offset)
@@ -239,13 +247,17 @@ impl Piece {
             TableElem {
                 buf: Some((clientid, true)),
                 text: curr.str_slice_end(),
-                id: self.buffers.clients[clientid].0.write().expect("Poison").get()
+                id: self.buffers.clients[clientid]
+                    .0
+                    .write()
+                    .expect("Poison")
+                    .get()
                     * self.buffers.clients.len()
                     + clientid,
             },
             self.piece_table.state(),
         ));
-        Some((offset, cursor.peek_prev().unwrap().clone()))
+        (offset, cursor.peek_prev().unwrap().clone())
     }
 
     /// Locks down the full list for reading.

@@ -5,7 +5,7 @@
 mod security;
 
 #[cfg(feature = "security")]
-use sqlx::{SqlitePool};
+use sqlx::SqlitePool;
 
 #[cfg(feature = "security")]
 pub use security::add_user;

@@ -23,9 +23,9 @@ only h, j, k, l are supported.
 and "l" moves the cursor right.
 
 You can visualize it like this:
-   k  
+   k
  h   l
-   j  
+   j
 
 Try moving the cursor here: X
 
@@ -35,9 +35,9 @@ You can press "i" to enter insert mode and "<ESC>" (a raw escape) to exit it.
 In insert mode you can edit text the way you are used together with "<BS>" (backspace)
 
 ## Command mode
-Command mode allows you to do more general things. 
+Command mode allows you to do more general things.
 You enter command mode by pressing ":". you can for example execute the command
-":w" which will force a write to happen. 
+":w" which will force a write to happen. This writes all pending changes; even if they are others's changes.
 
 Other handy commands you might use are
 - ":q" closes the current buffer
