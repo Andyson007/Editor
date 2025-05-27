@@ -49,7 +49,7 @@ struct ServerArgs {
     /// path to the file that should be opened
     ///
     /// it is not a feature yet to share folders
-    path: PathBuf,
+    path: Option<PathBuf>,
     /// disables periodic saves. This forces clients to manually save with `:w`
     #[arg(long, default_value = "false")]
     disable_auto_save: bool,
@@ -158,14 +158,21 @@ fn main() -> color_eyre::Result<()> {
             server::run(
                 (!disable_auto_save).then_some(*save_interval),
                 address,
-                path,
+                path.as_ref().expect("A path is required to run the server"),
                 #[cfg(feature = "security")]
                 pool,
             );
         }
         #[cfg(feature = "security")]
         Commands::Server(ServerArgs { add_user: true, .. }) => {
-            add_user(&pool);
+            if let Err(e) = add_user(&pool) {
+                match e {
+                    sqlx::Error::Database(db) if db.is_unique_violation() => {
+                        println!("A user with that username already exists")
+                    }
+                    _ => println!("An unknown error occurred: {e:?}"),
+                }
+            }
         }
         Commands::Client(ClientArgs {
             username,
@@ -213,7 +220,7 @@ fn main() -> color_eyre::Result<()> {
 }
 
 #[cfg(feature = "security")]
-fn add_user(pool: &SqlitePool) {
+fn add_user(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     let mut stdout = std::io::stdout();
     print!("Enter username: ");
     let mut stdin = std::io::stdin();
@@ -229,13 +236,15 @@ fn add_user(pool: &SqlitePool) {
         // Entering the password was aborted
         std::process::exit(0x82)
     };
-    tokio::runtime::Builder::new_current_thread()
+    let ret = tokio::runtime::Builder::new_current_thread()
         .enable_time()
         .build()
         .unwrap()
         .block_on(server::add_user(
             pool,
             username.lines().next().unwrap(),
-            password.lines().next().unwrap(),
+            password.lines().next().unwrap_or(""),
         ));
+    println!();
+    ret
 }

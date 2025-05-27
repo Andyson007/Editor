@@ -34,17 +34,20 @@ pub(crate) async fn create_tables(pool: &SqlitePool) -> Result<(), sqlx::Error> 
     Ok(())
 }
 
-pub async fn add_user(pool: &SqlitePool, username: &str, password: &str) {
+pub async fn add_user(
+    pool: &SqlitePool,
+    username: &str,
+    password: &str,
+) -> Result<(), sqlx::Error> {
     create_tables(pool).await.unwrap();
     let phc = Argon2::default()
         .hash_password(password.as_bytes(), &SaltString::generate(&mut OsRng))
         .unwrap()
         .to_string();
-    println!("{phc}");
     sqlx::query("INSERT INTO users (username, phc) VALUES ($1, $2)")
         .bind(username)
         .bind(phc)
         .execute(pool)
-        .await
-        .unwrap();
+        .await?;
+    Ok(())
 }

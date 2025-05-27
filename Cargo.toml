@@ -16,4 +16,7 @@ members = [
 strip = true
 lto = true
 codegen-units = 1
-opt-level = "z"
+opt-level = 3
+[profile.release.package."*"]
+opt-level = 3
+codegen-units = 1

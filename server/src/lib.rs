@@ -150,7 +150,8 @@ async fn handle_client(
     let (mut read, mut write) = stream.into_split();
     let client_path = if serve_other {
         let C2S::Path(client_path) = C2S::deserialize(&mut read).await? else {
-            panic!();
+            warn!("Client sent wrong data");
+            return Ok(());
         };
         let Ok(canonicalized) = path.join(client_path).canonicalize() else {
             warn!("client path was invalid");

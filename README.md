@@ -5,7 +5,7 @@ The scope of this project is to create a vim-inspired editor for collaboration w
 You can run the a server for this client using 
 You might have to open up a port for this to be acceble from other computers
 ```sh
-cargo r -- server
+cargo r -- server ./<path>
 ```
 and a client with
 ```sh
@@ -20,11 +20,13 @@ cargo r --features=security -- server
 ```
 to connect with a client you will have to run
 ```sh
-cargo r -- client --password
+cargo r --features=security -- client
 ```
-
-
-
+## Adding a user
+in order to add a user with a username on password run
+```sh
+ cargo r --features=security -- server --add-user
+```
 # Development
 Look at [Architecture](Architecture.md) to see how the project is structured
 ## Goals
