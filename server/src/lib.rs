@@ -65,7 +65,7 @@ pub async fn run(
 
     let files: Arc<RwLock<HashMap<PathBuf, BufferData>>> = Arc::new(RwLock::new(HashMap::new()));
 
-    for client_id in 0.. {
+    loop {
         let (stream, _) = server.accept().await.unwrap();
         tokio::spawn(
             handle_connection(
@@ -79,7 +79,7 @@ pub async fn run(
             )
             .then(move |output| async move {
                 if let Err(e) = output {
-                    error!("{client_id} {e:?}");
+                    error!("{e:?}");
                 }
             }),
         );
