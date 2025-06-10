@@ -19,7 +19,7 @@ use std::{
     str,
 };
 
-use tokio::time;
+use tokio::{io::Interest, time};
 
 /// Runs a the client side of the editor
 #[allow(clippy::missing_panics_doc)]
@@ -71,18 +71,20 @@ pub async fn run(
                     None => panic!("idk what this branch is supposed to handle"),
                 })
             },
-            length = async {
+            r = async {
                 if let Some(x) = &mut app.client.buffers[app.client.current_buffer].socket{
-                    let mut buf = [0];
-                    x.reader.peek(&mut buf).await
+                    x.reader.ready(Interest::READABLE).await
                 } else {
                     future::pending::<()>().await;
                     unreachable!()
                 }
             } => {
-                assert_eq!(length?, 1, "The server disconnected");
-                app.client.curr_mut().update().await?;
-                Ok::<bool, io::Error>(true)
+                if r?.is_read_closed() {
+                    break;
+                } else {
+                    app.client.curr_mut().update().await?;
+                    Ok::<bool, io::Error>(true)
+                }
             },
             _ = async {
                 if let Some(timer) = app.client.modeinfo.timer.as_ref() {
