@@ -100,9 +100,9 @@ struct ClientArgs {
     #[arg(long)]
     #[allow(clippy::option_option)]
     password: Option<Option<String>>,
-    /// IP-address the server should be hosted on
+    /// IP-address that the server is running on
     ///
-    /// 0.0.0.0 in order to host on the local network
+    /// By default it checks locally, but for remote access use the ip of that computers ip
     #[arg(
         short = 'i',
         long,
