@@ -103,7 +103,12 @@ struct ClientArgs {
     /// IP-address the server should be hosted on
     ///
     /// 0.0.0.0 in order to host on the local network
-    #[arg(short = 'i', default_value = "127.0.0.1", conflicts_with = "address")]
+    #[arg(
+        short = 'i',
+        long,
+        default_value = "127.0.0.1",
+        conflicts_with = "address"
+    )]
     ip: Ipv4Addr,
     #[arg(
         short = 'p',
